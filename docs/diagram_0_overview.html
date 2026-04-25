@@ -909,9 +909,26 @@
 
   }
 
-  window.addEventListener('load',   () => setTimeout(render, 60));
-  window.addEventListener('resize', () => setTimeout(render, 100));
-  render();
+  function rerender() { requestAnimationFrame(render); }
+
+  function initialRender() {
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(rerender);
+    } else {
+      setTimeout(rerender, 120);
+    }
+  }
+
+  if (document.readyState === 'complete') {
+    initialRender();
+  } else {
+    window.addEventListener('load', initialRender);
+  }
+  window.addEventListener('resize', () => setTimeout(rerender, 50));
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(rerender).observe(canvas);
+  }
 </script>
 
 </body>
