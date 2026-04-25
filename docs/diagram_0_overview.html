@@ -66,7 +66,7 @@
   }
   .swimlane {
     display: grid;
-    grid-template-columns: 160px repeat(3, 1fr);
+    grid-template-columns: 160px repeat(4, 1fr);
     gap: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -81,7 +81,7 @@
     border-right: 1px solid var(--line);
     font-size: 13px;
   }
-  .phase-header:nth-child(4) { border-right: none; }
+  .phase-header:nth-child(5) { border-right: none; }
   .phase-header.corner {
     background: rgba(0,0,0,0.025);
     font-size: 11px;
@@ -136,7 +136,7 @@
     justify-content: center;
     position: relative;
   }
-  .cell:nth-child(4n) { border-right: none; }
+  .cell:nth-child(5n) { border-right: none; }
   .cell.empty { background: rgba(0,0,0,0.015); }
   .lane-row-last .cell { border-bottom: none; }
 
@@ -372,7 +372,7 @@
 <body>
 
 <h1>E-Zoo Replenishment. Общая swimlane-диаграмма</h1>
-<p class="subtitle">Пять ролей-дорожек и три фазы процесса. Задачи показывают зону ответственности каждой роли, стрелки — передачу данных и документов.</p>
+<p class="subtitle">Пять ролей-дорожек и четыре фазы процесса. Задачи показывают зону ответственности каждой роли, стрелки — передачу данных и документов.</p>
 
 <div class="hint">Наведите курсор на подпись стрелки — увидите, какие именно поля передаются</div>
 
@@ -391,7 +391,8 @@
   <div class="phase-header corner">Роль / Фаза</div>
   <div class="phase-header"><div class="ph-num">Фаза 1</div><div class="ph-title">Сбор данных</div></div>
   <div class="phase-header"><div class="ph-num">Фаза 2</div><div class="ph-title">Расчёт заказа</div></div>
-  <div class="phase-header"><div class="ph-num">Фаза 3</div><div class="ph-title">Регистрация заказов</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 3</div><div class="ph-title">Подготовка заказа</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 4</div><div class="ph-title">Регистрация заказов</div></div>
 
   <div class="lane-name gray">
     <div class="ln-title">ERP клиента</div>
@@ -404,7 +405,8 @@
     </div>
   </div>
   <div class="cell empty" id="c-erp-2"></div>
-  <div class="cell" id="c-erp-3">
+  <div class="cell empty" id="c-erp-3"></div>
+  <div class="cell" id="c-erp-4">
     <div class="task gray">
       <div class="t-title">Регистрация заказа</div>
       <div class="t-desc">Документ закупки, статусы</div>
@@ -423,6 +425,7 @@
   </div>
   <div class="cell empty" id="c-adp-2"></div>
   <div class="cell empty" id="c-adp-3"></div>
+  <div class="cell empty" id="c-adp-4"></div>
 
   <div class="lane-name blue">
     <div class="ln-title">X-Flow</div>
@@ -436,6 +439,7 @@
   </div>
   <div class="cell empty" id="c-xf-2"></div>
   <div class="cell empty" id="c-xf-3"></div>
+  <div class="cell empty" id="c-xf-4"></div>
 
   <div class="lane-name purple">
     <div class="ln-title">Replenishment</div>
@@ -463,6 +467,7 @@
       <div class="t-desc">Финальный документ заказа</div>
     </div>
   </div>
+  <div class="cell empty" id="c-rep-4"></div>
 
   <div class="lane-name rose lane-row-last">
     <div class="ln-title">Адаптер провайдеров</div>
@@ -476,6 +481,7 @@
       <div class="t-desc">EDI / 1С / ERP / CRM по описи поставщика</div>
     </div>
   </div>
+  <div class="cell empty lane-row-last" id="c-prv-4"></div>
 </div>
 
 <svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -891,12 +897,15 @@
     drawLine(rep3.cx, rep3.bottom - 20, prv3.cx, prv3.top + 20);
     drawLabel(rep3.cx, (rep3.bottom + prv3.top)/2, 'order-to-routing');
 
-    // ФАЗА 3: Адаптер провайдеров (Маршрутизация каналов) → ERP (Регистрация заказа).
-    // Стрелка идёт справа от task-блоков, чтобы не пересекать «Блок подготовки заказа» в Replenishment Ф3.
-    const erp3 = rectOf('c-erp-3');
-    const docX = prv3.cx + 130;
-    drawLine(docX, prv3.top + 14, docX, erp3.bottom - 14);
-    drawLabel(docX, (prv3.top + erp3.bottom)/2, 'channel-orders');
+    // ФАЗА 3 → 4: Адаптер провайдеров (Маршрутизация каналов) → ERP×Ф4 (Регистрация заказа).
+    // Диагональ вверх-вправо через пустые ячейки Ф3 (X-Flow, Адаптер источников) и Ф4 (Адаптер источников, X-Flow, Replenishment, Адаптер провайдеров).
+    const erp4 = rectOf('c-erp-4');
+    drawLine(
+      prv3.cx, prv3.top + 14,
+      erp4.cx, erp4.bottom - 14,
+      { via: { x: erp4.cx, y: prv3.top + 14 } }
+    );
+    drawLabel((prv3.cx + erp4.cx)/2, prv3.top + 14, 'channel-orders');
 
   }
 
