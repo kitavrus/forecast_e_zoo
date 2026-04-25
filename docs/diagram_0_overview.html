@@ -66,7 +66,7 @@
   }
   .swimlane {
     display: grid;
-    grid-template-columns: 160px repeat(4, 1fr);
+    grid-template-columns: 160px repeat(3, 1fr);
     gap: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -81,7 +81,7 @@
     border-right: 1px solid var(--line);
     font-size: 13px;
   }
-  .phase-header:nth-child(5) { border-right: none; }
+  .phase-header:nth-child(4) { border-right: none; }
   .phase-header.corner {
     background: rgba(0,0,0,0.025);
     font-size: 11px;
@@ -136,7 +136,7 @@
     justify-content: center;
     position: relative;
   }
-  .cell:nth-child(5n) { border-right: none; }
+  .cell:nth-child(4n) { border-right: none; }
   .cell.empty { background: rgba(0,0,0,0.015); }
   .lane-row-last .cell { border-bottom: none; }
 
@@ -372,7 +372,7 @@
 <body>
 
 <h1>E-Zoo Replenishment. Общая swimlane-диаграмма</h1>
-<p class="subtitle">Пять ролей-дорожек и четыре фазы процесса. Задачи показывают зону ответственности каждой роли, стрелки — передачу данных и документов.</p>
+<p class="subtitle">Пять ролей-дорожек и три фазы процесса. Задачи показывают зону ответственности каждой роли, стрелки — передачу данных и документов.</p>
 
 <div class="hint">Наведите курсор на подпись стрелки — увидите, какие именно поля передаются</div>
 
@@ -392,7 +392,6 @@
   <div class="phase-header"><div class="ph-num">Фаза 1</div><div class="ph-title">Сбор данных</div></div>
   <div class="phase-header"><div class="ph-num">Фаза 2</div><div class="ph-title">Расчёт заказа</div></div>
   <div class="phase-header"><div class="ph-num">Фаза 3</div><div class="ph-title">Регистрация заказов</div></div>
-  <div class="phase-header"><div class="ph-num">Фаза 4</div><div class="ph-title">Приёмка и обратная связь</div></div>
 
   <div class="lane-name gray">
     <div class="ln-title">ERP клиента</div>
@@ -411,12 +410,6 @@
       <div class="t-desc">Документ закупки, статусы</div>
     </div>
   </div>
-  <div class="cell" id="c-erp-4">
-    <div class="task gray">
-      <div class="t-title">Учёт фактов</div>
-      <div class="t-desc">Оприходование, остатки, чеки, списания</div>
-    </div>
-  </div>
 
   <div class="lane-name indigo">
     <div class="ln-title">Адаптер источников</div>
@@ -430,7 +423,6 @@
   </div>
   <div class="cell empty" id="c-adp-2"></div>
   <div class="cell empty" id="c-adp-3"></div>
-  <div class="cell empty" id="c-adp-4"></div>
 
   <div class="lane-name blue">
     <div class="ln-title">X-Flow</div>
@@ -444,12 +436,6 @@
   </div>
   <div class="cell empty" id="c-xf-2"></div>
   <div class="cell empty" id="c-xf-3"></div>
-  <div class="cell" id="c-xf-4">
-    <div class="task blue">
-      <div class="t-title">Возврат фактов</div>
-      <div class="t-desc">Статусы, остатки, продажи → в прогноз</div>
-    </div>
-  </div>
 
   <div class="lane-name purple">
     <div class="ln-title">Replenishment</div>
@@ -477,42 +463,17 @@
       <div class="t-desc">Финальный документ заказа</div>
     </div>
   </div>
-  <div class="cell empty" id="c-rep-4"></div>
 
-  <div class="lane-name rose">
+  <div class="lane-name rose lane-row-last">
     <div class="ln-title">Адаптер провайдеров</div>
     <div class="ln-sub">Маршрутизация и форматы</div>
   </div>
-  <div class="cell empty" id="c-prv-1"></div>
-  <div class="cell empty" id="c-prv-2"></div>
-  <div class="cell" id="c-prv-3">
+  <div class="cell empty lane-row-last" id="c-prv-1"></div>
+  <div class="cell empty lane-row-last" id="c-prv-2"></div>
+  <div class="cell lane-row-last" id="c-prv-3">
     <div class="task rose">
       <div class="t-title">Маршрутизация каналов</div>
       <div class="t-desc">EDI / 1С / ERP / CRM по описи поставщика</div>
-    </div>
-  </div>
-  <div class="cell empty" id="c-prv-4"></div>
-
-  <div class="lane-name teal">
-    <div class="ln-title">Поставщик</div>
-    <div class="ln-sub">Контрагент</div>
-  </div>
-  <div class="cell empty" id="c-sup-1"></div>
-  <div class="cell empty" id="c-sup-2"></div>
-  <div class="cell empty" id="c-sup-3"></div>
-  <div class="cell empty" id="c-sup-4"></div>
-
-  <div class="lane-name amber lane-row-last">
-    <div class="ln-title">Магазин / склад</div>
-    <div class="ln-sub">Приёмка и продажи</div>
-  </div>
-  <div class="cell empty lane-row-last" id="c-shop-1"></div>
-  <div class="cell empty lane-row-last" id="c-shop-2"></div>
-  <div class="cell empty lane-row-last" id="c-shop-3"></div>
-  <div class="cell lane-row-last" id="c-shop-4">
-    <div class="task amber">
-      <div class="t-title">Приёмка и продажи</div>
-      <div class="t-desc">Сверка DESADV, RECADV, выкладка, чеки</div>
     </div>
   </div>
 </div>
@@ -535,7 +496,7 @@
 </div>
 
 <div class="footer">
-  <b>Как читать диаграмму.</b> Каждая строка — роль, каждая колонка — фаза процесса. Задача живёт на пересечении «роль × фаза». Стрелки показывают передачу ответственности: сплошные — прямой поток, пунктирные — обратная связь. <b>Наведите курсор на любую подпись стрелки</b>, чтобы увидеть детальный список передаваемых полей. Фаза 4 замыкается на Фазу 1 — это делает систему самообучающейся.
+  <b>Как читать диаграмму.</b> Каждая строка — роль, каждая колонка — фаза процесса. Задача живёт на пересечении «роль × фаза». Стрелки показывают передачу ответственности: сплошные — прямой поток, пунктирные — обратная связь. <b>Наведите курсор на любую подпись стрелки</b>, чтобы увидеть детальный список передаваемых полей. KPI и калибровка внутри Replenishment Ф2 замыкают цикл — данные о фактах используются для следующего прогноза.
 </div>
 
 <div class="tooltip" id="tooltip"></div>
@@ -747,83 +708,26 @@
         }
       ]
     },
-    'facts-from-store': {
-      title: 'Чеки, RECADV, остатки',
-      meta: 'Магазин → ERP · в реальном времени и CDC',
+    'kpi-to-prognoz': {
+      title: 'KPI → Прогноз',
+      meta: 'Внутри Replenishment Ф2: KPI и калибровка → Прогноз → калькуляция → конструктор',
       sections: [
         {
-          name: 'Чеки с касс (POS)',
+          name: 'Что передаётся',
           items: [
-            'Номер чека, дата, время',
-            'SKU, количество, цена продажи',
-            'Маркдаун и промо-флаги',
-            'Канал: офлайн / онлайн'
+            'OSA, OTIF, Stock days за прошедший цикл',
+            'MAPE / bias прошлого прогноза против факта',
+            'Доля автоматических vs ручных заказов',
+            'Отклонения lead time, отказы поставщиков, расхождения приёмки'
           ]
         },
         {
-          name: 'RECADV — факт приёмки',
+          name: 'Эффект',
           items: [
-            'Принято по каждой позиции (кол-во)',
-            'Расхождения: недостача, пересорт, брак',
-            'Короткие сроки годности',
-            'Причины отклонений',
-            '⚠️ В ТЗ присутствует только как EDI-статус — согласовать: полноценный документ или флаг готовности приёмки в ERP'
-          ]
-        },
-        {
-          name: 'Обновлённые остатки',
-          items: [
-            'Реальный сток после приёмки',
-            'Перемещения между точками',
-            'Списания (с причиной), потери, инвентаризации'
-          ]
-        }
-      ]
-    },
-    'facts-uplink': {
-      title: 'Факты из ERP в интеграцию',
-      meta: 'ERP → X-Flow · по CDC или расписанию (раз в сутки)',
-      sections: [
-        {
-          name: 'Регистрация приёмки и заказов',
-          items: [
-            'Оприходования: SKU-объект-дата-время',
-            'Обновлённые остатки по точкам после приёмки',
-            'Расхождения приёмки (из RECADV): недостача, пересорт, брак',
-            'Статусы отправленных заказов: в пути / получен / закрыт'
-          ]
-        },
-        {
-          name: 'Факты из торгового дня',
-          items: [
-            'Чеки с касс: SKU, кол-во, цена, маркдаун, канал (офлайн/онлайн)',
-            'Списания с причинами',
-            'Перемещения между точками (SKU-объект1-объект2)',
-            'Результаты инвентаризаций'
-          ]
-        }
-      ]
-    },
-    'calibration': {
-      title: 'Факт для калибровки',
-      meta: 'X-Flow Ф4 → Replenishment Ф2 (KPI и калибровка) · замыкание цикла на единый блок прогноза',
-      sections: [
-        {
-          name: 'KPI для мониторинга',
-          items: [
-            'OSA: % SKU доступен на полке',
-            'OTIF: % онлайн-заказов собран полностью и вовремя',
-            'Stock days: покрытие стока в днях',
-            'Доля автоматических заказов vs ручных'
-          ]
-        },
-        {
-          name: 'Данные для калибровки моделей',
-          items: [
-            'Прогноз vs факт по SKU-точка-день',
-            'MAPE, bias по ассортименту',
-            'Отклонения от плана поставок (lead time)',
-            'Отказы поставщиков, расхождения в приёмке'
+            'Калибровка моделей прогнозирования',
+            'Корректировка точек заказа и MSP',
+            'Уточнение бизнес-правил конструктора',
+            'Сигнал об ассортименте/поставщиках с проблемой'
           ]
         }
       ]
@@ -966,14 +870,18 @@
     drawLine(xf1.cx, xf1.bottom - 20, rep1.cx, rep1.top + 20);
     drawLabel(xf1.cx, (xf1.bottom + rep1.top)/2, 'vitrines');
 
-    // ФАЗА 1 → 2 (входные данные приходят в нижний sub-блок «Прогноз → калькуляция → конструктор»)
-    const rep2  = rectOf('c-rep-2');
-    const repBuild = rectOf('rep2-build');
+    // ФАЗА 1 → 2: Витрины → KPI и калибровка (верхний sub-блок rep2)
+    const rep2     = rectOf('c-rep-2');
     const repKpi   = rectOf('rep2-kpi');
-    drawLine(rep1.right - 20, rep1.cy, repBuild.left - 4, repBuild.cy, { via: { x: repBuild.left - 24, y: rep1.cy } });
-    drawLabel((rep1.right + repBuild.left)/2, rep1.cy - 14, 'inputs');
+    const repBuild = rectOf('rep2-build');
+    drawLine(rep1.right - 20, rep1.cy, repKpi.left - 4, repKpi.cy, { via: { x: repKpi.left - 24, y: rep1.cy } });
+    drawLabel((rep1.right + repKpi.left)/2, rep1.cy - 14, 'inputs');
 
-    // ФАЗА 2 → 3 (Replenishment Ф2 «Конструктор» → Replenishment Ф3 «Блок подготовки заказа»)
+    // Внутри rep2: KPI → Прогноз/Калькуляция/Конструктор (vertical)
+    drawLine(repKpi.cx, repKpi.bottom + 2, repBuild.cx, repBuild.top - 2);
+    drawLabel(repKpi.cx + 60, (repKpi.bottom + repBuild.top)/2, 'kpi-to-prognoz');
+
+    // ФАЗА 2 → 3 (Конструктор → Блок подготовки заказа)
     const rep3 = rectOf('c-rep-3');
     drawLine(repBuild.right + 4, repBuild.cy, rep3.left + 20, rep3.cy);
     drawLabel((repBuild.right + rep3.left)/2 + 12, repBuild.cy - 14, 'ready-order');
@@ -990,36 +898,6 @@
     drawLine(docX, prv3.top + 14, docX, erp3.bottom - 14);
     drawLabel(docX, (prv3.top + erp3.bottom)/2, 'channel-orders');
 
-    // ФАЗА 4: Магазин → ERP (обход task-блоков через правую кромку Фазы 4)
-    const shop4 = rectOf('c-shop-4');
-    const erp4 = rectOf('c-erp-4');
-    const sup4 = rectOf('c-sup-4');
-    drawLine(
-      shop4.cx - 30, shop4.top + 20,
-      erp4.cx - 30, erp4.bottom - 20,
-      {
-        dashed: true,
-        via: [
-          { x: shop4.cx - 30, y: shop4.top + 4 },
-          { x: shop4.right - 10, y: shop4.top + 4 },
-          { x: erp4.right - 10, y: erp4.bottom - 4 },
-          { x: erp4.cx - 30, y: erp4.bottom - 4 }
-        ]
-      }
-    );
-    drawLabel(shop4.right - 10, sup4.cy, 'facts-from-store');
-
-    // ФАЗА 4: ERP → X-Flow → Replenishment (KPI/калибровка теперь в rep2)
-    const xf4 = rectOf('c-xf-4');
-    drawLine(erp4.cx, erp4.bottom - 20, xf4.cx, xf4.top + 20, { dashed: true });
-    drawLabel(xf4.cx, (erp4.bottom + xf4.top)/2, 'facts-uplink');
-    // calibration: горизонтально влево от X-Flow Ф4 до колонки Ф2, затем вниз в KPI sub-блок rep2
-    drawLine(
-      xf4.left + 20, xf4.cy,
-      repKpi.cx, repKpi.top - 4,
-      { dashed: true, via: [{ x: repKpi.cx, y: xf4.cy }] }
-    );
-    drawLabel((xf4.left + repKpi.cx)/2, xf4.cy - 14, 'calibration');
   }
 
   window.addEventListener('load',   () => setTimeout(render, 60));
