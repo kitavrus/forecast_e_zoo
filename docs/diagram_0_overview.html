@@ -16,6 +16,7 @@
     --teal-50:#E1F5EE;   --teal-600:#0F6E56;   --teal-800:#085041;
     --amber-50:#FAEEDA;  --amber-600:#854F0B;  --amber-800:#633806;
     --indigo-50:#E8E7F8; --indigo-600:#4C3FAA; --indigo-800:#332877;
+    --rose-50:#FDE6EE;   --rose-600:#B92864;   --rose-800:#841845;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -123,6 +124,7 @@
   .lane-name.teal   { background: var(--teal-50);   color: var(--teal-800);   }
   .lane-name.amber  { background: var(--amber-50);  color: var(--amber-800);  }
   .lane-name.indigo { background: var(--indigo-50); color: var(--indigo-800); }
+  .lane-name.rose   { background: var(--rose-50);   color: var(--rose-800);   }
 
   .cell {
     padding: 18px 14px;
@@ -166,6 +168,7 @@
   .task.teal   { background: var(--teal-50);   border-color: var(--teal-600);   color: var(--teal-800);   }
   .task.amber  { background: var(--amber-50);  border-color: var(--amber-600);  color: var(--amber-800);  }
   .task.indigo { background: var(--indigo-50); border-color: var(--indigo-600); color: var(--indigo-800); }
+  .task.rose   { background: var(--rose-50);   border-color: var(--rose-600);   color: var(--rose-800);   }
 
   .arrows-layer {
     position: absolute;
@@ -430,12 +433,7 @@
     </div>
   </div>
   <div class="cell empty" id="c-xf-2"></div>
-  <div class="cell" id="c-xf-3">
-    <div class="task blue">
-      <div class="t-title">EDI-маршрутизация</div>
-      <div class="t-desc">ORDERS ↔ ORDRSP ↔ DESADV ↔ РН ЭЦП</div>
-    </div>
-  </div>
+  <div class="cell empty" id="c-xf-3"></div>
   <div class="cell" id="c-xf-4">
     <div class="task blue">
       <div class="t-title">Возврат фактов</div>
@@ -466,6 +464,20 @@
       <div class="t-desc">OSA, OTIF, Stock days, калибровка</div>
     </div>
   </div>
+
+  <div class="lane-name rose">
+    <div class="ln-title">Адаптер провайдеров</div>
+    <div class="ln-sub">Маршрутизация и форматы</div>
+  </div>
+  <div class="cell empty" id="c-prv-1"></div>
+  <div class="cell empty" id="c-prv-2"></div>
+  <div class="cell" id="c-prv-3">
+    <div class="task rose">
+      <div class="t-title">Маршрутизация каналов</div>
+      <div class="t-desc">EDI / 1С / ERP / CRM по описи поставщика</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-prv-4"></div>
 
   <div class="lane-name teal">
     <div class="ln-title">Поставщик</div>
@@ -665,73 +677,95 @@
     },
     'copy-docs': {
       title: 'Копии документов в ERP',
-      meta: 'X-Flow → ERP · параллельно с отправкой поставщику',
+      meta: 'Адаптер провайдеров → ERP · параллельно с отправкой поставщику',
       sections: [
         {
-          name: 'Передаётся',
+          name: 'Передаётся (формат зависит от канала)',
           items: [
-            'Копия ORDERS → документ закупки',
-            'ORDRSP → обновление статуса, корректировки',
-            'DESADV → ASN-документ ожидаемой поставки',
-            'РН с ЭЦП → основа для проведения прихода'
+            'Копия исходящего заказа → документ закупки в ERP',
+            'Подтверждение / корректировки → обновление статуса',
+            'Уведомление об отгрузке → ASN-документ ожидаемой поставки',
+            'Финальный документ канала (РН с ЭЦП для EDI, выходной документ 1С/ERP/CRM) → основа для проводки прихода'
           ]
         }
       ]
     },
-    'orders': {
-      title: 'EDI ORDERS',
-      meta: 'X-Flow → Поставщик · формат EDIFACT',
+    'channel-orders': {
+      title: 'Исходящий заказ по каналу поставщика',
+      meta: 'Адаптер провайдеров → Поставщик · формат и канал по описи поставщика',
       sections: [
         {
-          name: 'Состав документа',
+          name: 'Как адаптер выбирает канал',
           items: [
-            'Тип сообщения: ORDERS (EDIFACT / GS1 EANCOM — профиль и версия на уточнение с провайдером)',
-            'Номер заказа, дата заказа',
-            'GLN покупателя, GLN поставщика',
-            'GLN точки доставки (магазин/склад)',
-            'Валюта, условия оплаты'
+            'По описи поставщика: какие каналы поддерживает (EDI / 1С / ERP / CRM / REST)',
+            'По типу заказа и стратегии: регулярная поставка, спот, под клиента, дроп-шип',
+            'Приоритет канала + fallback (если EDI недоступен → REST → ручная выгрузка)',
+            'SLA канала и историческая надёжность доставки'
           ]
         },
         {
-          name: 'Позиции (LIN)',
+          name: 'EDI (EDIFACT / GS1 EANCOM)',
           items: [
-            'EAN-13 или SKU',
-            'Количество и единица измерения',
-            'Цена за единицу (PRI)',
-            'Запрошенная дата поставки (DTM)'
+            'ORDERS: GLN покупателя/поставщика/точки доставки, валюта, условия оплаты',
+            'Позиции LIN: EAN-13 или SKU, количество, цена PRI, дата поставки DTM',
+            'Профиль и версия EDIFACT — по описи провайдера'
+          ]
+        },
+        {
+          name: '1С (HTTP-сервис, обмен файлами)',
+          items: [
+            'Документ «Заказ поставщику» в формате 1С (XDTO/JSON)',
+            'Web-сервис 1С или файловый обмен через S3/SFTP',
+            'Контрагент-поставщик и точка доставки по справочнику 1С'
+          ]
+        },
+        {
+          name: 'ERP enterprise (SAP / Oracle / другие)',
+          items: [
+            'IDoc ORDERS05 / BAPI_PO_CREATE1 (SAP)',
+            'REST-вызов purchase-order endpoint с JSON-payload',
+            'Идентификаторы поставщика и точки в схеме целевого ERP'
+          ]
+        },
+        {
+          name: 'CRM / REST API поставщика',
+          items: [
+            'POST /orders или эквивалент в CRM-системе поставщика',
+            'JSON по схеме провайдера + аутентификация (OAuth, API key)',
+            'Связка заказа со сделкой/лидом если CRM использует продажный пайплайн'
           ]
         }
       ]
     },
-    'ordrsp-desadv-rn': {
-      title: 'ORDRSP / DESADV / РН с ЭЦП',
-      meta: 'Поставщик → X-Flow · обратный поток документов',
+    'channel-feedback': {
+      title: 'Обратный поток по каналу поставщика',
+      meta: 'Поставщик → Адаптер провайдеров · подтверждение, отгрузка, финальный документ',
       sections: [
         {
-          name: 'ORDRSP — подтверждение',
+          name: 'Подтверждение заказа',
           items: [
-            'Статус: принят / принят с изменениями / отклонён',
-            'Корректировки: количество, цена, дата',
-            'Причины изменений по позициям',
-            'SLA на ответ — согласовывается с поставщиком индивидуально'
+            'EDI: ORDRSP — статус (принят / с изменениями / отклонён), корректировки',
+            '1С/ERP: статус документа закупки, номер встречного заказа',
+            'CRM/REST: response с подтверждением и SLA на ответ',
+            'Адаптер нормализует все варианты в единый канонический статус заказа'
           ]
         },
         {
-          name: 'DESADV — уведомление об отгрузке',
+          name: 'Уведомление об отгрузке',
           items: [
-            'SSCC-коды паллет и коробов',
-            'Номера партий, сроки годности',
-            'Фактическое количество к отгрузке',
-            'Дата отгрузки, ожидаемая дата прибытия'
+            'EDI: DESADV — SSCC паллет/коробов, партии, сроки годности, фактические кол-ва',
+            '1С/ERP: расходная накладная или ASN-документ',
+            'CRM/REST: shipment notification с tracking',
+            'Дата отгрузки, ожидаемая дата прибытия — независимо от канала'
           ]
         },
         {
-          name: 'РН с ЭЦП',
+          name: 'Финальный юридически значимый документ',
           items: [
-            'Расходная накладная (юридически значимый документ)',
-            'Электронная цифровая подпись поставщика',
-            'Основа для проводки прихода в ERP',
-            '⚠️ В ТЗ упомянут как EDI-статус — трактовка как документа и формат ЭЦП (КЭП/КНЭДП) требуют подтверждения заказчика'
+            'EDI: РН с ЭЦП (КЭП/КНЭДП — формат уточняется с провайдером)',
+            '1С/ERP: документ реализации поставщика с подписью',
+            'CRM/REST: invoice + сопровождающий PDF/XML',
+            'Основа для проводки прихода в ERP клиента'
           ]
         }
       ]
@@ -985,27 +1019,27 @@
     drawLine(rep1.right - 20, rep1.cy, rep2.left + 20, rep2.cy);
     drawLabel((rep1.right + rep2.left)/2, rep1.cy - 14, 'inputs');
 
-    // ФАЗА 2 → 3
-    const xf3 = rectOf('c-xf-3');
+    // ФАЗА 2 → 3 (Replenishment Ф2 → Адаптер провайдеров Ф3)
+    const prv3 = rectOf('c-prv-3');
     drawLine(
       rep2.right - 20, rep2.cy,
-      xf3.cx, xf3.bottom - 20,
-      { via: { x: xf3.cx, y: rep2.cy } }
+      prv3.cx, prv3.top + 20,
+      { via: { x: prv3.cx, y: rep2.cy } }
     );
-    drawLabel(xf3.cx, rep2.cy - 14, 'ready-order');
+    drawLabel(prv3.cx, rep2.cy - 14, 'ready-order');
 
-    // ФАЗА 3: X-Flow ↔ Поставщик
+    // ФАЗА 3: Адаптер провайдеров ↔ Поставщик
     const sup3 = rectOf('c-sup-3');
-    drawLine(xf3.cx - 40, xf3.bottom - 20, sup3.cx - 40, sup3.top + 20);
-    drawLabel(xf3.cx - 40, (xf3.bottom + sup3.top)/2 - 8, 'orders');
+    drawLine(prv3.cx - 40, prv3.bottom - 20, sup3.cx - 40, sup3.top + 20);
+    drawLabel(prv3.cx - 40, (prv3.bottom + sup3.top)/2 - 8, 'channel-orders');
 
-    drawLine(sup3.cx + 40, sup3.top + 20, xf3.cx + 40, xf3.bottom - 20, { dashed: true });
-    drawLabel(xf3.cx + 40, (xf3.bottom + sup3.top)/2 + 14, 'ordrsp-desadv-rn');
+    drawLine(sup3.cx + 40, sup3.top + 20, prv3.cx + 40, prv3.bottom - 20, { dashed: true });
+    drawLabel(prv3.cx + 40, (prv3.bottom + sup3.top)/2 + 14, 'channel-feedback');
 
-    // ФАЗА 3: X-Flow → ERP
+    // ФАЗА 3: Адаптер провайдеров → ERP (копии документов идут вверх через пустые ячейки)
     const erp3 = rectOf('c-erp-3');
-    drawLine(xf3.cx, xf3.top + 20, erp3.cx, erp3.bottom - 20);
-    drawLabel(xf3.cx, (xf3.top + erp3.bottom)/2, 'copy-docs');
+    drawLine(prv3.right - 30, prv3.top + 20, erp3.right - 30, erp3.bottom - 20);
+    drawLabel(prv3.right - 30, (prv3.top + erp3.bottom)/2, 'copy-docs');
 
     // ФАЗА 3 → 4: Поставщик → Магазин (через пустую ячейку Фаза 3 × Магазин)
     const shop4 = rectOf('c-shop-4');
