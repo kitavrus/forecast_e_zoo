@@ -170,6 +170,16 @@
   .task.indigo { background: var(--indigo-50); border-color: var(--indigo-600); color: var(--indigo-800); }
   .task.rose   { background: var(--rose-50);   border-color: var(--rose-600);   color: var(--rose-800);   }
 
+  .cell.stacked {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    justify-content: center;
+    padding: 14px;
+    min-height: 200px;
+  }
+  .cell.stacked .task { max-width: none; }
+
   .arrows-layer {
     position: absolute;
     inset: 0;
@@ -451,8 +461,12 @@
       <div class="t-desc">SKU, точки, движения, планирование</div>
     </div>
   </div>
-  <div class="cell" id="c-rep-2">
-    <div class="task purple">
+  <div class="cell stacked" id="c-rep-2">
+    <div class="task purple" id="rep2-kpi">
+      <div class="t-title">KPI и калибровка</div>
+      <div class="t-desc">OSA, OTIF, Stock days</div>
+    </div>
+    <div class="task purple" id="rep2-build">
       <div class="t-title">Прогноз → калькуляция → конструктор</div>
       <div class="t-desc">Спрос, потребность, правила, готовый заказ</div>
     </div>
@@ -463,12 +477,7 @@
       <div class="t-desc">Финальный документ заказа</div>
     </div>
   </div>
-  <div class="cell" id="c-rep-4">
-    <div class="task purple">
-      <div class="t-title">KPI и следующий цикл</div>
-      <div class="t-desc">OSA, OTIF, Stock days, калибровка</div>
-    </div>
-  </div>
+  <div class="cell empty" id="c-rep-4"></div>
 
   <div class="lane-name rose">
     <div class="ln-title">Адаптер провайдеров</div>
@@ -797,7 +806,7 @@
     },
     'calibration': {
       title: 'Факт для калибровки',
-      meta: 'X-Flow → Replenishment · замыкание цикла',
+      meta: 'X-Flow Ф4 → Replenishment Ф2 (KPI и калибровка) · замыкание цикла на единый блок прогноза',
       sections: [
         {
           name: 'KPI для мониторинга',
@@ -957,15 +966,17 @@
     drawLine(xf1.cx, xf1.bottom - 20, rep1.cx, rep1.top + 20);
     drawLabel(xf1.cx, (xf1.bottom + rep1.top)/2, 'vitrines');
 
-    // ФАЗА 1 → 2
-    const rep2 = rectOf('c-rep-2');
-    drawLine(rep1.right - 20, rep1.cy, rep2.left + 20, rep2.cy);
-    drawLabel((rep1.right + rep2.left)/2, rep1.cy - 14, 'inputs');
+    // ФАЗА 1 → 2 (входные данные приходят в нижний sub-блок «Прогноз → калькуляция → конструктор»)
+    const rep2  = rectOf('c-rep-2');
+    const repBuild = rectOf('rep2-build');
+    const repKpi   = rectOf('rep2-kpi');
+    drawLine(rep1.right - 20, rep1.cy, repBuild.left - 4, repBuild.cy, { via: { x: repBuild.left - 24, y: rep1.cy } });
+    drawLabel((rep1.right + repBuild.left)/2, rep1.cy - 14, 'inputs');
 
     // ФАЗА 2 → 3 (Replenishment Ф2 «Конструктор» → Replenishment Ф3 «Блок подготовки заказа»)
     const rep3 = rectOf('c-rep-3');
-    drawLine(rep2.right - 20, rep2.cy, rep3.left + 20, rep3.cy);
-    drawLabel((rep2.right + rep3.left)/2, rep2.cy - 14, 'ready-order');
+    drawLine(repBuild.right + 4, repBuild.cy, rep3.left + 20, rep3.cy);
+    drawLabel((repBuild.right + rep3.left)/2 + 12, repBuild.cy - 14, 'ready-order');
 
     // ФАЗА 3: Replenishment (Блок подготовки заказа) → Адаптер провайдеров (Маршрутизация каналов)
     const prv3 = rectOf('c-prv-3');
@@ -998,13 +1009,17 @@
     );
     drawLabel(shop4.right - 10, sup4.cy, 'facts-from-store');
 
-    // ФАЗА 4: ERP → X-Flow → Replenishment
+    // ФАЗА 4: ERP → X-Flow → Replenishment (KPI/калибровка теперь в rep2)
     const xf4 = rectOf('c-xf-4');
-    const rep4 = rectOf('c-rep-4');
     drawLine(erp4.cx, erp4.bottom - 20, xf4.cx, xf4.top + 20, { dashed: true });
     drawLabel(xf4.cx, (erp4.bottom + xf4.top)/2, 'facts-uplink');
-    drawLine(xf4.cx, xf4.bottom - 20, rep4.cx, rep4.top + 20, { dashed: true });
-    drawLabel(xf4.cx, (xf4.bottom + rep4.top)/2, 'calibration');
+    // calibration: горизонтально влево от X-Flow Ф4 до колонки Ф2, затем вниз в KPI sub-блок rep2
+    drawLine(
+      xf4.left + 20, xf4.cy,
+      repKpi.cx, repKpi.top - 4,
+      { dashed: true, via: [{ x: repKpi.cx, y: xf4.cy }] }
+    );
+    drawLabel((xf4.left + repKpi.cx)/2, xf4.cy - 14, 'calibration');
   }
 
   window.addEventListener('load',   () => setTimeout(render, 60));
