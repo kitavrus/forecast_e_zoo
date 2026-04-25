@@ -457,7 +457,12 @@
       <div class="t-desc">Спрос, потребность, правила, готовый заказ</div>
     </div>
   </div>
-  <div class="cell empty" id="c-rep-3"></div>
+  <div class="cell" id="c-rep-3">
+    <div class="task purple">
+      <div class="t-title">Блок подготовки заказа</div>
+      <div class="t-desc">Финальный документ заказа</div>
+    </div>
+  </div>
   <div class="cell" id="c-rep-4">
     <div class="task purple">
       <div class="t-title">KPI и следующий цикл</div>
@@ -648,7 +653,7 @@
     },
     'ready-order': {
       title: 'Готовый заказ',
-      meta: 'Replenishment → X-Flow · по расписанию или внепланово',
+      meta: 'Replenishment Ф2 (Конструктор) → Replenishment Ф3 (Блок подготовки заказа)',
       sections: [
         {
           name: 'Шапка документа',
@@ -670,9 +675,25 @@
         }
       ]
     },
+    'order-to-routing': {
+      title: 'Готовый заказ → Маршрутизация',
+      meta: 'Replenishment Ф3 (Блок подготовки) → Адаптер провайдеров (Маршрутизация каналов)',
+      sections: [
+        {
+          name: 'Что передаётся',
+          items: [
+            'Финальный документ заказа в каноническом формате',
+            'Шапка: поставщик, точка выгрузки, дата поставки, валюта, статус «готов к отправке»',
+            'Позиции: SKU, количество (с учётом кратности), цена, сумма',
+            'Метаданные стратегии: тип заказа (регулярный / промо / спот), приоритет поставщика',
+            'Ссылка на расчётный пакет (прогноз / калькуляция) для аудита'
+          ]
+        }
+      ]
+    },
     'channel-orders': {
-      title: 'Маршрутизированный заказ → Регистрация в ERP',
-      meta: 'Адаптер провайдеров → ERP (Регистрация заказа) · отправка во внешнюю систему поставщика идёт параллельно вне диаграммы; ответ и факты возвращаются через Фазу 1 (Адаптер источников)',
+      title: 'Передача заказа в формате целевой системы',
+      meta: 'Адаптер провайдеров → ERP (Регистрация заказа) · передаёт заказ в формате для регистрации в зависимости от целевой системы (1С / ERP / CRM / EDI). Параллельно отправка во внешнюю систему поставщика; ответ и факты возвращаются через Фазу 1 (Адаптер источников).',
       sections: [
         {
           name: 'Как адаптер выбирает канал',
@@ -941,21 +962,22 @@
     drawLine(rep1.right - 20, rep1.cy, rep2.left + 20, rep2.cy);
     drawLabel((rep1.right + rep2.left)/2, rep1.cy - 14, 'inputs');
 
-    // ФАЗА 2 → 3 (Replenishment Ф2 → Адаптер провайдеров Ф3)
-    const prv3 = rectOf('c-prv-3');
-    drawLine(
-      rep2.right - 20, rep2.cy,
-      prv3.cx, prv3.top + 20,
-      { via: { x: prv3.cx, y: rep2.cy } }
-    );
-    drawLabel(prv3.cx, rep2.cy - 14, 'ready-order');
+    // ФАЗА 2 → 3 (Replenishment Ф2 «Конструктор» → Replenishment Ф3 «Блок подготовки заказа»)
+    const rep3 = rectOf('c-rep-3');
+    drawLine(rep2.right - 20, rep2.cy, rep3.left + 20, rep3.cy);
+    drawLabel((rep2.right + rep3.left)/2, rep2.cy - 14, 'ready-order');
 
-    // ФАЗА 3: Адаптер провайдеров → ERP (Регистрация заказа)
-    // Готовый маршрутизированный заказ (формат канала + копия для регистрации)
-    // идёт вверх через пустые ячейки X-Flow Ф3, Адаптер источников Ф3.
+    // ФАЗА 3: Replenishment (Блок подготовки заказа) → Адаптер провайдеров (Маршрутизация каналов)
+    const prv3 = rectOf('c-prv-3');
+    drawLine(rep3.cx, rep3.bottom - 20, prv3.cx, prv3.top + 20);
+    drawLabel(rep3.cx, (rep3.bottom + prv3.top)/2, 'order-to-routing');
+
+    // ФАЗА 3: Адаптер провайдеров (Маршрутизация каналов) → ERP (Регистрация заказа).
+    // Стрелка идёт справа от task-блоков, чтобы не пересекать «Блок подготовки заказа» в Replenishment Ф3.
     const erp3 = rectOf('c-erp-3');
-    drawLine(prv3.cx, prv3.top + 14, erp3.cx, erp3.bottom - 14);
-    drawLabel(prv3.cx, (prv3.top + erp3.bottom)/2, 'channel-orders');
+    const docX = prv3.cx + 130;
+    drawLine(docX, prv3.top + 14, docX, erp3.bottom - 14);
+    drawLabel(docX, (prv3.top + erp3.bottom)/2, 'channel-orders');
 
     // ФАЗА 4: Магазин → ERP (обход task-блоков через правую кромку Фазы 4)
     const shop4 = rectOf('c-shop-4');
