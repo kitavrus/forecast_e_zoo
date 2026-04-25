@@ -732,31 +732,6 @@
         }
       ]
     },
-    'physical': {
-      title: 'Физическая поставка',
-      meta: 'Поставщик → Магазин/склад · по расписанию в DESADV',
-      sections: [
-        {
-          name: 'Что приезжает',
-          items: [
-            'Паллеты с SSCC-кодами',
-            'Короба по партиям',
-            'Сопроводительные документы',
-            'Товарно-транспортная накладная',
-            'Маршрут: поставщик → (опц.) промежуточная точка выгрузки → магазин/склад'
-          ]
-        },
-        {
-          name: 'Что проверяется при приёмке',
-          items: [
-            'Количество паллет и коробов',
-            'Соответствие SSCC из DESADV',
-            'Целостность упаковки',
-            'Сроки годности'
-          ]
-        }
-      ]
-    },
     'facts-from-store': {
       title: 'Чеки, RECADV, остатки',
       meta: 'Магазин → ERP · в реальном времени и CDC',
@@ -1003,17 +978,8 @@
     drawLine(docX, prv3.top + 14, docX, erp3.bottom - 14);
     drawLabel(docX, (prv3.top + erp3.bottom)/2, 'copy-docs');
 
-    // ФАЗА 3 → 4: Поставщик → Магазин (через пустую ячейку Фаза 3 × Магазин)
-    const shop4 = rectOf('c-shop-4');
-    const shop3 = rectOf('c-shop-3');
-    drawLine(
-      sup3.cx, sup3.bottom - 10,
-      shop4.left + 20, shop4.cy,
-      { via: { x: sup3.cx, y: shop4.cy } }
-    );
-    drawLabel(sup3.cx, shop3.cy, 'physical');
-
     // ФАЗА 4: Магазин → ERP (обход task-блоков через правую кромку Фазы 4)
+    const shop4 = rectOf('c-shop-4');
     const erp4 = rectOf('c-erp-4');
     const sup4 = rectOf('c-sup-4');
     drawLine(
