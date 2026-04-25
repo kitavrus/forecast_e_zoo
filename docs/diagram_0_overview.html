@@ -890,7 +890,7 @@
     // ФАЗА 2 → 3 (Конструктор → Блок подготовки заказа)
     const rep3 = rectOf('c-rep-3');
     drawLine(repBuild.right + 4, repBuild.cy, rep3.left + 20, rep3.cy);
-    drawLabel((repBuild.right + rep3.left)/2, rep3.top + 28, 'ready-order');
+    drawLabel((repBuild.right + rep3.left)/2, (repBuild.cy + rep3.cy)/2, 'ready-order');
 
     // ФАЗА 3: Replenishment (Блок подготовки заказа) → Адаптер провайдеров (Маршрутизация каналов)
     const prv3 = rectOf('c-prv-3');
