@@ -1036,10 +1036,12 @@
     drawLine(sup3.cx + 40, sup3.top + 20, prv3.cx + 40, prv3.bottom - 20, { dashed: true });
     drawLabel(prv3.cx + 40, (prv3.bottom + sup3.top)/2 + 14, 'channel-feedback');
 
-    // ФАЗА 3: Адаптер провайдеров → ERP (копии документов идут вверх через пустые ячейки)
+    // ФАЗА 3: Адаптер провайдеров → ERP (Регистрация заказа)
+    // Стрелка идёт вверх рядом с правым краем task-блоков через пустые ячейки.
     const erp3 = rectOf('c-erp-3');
-    drawLine(prv3.right - 30, prv3.top + 20, erp3.right - 30, erp3.bottom - 20);
-    drawLabel(prv3.right - 30, (prv3.top + erp3.bottom)/2, 'copy-docs');
+    const docX = prv3.cx + 130;
+    drawLine(docX, prv3.top + 14, docX, erp3.bottom - 14);
+    drawLabel(docX, (prv3.top + erp3.bottom)/2, 'copy-docs');
 
     // ФАЗА 3 → 4: Поставщик → Магазин (через пустую ячейку Фаза 3 × Магазин)
     const shop4 = rectOf('c-shop-4');
