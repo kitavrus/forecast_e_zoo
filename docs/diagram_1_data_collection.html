@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Процесс 1. Сбор данных из ERP</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --ink: #2C2C2A;
+    --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15);
+    --lane-bg: rgba(255,255,255,0.6);
+    --gray-50:#F1EFE8; --gray-600:#5F5E5A; --gray-800:#444441;
+    --blue-50:#E6F1FB; --blue-600:#185FA5; --blue-800:#0C447C;
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 40px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 28px;
+  }
+  .diagram {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .lane-label {
+    border-radius: 10px;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    border: 1px solid;
+  }
+  .lane-label .title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .lane-label .subt { font-size: 13px; opacity: 0.8; }
+  .lane-label.gray   { background: var(--gray-50);   border-color: var(--gray-600); color: var(--gray-800); }
+  .lane-label.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .lane-label.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .lane-content {
+    background: var(--lane-bg);
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 20px;
+    display: grid;
+    gap: 16px;
+    position: relative;
+  }
+  .lane-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .lane-row.two { grid-template-columns: repeat(2, 1fr); }
+  .card {
+    border-radius: 8px;
+    border: 1px solid;
+    padding: 14px 16px;
+    font-size: 13px;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  .card .card-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .card ul {
+    list-style: none;
+    font-size: 12.5px;
+    line-height: 1.55;
+    opacity: 0.88;
+  }
+  .card ul li {
+    padding-left: 10px;
+    position: relative;
+  }
+  .card ul li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 8px;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.5;
+  }
+  .card.gray   { background: var(--gray-50);   border-color: var(--gray-600); color: var(--gray-800); }
+  .card.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .card.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+
+  .flow-arrows {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin: -8px 0;
+    pointer-events: none;
+  }
+  .flow-arrows .label { }
+  .flow-arrows .arrows {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    padding: 0 20px;
+  }
+  .arrow-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px;
+  }
+  .arrow-line {
+    width: 1.5px;
+    height: 14px;
+    background: var(--ink);
+    opacity: 0.45;
+  }
+  .arrow-head {
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid var(--ink);
+    opacity: 0.45;
+  }
+  .arrow-label {
+    font-size: 11.5px;
+    color: var(--muted);
+    padding: 4px 10px;
+    background: var(--bg);
+    border-radius: 4px;
+    margin: 4px 0;
+    text-align: center;
+    max-width: 260px;
+  }
+  .legend {
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: var(--lane-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .legend b { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+<h1>Процесс 1. Сбор мастер-данных и статистики</h1>
+<p class="subtitle">Поток данных из ERP E-Zoo через интеграционный слой X-Flow в витрины системы репленишмента</p>
+
+<div class="diagram">
+  <div class="lane-label gray">
+    <div class="title">ERP клиента</div>
+    <div class="subt">E-Zoo · источник</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row">
+      <div class="card gray">
+        <div class="card-title">Товары и иерархия</div>
+        <ul>
+          <li>SKU, штрих-код, название</li>
+          <li>Вес, упаковка, паллета</li>
+          <li>Срок и температура хранения</li>
+          <li>УКТ ВЭД, страна-производитель</li>
+        </ul>
+      </div>
+      <div class="card gray">
+        <div class="card-title">Точки и поставщики</div>
+        <ul>
+          <li>Магазин, склад, кросс-хаб</li>
+          <li>GLN, адрес, GPS, график</li>
+          <li>ЕДРПОУ / ИНН, тип</li>
+          <li>EDI-статусы документов</li>
+        </ul>
+      </div>
+      <div class="card gray">
+        <div class="card-title">Статистика движений</div>
+        <ul>
+          <li>Остатки SKU-объект-время</li>
+          <li>Чеки с касс, маркдаун</li>
+          <li>Перемещения, списания</li>
+          <li>Инвентаризации, оприходования</li>
+        </ul>
+      </div>
+    </div>
+    <div class="lane-row two">
+      <div class="card gray">
+        <div class="card-title">План поставок и бизнес-правила</div>
+        <ul>
+          <li>Расписание, периодичность, точка выгрузки</li>
+          <li>Лимиты по сумме, паллетам, весу, объёму</li>
+          <li>Бизнес-правило калькуляции, точка заказа</li>
+          <li>Ассортимент: MSP, фейсы, дополнительная выкладка</li>
+        </ul>
+      </div>
+      <div class="card gray">
+        <div class="card-title">Промо и спецификации поставок</div>
+        <ul>
+          <li>Тип акции, даты начала и окончания</li>
+          <li>Промо-цена реализации с НДС</li>
+          <li>Мин. количество заказа, закупочная цена</li>
+          <li>Приоритетность поставщика по SKU</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div class="label"></div>
+  <div class="arrows">
+    <div class="arrow-col">
+      <div class="arrow-label">Справочники · 1 раз в сутки</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Движения · CDC или сутки</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Правила и промо · сутки</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label blue">
+    <div class="title">X-Flow</div>
+    <div class="subt">ETL и интеграция</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row">
+      <div class="card blue">
+        <div class="card-title">ETL справочников</div>
+        <ul>
+          <li>Выгрузка из ERP по расписанию</li>
+          <li>Нормализация значений</li>
+          <li>Мэппинг внешних идентификаторов</li>
+          <li>Поддержка версий записей</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <div class="card-title">Валидация и CDC</div>
+        <ul>
+          <li>Проверка ссылочной целостности</li>
+          <li>Контроль типов и обязательных полей</li>
+          <li>Инкремент по изменениям (CDC)</li>
+          <li>Дедупликация событий</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <div class="card-title">Журнал и обработка ошибок</div>
+        <ul>
+          <li>Логи загрузок и отклонений</li>
+          <li>Повторы по расписанию</li>
+          <li>Уведомления об ошибках</li>
+          <li>Метрики задержки и объёма</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div class="label"></div>
+  <div class="arrows">
+    <div class="arrow-col">
+      <div class="arrow-label">Очищенные справочники</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Валидированные движения</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Правила и календарь промо</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label purple">
+    <div class="title">Replenishment</div>
+    <div class="subt">Витрины данных</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row">
+      <div class="card purple">
+        <div class="card-title">Витрина SKU</div>
+        <ul>
+          <li>Товар + иерархия классификатора</li>
+          <li>Спецификации поставок</li>
+          <li>Вагогабаритные характеристики</li>
+          <li>Статус артикула</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Витрина точек и ассортимента</div>
+        <ul>
+          <li>Магазины, склады, даркстор</li>
+          <li>Пары магазин-SKU</li>
+          <li>MSP и правила выкладки</li>
+          <li>Приоритет по обороту</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Витрина движений</div>
+        <ul>
+          <li>История продаж по чекам</li>
+          <li>Снимки остатков по времени</li>
+          <li>Заказы в пути, резервы</li>
+          <li>Списания и перемещения</li>
+        </ul>
+      </div>
+    </div>
+    <div class="lane-row two">
+      <div class="card purple">
+        <div class="card-title">Витрина планирования</div>
+        <ul>
+          <li>Расписание поставок по дням недели</li>
+          <li>Бизнес-правила калькуляции</li>
+          <li>Лимиты заказов</li>
+          <li>Точки заказа, страховой запас</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Витрина коммерческих условий</div>
+        <ul>
+          <li>Календарь промо-акций</li>
+          <li>Мин. партия от поставщика</li>
+          <li>Закупочные цены</li>
+          <li>Приоритет поставщика по SKU</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <b>Как это работает.</b> ERP E-Zoo — единственный источник истины для всех справочников и фактов. X-Flow раз в сутки выгружает мастер-данные (товары, точки, поставщики, план поставок, промо) и движения (остатки, чеки, перемещения, списания, инвентаризации). Для высоконагруженных потоков используется CDC-обмен — только инкремент изменений. На выходе Replenishment получает пять витрин, готовых для работы модулей прогнозирования и калькуляции.
+</div>
+</body>
+</html>

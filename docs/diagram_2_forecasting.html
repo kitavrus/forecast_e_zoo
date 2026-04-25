@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Процесс 2. Прогнозирование и расчёт заказа</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --ink: #2C2C2A;
+    --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15);
+    --lane-bg: rgba(255,255,255,0.6);
+    --blue-50:#E6F1FB; --blue-600:#185FA5; --blue-800:#0C447C;
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+    --coral-50:#FAECE7; --coral-600:#993C1D; --coral-800:#712B13;
+    --teal-50:#E1F5EE; --teal-600:#0F6E56; --teal-800:#085041;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 40px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+  .diagram {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .lane-label {
+    border-radius: 10px;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid;
+  }
+  .lane-label .title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .lane-label .subt { font-size: 13px; opacity: 0.8; }
+  .lane-label.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .lane-label.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .lane-label.coral  { background: var(--coral-50);  border-color: var(--coral-600); color: var(--coral-800); }
+  .lane-label.teal   { background: var(--teal-50);   border-color: var(--teal-600); color: var(--teal-800); }
+  .lane-content {
+    background: var(--lane-bg);
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 20px;
+    display: grid;
+    gap: 14px;
+  }
+  .lane-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr) minmax(240px, 1.2fr);
+    gap: 16px;
+  }
+  .lane-row.three { grid-template-columns: repeat(3, 1fr); }
+  .lane-row.four-eq { grid-template-columns: repeat(4, 1fr); }
+  .card {
+    border-radius: 8px;
+    border: 1px solid;
+    padding: 14px 16px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .card .card-title { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+  .card ul { list-style: none; font-size: 12.5px; line-height: 1.55; opacity: 0.88; }
+  .card ul li { padding-left: 10px; position: relative; }
+  .card ul li::before {
+    content: ""; position: absolute; left: 0; top: 8px;
+    width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0.5;
+  }
+  .card.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .card.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .card.coral  { background: var(--coral-50);  border-color: var(--coral-600); color: var(--coral-800); }
+  .card.teal   { background: var(--teal-50);   border-color: var(--teal-600); color: var(--teal-800); }
+
+  .flow-arrows {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin: -6px 0;
+  }
+  .flow-arrows .arrows {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr) minmax(240px, 1.2fr);
+    gap: 16px;
+    padding: 0 20px;
+  }
+  .flow-arrows .arrows.three { grid-template-columns: repeat(3, 1fr); }
+  .arrow-col {
+    display: flex; flex-direction: column; align-items: center; padding: 4px 8px;
+  }
+  .arrow-line { width: 1.5px; height: 14px; background: var(--ink); opacity: 0.45; }
+  .arrow-head {
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid var(--ink);
+    opacity: 0.45;
+  }
+  .arrow-label {
+    font-size: 11.5px; color: var(--muted);
+    padding: 4px 10px; background: var(--bg);
+    border-radius: 4px; margin: 4px 0;
+    text-align: center; max-width: 260px;
+  }
+  .legend {
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: var(--lane-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .legend b { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+<h1>Процесс 2. Прогнозирование и расчёт заказа</h1>
+<p class="subtitle">Пошаговое превращение витрин данных в готовый документ заказа</p>
+
+<div class="diagram">
+  <div class="lane-label blue">
+    <div class="title">Входные данные</div>
+    <div class="subt">Из витрин</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row three">
+      <div class="card blue">
+        <div class="card-title">История продаж</div>
+        <ul>
+          <li>Чек-SKU-точка-дата-время</li>
+          <li>Маркдауны и акции</li>
+          <li>Сезонные паттерны</li>
+          <li>История 1-2 года по SKU</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <div class="card-title">Текущие остатки</div>
+        <ul>
+          <li>Фактический сток по точкам</li>
+          <li>Заказы в пути</li>
+          <li>Резервы и блокировки</li>
+          <li>Товар в перемещении</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <div class="card-title">Промо и календарь</div>
+        <ul>
+          <li>Тип акции, даты, промо-цена</li>
+          <li>Государственные праздники</li>
+          <li>Сезонные пики спроса</li>
+          <li>Запуск новых SKU</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows three">
+    <div class="arrow-col">
+      <div class="arrow-label">Ряд продаж по SKU</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Снимок остатков</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Промо-аплифт и события</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label purple">
+    <div class="title">Прогнозирование</div>
+    <div class="subt">Спрос по SKU</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row four-eq">
+      <div class="card purple">
+        <div class="card-title">Выбор модели</div>
+        <ul>
+          <li>Регулярный SKU — стат. модель</li>
+          <li>Новый SKU — аналог</li>
+          <li>Сезонный SKU — с сезонностью</li>
+          <li>Промо — с аплифтом</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Базовый прогноз</div>
+        <ul>
+          <li>Тренд + сезонность</li>
+          <li>Дневной спрос</li>
+          <li>Горизонт по SKU</li>
+          <li>Доверительный интервал</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Промо-аплифт</div>
+        <ul>
+          <li>Коэффициент на период акции</li>
+          <li>Каннибализация ассортимента</li>
+          <li>Эффект пост-промо-спада</li>
+          <li>Переоценка новых промо</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Итоговый прогноз</div>
+        <ul>
+          <li>SKU-точка-день</li>
+          <li>Горизонт индивидуально</li>
+          <li>Версионирование</li>
+          <li>Готово для калькуляции</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows three">
+    <div class="arrow-col">
+      <div class="arrow-label">Остатки напрямую</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Прогноз по SKU-точка-день</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Правила и лимиты</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label coral">
+    <div class="title">Калькуляция</div>
+    <div class="subt">Потребность</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row four-eq">
+      <div class="card coral">
+        <div class="card-title">Чистая потребность</div>
+        <ul>
+          <li>Прогноз − остаток − заказы в пути</li>
+          <li>С учётом горизонта поставки</li>
+          <li>На уровне SKU-точка</li>
+          <li>С учётом lead time</li>
+        </ul>
+      </div>
+      <div class="card coral">
+        <div class="card-title">Бизнес-правила</div>
+        <ul>
+          <li>Точка заказа (ROP)</li>
+          <li>MSP — мин. выкладка</li>
+          <li>Страховой запас</li>
+          <li>Правила по типу SKU</li>
+        </ul>
+      </div>
+      <div class="card coral">
+        <div class="card-title">Лимиты заказа</div>
+        <ul>
+          <li>По сумме заказа</li>
+          <li>По количеству паллет</li>
+          <li>По весу и объёму</li>
+          <li>Мин. партия поставщика</li>
+        </ul>
+      </div>
+      <div class="card coral">
+        <div class="card-title">Выбор поставщика</div>
+        <ul>
+          <li>По приоритету из спецификаций</li>
+          <li>По доступности SKU</li>
+          <li>По цене и условиям</li>
+          <li>По lead time</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows three">
+    <div class="arrow-col">
+      <div class="arrow-label">Позиции по поставщику</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Потребность с учётом лимитов</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Приоритет поставщика</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label teal">
+    <div class="title">Конструктор заказов</div>
+    <div class="subt">Готовый документ</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row four-eq">
+      <div class="card teal">
+        <div class="card-title">Сборка заказа</div>
+        <ul>
+          <li>Группировка позиций по поставщику</li>
+          <li>Консолидация по точке выгрузки</li>
+          <li>Округление до кратности упаковки</li>
+          <li>Сортировка позиций</li>
+        </ul>
+      </div>
+      <div class="card teal">
+        <div class="card-title">Проверка расписания</div>
+        <ul>
+          <li>День недели по графику</li>
+          <li>Время отсечки заказа</li>
+          <li>Дата поставки (lead time)</li>
+          <li>Авто- или ручная отправка</li>
+        </ul>
+      </div>
+      <div class="card teal">
+        <div class="card-title">Готовый заказ</div>
+        <ul>
+          <li>Шапка: поставщик, точка, даты</li>
+          <li>Позиции: SKU, кол-во, цена</li>
+          <li>GLN отправителя и получателя</li>
+          <li>Статус: готов к отправке</li>
+        </ul>
+      </div>
+      <div class="card teal">
+        <div class="card-title">Передача в X-Flow</div>
+        <ul>
+          <li>Отправка в ERP (копия)</li>
+          <li>Формирование EDI ORDERS</li>
+          <li>Маршрутизация поставщику</li>
+          <li>Журналирование</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <b>Как это работает.</b> Система выбирает модель прогноза в зависимости от характера SKU (регулярный, новый, сезонный, промо), считает базовый прогноз по тренду и сезонности и применяет промо-аплифт. Калькуляция превращает прогноз в чистую потребность с учётом остатков и заказов в пути, применяет бизнес-правила (точка заказа, MSP, страховой запас) и лимиты (сумма, паллеты, вес, объём). Если у SKU несколько поставщиков — выбор по приоритету из спецификаций. Конструктор группирует позиции, проверяет расписание и собирает итоговый документ заказа.
+</div>
+</body>
+</html>

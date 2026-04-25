@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Процесс 3. EDI-обмен с поставщиком</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --ink: #2C2C2A;
+    --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15);
+    --lane-bg: rgba(255,255,255,0.6);
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+    --blue-50:#E6F1FB; --blue-600:#185FA5; --blue-800:#0C447C;
+    --teal-50:#E1F5EE; --teal-600:#0F6E56; --teal-800:#085041;
+    --amber-50:#FAEEDA; --amber-600:#854F0B; --amber-800:#633806;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 40px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+  .diagram {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .lane-label {
+    border-radius: 10px;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid;
+  }
+  .lane-label .title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .lane-label .subt { font-size: 13px; opacity: 0.8; }
+  .lane-label.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .lane-label.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .lane-label.teal   { background: var(--teal-50);   border-color: var(--teal-600); color: var(--teal-800); }
+  .lane-label.amber  { background: var(--amber-50);  border-color: var(--amber-600); color: var(--amber-800); }
+  .lane-content {
+    background: var(--lane-bg);
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 20px;
+    display: grid;
+    gap: 14px;
+  }
+  .lane-row {
+    display: grid;
+    gap: 16px;
+  }
+  .lane-row.c1 { grid-template-columns: 1fr; }
+  .lane-row.c2 { grid-template-columns: repeat(2, 1fr); }
+  .lane-row.c3 { grid-template-columns: repeat(3, 1fr); }
+  .lane-row.c4 { grid-template-columns: repeat(4, 1fr); }
+  .card {
+    border-radius: 8px;
+    border: 1px solid;
+    padding: 14px 16px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+  }
+  .card .card-title { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+  .card ul { list-style: none; font-size: 12.5px; line-height: 1.55; opacity: 0.88; }
+  .card ul li { padding-left: 10px; position: relative; }
+  .card ul li::before {
+    content: ""; position: absolute; left: 0; top: 8px;
+    width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0.5;
+  }
+  .card.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .card.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .card.teal   { background: var(--teal-50);   border-color: var(--teal-600); color: var(--teal-800); }
+  .card.amber  { background: var(--amber-50);  border-color: var(--amber-600); color: var(--amber-800); }
+  .card .edi-badge {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(0,0,0,0.08);
+    margin-bottom: 8px;
+    align-self: flex-start;
+  }
+
+  .flow-arrows {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin: -6px 0;
+  }
+  .flow-arrows .arrows {
+    display: grid;
+    gap: 16px;
+    padding: 0 20px;
+  }
+  .arrows.c3 { grid-template-columns: repeat(3, 1fr); }
+  .arrows.c4 { grid-template-columns: repeat(4, 1fr); }
+  .arrow-col {
+    display: flex; flex-direction: column; align-items: center; padding: 4px 8px;
+  }
+  .arrow-col.reverse { flex-direction: column-reverse; }
+  .arrow-line { width: 1.5px; height: 14px; background: var(--ink); opacity: 0.45; }
+  .arrow-line.dashed {
+    background: repeating-linear-gradient(to bottom, var(--ink) 0 4px, transparent 4px 8px);
+  }
+  .arrow-head {
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid var(--ink);
+    opacity: 0.45;
+  }
+  .arrow-head.up {
+    border-top: none;
+    border-bottom: 6px solid var(--ink);
+  }
+  .arrow-label {
+    font-size: 11.5px; color: var(--muted);
+    padding: 4px 10px; background: var(--bg);
+    border-radius: 4px; margin: 4px 0;
+    text-align: center; max-width: 260px;
+  }
+  .legend {
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: var(--lane-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .legend b { color: var(--ink); font-weight: 500; }
+
+  .dir-note {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<h1>Процесс 3. EDI-обмен с поставщиком</h1>
+<p class="subtitle">Последовательность электронных документов от заказа до подписанной приходной накладной</p>
+
+<div class="diagram">
+  <div class="lane-label purple">
+    <div class="title">Replenishment</div>
+    <div class="subt">Источник заказа</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c2">
+      <div class="card purple">
+        <div class="card-title">Сформированный заказ</div>
+        <ul>
+          <li>Поставщик GLN, точка выгрузки GLN</li>
+          <li>Позиции: SKU, количество, цена</li>
+          <li>Дата заказа, дата поставки</li>
+          <li>Номер заказа, валюта</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Обновление статуса заказа</div>
+        <ul>
+          <li>Отправлен → подтверждён</li>
+          <li>Отгружен → принят</li>
+          <li>Расхождения и их причины</li>
+          <li>Закрыт полностью / частично</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows c3">
+    <div class="arrow-col">
+      <div class="arrow-label">Данные заказа ↓</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col reverse">
+      <div class="arrow-label">Статусы ↑ (пунктир)</div>
+      <div class="arrow-line dashed"></div>
+      <div class="arrow-head up"></div>
+    </div>
+    <div class="arrow-col reverse">
+      <div class="arrow-label">Факт приёмки ↑</div>
+      <div class="arrow-line dashed"></div>
+      <div class="arrow-head up"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label blue">
+    <div class="title">X-Flow / EDI</div>
+    <div class="subt">Провайдер обмена</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c4">
+      <div class="card blue">
+        <span class="edi-badge">ORDERS</span>
+        <div class="card-title">Формирование заказа</div>
+        <ul>
+          <li>Преобразование в EDIFACT</li>
+          <li>Подпись провайдера</li>
+          <li>Отправка поставщику</li>
+          <li>Параллельно — в ERP</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <span class="edi-badge">ORDRSP</span>
+        <div class="card-title">Приём подтверждения</div>
+        <ul>
+          <li>Сверка позиций с ORDERS</li>
+          <li>Проверка корректировок</li>
+          <li>Обновление в Replenishment</li>
+          <li>Передача в ERP</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <span class="edi-badge">DESADV</span>
+        <div class="card-title">Приём уведомления</div>
+        <ul>
+          <li>Распаковка SSCC-кодов</li>
+          <li>Маршрутизация на точку</li>
+          <li>Создание ASN в ERP</li>
+          <li>Подготовка приёмки</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <span class="edi-badge">RECADV + РН с ЭЦП</span>
+        <div class="card-title">Приёмка и накладная</div>
+        <ul>
+          <li>RECADV факт приёмки</li>
+          <li>Расходная накладная с ЭЦП</li>
+          <li>Проводка в ERP</li>
+          <li>Закрытие заказа</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows c4">
+    <div class="arrow-col">
+      <div class="arrow-label">ORDERS → поставщику</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col reverse">
+      <div class="arrow-label">ORDRSP ← от поставщика</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head up"></div>
+    </div>
+    <div class="arrow-col reverse">
+      <div class="arrow-label">DESADV ← от поставщика</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head up"></div>
+    </div>
+    <div class="arrow-col reverse">
+      <div class="arrow-label">РН с ЭЦП ← от поставщика</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head up"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label teal">
+    <div class="title">Поставщик</div>
+    <div class="subt">Контрагент</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c4">
+      <div class="card teal">
+        <div class="card-title">Приём ORDERS</div>
+        <ul>
+          <li>Загрузка в WMS поставщика</li>
+          <li>Проверка наличия на складе</li>
+          <li>Резервирование товара</li>
+          <li>Решение по позициям</li>
+        </ul>
+      </div>
+      <div class="card teal">
+        <div class="card-title">Отправка ORDRSP</div>
+        <ul>
+          <li>Принят полностью</li>
+          <li>Принят с корректировками</li>
+          <li>Изменение кол-ва, цен, дат</li>
+          <li>Отклонён полностью</li>
+        </ul>
+      </div>
+      <div class="card teal">
+        <div class="card-title">Отгрузка и DESADV</div>
+        <ul>
+          <li>Комплектация по заказу</li>
+          <li>Упаковка на паллеты (SSCC)</li>
+          <li>Партии, сроки годности</li>
+          <li>Отправка DESADV до доставки</li>
+        </ul>
+      </div>
+      <div class="card teal">
+        <div class="card-title">РН с ЭЦП</div>
+        <ul>
+          <li>Расходная накладная</li>
+          <li>Электронная цифровая подпись</li>
+          <li>Юридически значимый документ</li>
+          <li>Основа для проводки у клиента</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows c4">
+    <div class="arrow-col">
+      <div class="arrow-label">Копия в ERP ↓</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Обновление по ORDRSP ↓</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">ASN-документ ↓</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Проведение накладной ↓</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label amber">
+    <div class="title">ERP клиента</div>
+    <div class="subt">Учётная система</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c4">
+      <div class="card amber">
+        <div class="card-title">Регистрация заказа</div>
+        <ul>
+          <li>Документ закупки</li>
+          <li>Привязка к поставщику</li>
+          <li>Статус: отправлен</li>
+          <li>Ожидаемая дата поставки</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <div class="card-title">Обновление по ORDRSP</div>
+        <ul>
+          <li>Корректировка количества</li>
+          <li>Корректировка цен</li>
+          <li>Новая дата поставки</li>
+          <li>Статус: подтверждён</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <div class="card-title">Ожидаемая поставка</div>
+        <ul>
+          <li>ASN-документ в ERP</li>
+          <li>Привязка к заказу</li>
+          <li>Уведомление магазина</li>
+          <li>Подготовка к приёмке</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <div class="card-title">Проведение накладной</div>
+        <ul>
+          <li>Учёт по ЭЦП</li>
+          <li>Контроль расхождений</li>
+          <li>Списание долга поставщику</li>
+          <li>Закрытие заказа</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <b>Как это работает.</b> Replenishment передаёт сформированный заказ в X-Flow, где документ преобразуется в стандарт EDIFACT и отправляется поставщику как <b>ORDERS</b>. Поставщик проверяет наличие и отвечает <b>ORDRSP</b> — подтверждением с возможными корректировками. Перед отгрузкой уходит <b>DESADV</b> с SSCC-кодами паллет, партиями и сроками годности. Юридически значимый обмен замыкается <b>РН с ЭЦП</b> (расходная накладная с электронной цифровой подписью). Все четыре документа параллельно регистрируются в ERP клиента, а статусы возвращаются в Replenishment для отслеживания OTIF.
+</div>
+</body>
+</html>
