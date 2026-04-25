@@ -172,11 +172,11 @@
 
   .cell.stacked {
     flex-direction: column;
-    gap: 12px;
+    gap: 38px;
     align-items: stretch;
     justify-content: center;
     padding: 14px;
-    min-height: 200px;
+    min-height: 240px;
   }
   .cell.stacked .task { max-width: none; }
 
@@ -890,7 +890,7 @@
     // ФАЗА 2 → 3 (Конструктор → Блок подготовки заказа)
     const rep3 = rectOf('c-rep-3');
     drawLine(repBuild.right + 4, repBuild.cy, rep3.left + 20, rep3.cy);
-    drawLabel((repBuild.right + rep3.left)/2 + 12, repBuild.cy - 14, 'ready-order');
+    drawLabel((repBuild.right + rep3.left)/2, rep3.top + 28, 'ready-order');
 
     // ФАЗА 3: Replenishment (Блок подготовки заказа) → Адаптер провайдеров (Маршрутизация каналов)
     const prv3 = rectOf('c-prv-3');
