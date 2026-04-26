@@ -399,7 +399,7 @@
     <div class="ln-sub">E-Zoo</div>
   </div>
   <div class="cell" id="c-erp-1">
-    <div class="task gray">
+    <div class="task gray" id="t-erp-1">
       <div class="t-title">Выгрузка данных</div>
       <div class="t-desc">Справочники, остатки, чеки, движения</div>
     </div>
@@ -407,7 +407,7 @@
   <div class="cell empty" id="c-erp-2"></div>
   <div class="cell empty" id="c-erp-3"></div>
   <div class="cell" id="c-erp-4">
-    <div class="task gray">
+    <div class="task gray" id="t-erp-4">
       <div class="t-title">Регистрация заказа</div>
       <div class="t-desc">Документ закупки, статусы</div>
     </div>
@@ -418,7 +418,7 @@
     <div class="ln-sub">Коннекторы и канонизация</div>
   </div>
   <div class="cell" id="c-adp-1">
-    <div class="task indigo">
+    <div class="task indigo" id="t-adp-1">
       <div class="t-title">Адаптер источников</div>
       <div class="t-desc">1С, ERP, WMS, OMS — единый формат</div>
     </div>
@@ -432,7 +432,7 @@
     <div class="ln-sub">Интеграция и EDI</div>
   </div>
   <div class="cell" id="c-xf-1">
-    <div class="task blue">
+    <div class="task blue" id="t-xf-1">
       <div class="t-title">ETL и валидация</div>
       <div class="t-desc">Нормализация, мэппинг, CDC-обмен</div>
     </div>
@@ -446,7 +446,7 @@
     <div class="ln-sub">Прогноз и расчёт</div>
   </div>
   <div class="cell" id="c-rep-1">
-    <div class="task purple">
+    <div class="task purple" id="t-rep-1">
       <div class="t-title">Витрины данных</div>
       <div class="t-desc">SKU, точки, движения, планирование</div>
     </div>
@@ -462,7 +462,7 @@
     </div>
   </div>
   <div class="cell" id="c-rep-3">
-    <div class="task purple">
+    <div class="task purple" id="t-rep-3">
       <div class="t-title">Блок подготовки заказа</div>
       <div class="t-desc">Финальный документ заказа</div>
     </div>
@@ -476,7 +476,7 @@
   <div class="cell empty lane-row-last" id="c-prv-1"></div>
   <div class="cell empty lane-row-last" id="c-prv-2"></div>
   <div class="cell lane-row-last" id="c-prv-3">
-    <div class="task rose">
+    <div class="task rose" id="t-prv-3">
       <div class="t-title">Маршрутизация каналов</div>
       <div class="t-desc">EDI / 1С / ERP / CRM по описи поставщика</div>
     </div>
@@ -861,51 +861,52 @@
     `;
     svg.appendChild(defs);
 
-    // ФАЗА 1
-    const erp1 = rectOf('c-erp-1');
-    const adp1 = rectOf('c-adp-1');
-    const xf1  = rectOf('c-xf-1');
-    const rep1 = rectOf('c-rep-1');
+    // ФАЗА 1 — стрелки от карточек к карточкам, чтобы стрелки касались блоков
+    const tErp1 = rectOf('t-erp-1');
+    const tAdp1 = rectOf('t-adp-1');
+    const tXf1  = rectOf('t-xf-1');
+    const tRep1 = rectOf('t-rep-1');
 
-    drawLine(erp1.cx, erp1.bottom - 20, adp1.cx, adp1.top + 20);
-    drawLabel(erp1.cx, (erp1.bottom + adp1.top)/2, 'raw-extract');
+    drawLine(tErp1.cx, tErp1.bottom + 4, tAdp1.cx, tAdp1.top - 2);
+    drawLabel(tErp1.cx, (tErp1.bottom + tAdp1.top)/2, 'raw-extract');
 
-    drawLine(adp1.cx, adp1.bottom - 20, xf1.cx, xf1.top + 20);
-    drawLabel(adp1.cx, (adp1.bottom + xf1.top)/2, 'canonical');
+    drawLine(tAdp1.cx, tAdp1.bottom + 4, tXf1.cx, tXf1.top - 2);
+    drawLabel(tAdp1.cx, (tAdp1.bottom + tXf1.top)/2, 'canonical');
 
-    drawLine(xf1.cx, xf1.bottom - 20, rep1.cx, rep1.top + 20);
-    drawLabel(xf1.cx, (xf1.bottom + rep1.top)/2, 'vitrines');
+    drawLine(tXf1.cx, tXf1.bottom + 4, tRep1.cx, tRep1.top - 2);
+    drawLabel(tXf1.cx, (tXf1.bottom + tRep1.top)/2, 'vitrines');
 
-    // ФАЗА 1 → 2: Витрины → KPI и калибровка (верхний sub-блок rep2)
-    const rep2     = rectOf('c-rep-2');
+    // ФАЗА 1 → 2: Витрины → KPI и калибровка
     const repKpi   = rectOf('rep2-kpi');
     const repBuild = rectOf('rep2-build');
-    drawLine(rep1.right - 20, rep1.cy, repKpi.left - 4, repKpi.cy, { via: { x: repKpi.left - 24, y: rep1.cy } });
-    drawLabel((rep1.right + repKpi.left)/2, rep1.cy - 14, 'inputs');
+    drawLine(tRep1.right + 4, tRep1.cy, repKpi.left - 2, repKpi.cy, { via: { x: repKpi.left - 24, y: tRep1.cy } });
+    drawLabel((tRep1.right + repKpi.left)/2, tRep1.cy - 14, 'inputs');
 
-    // Внутри rep2: KPI → Прогноз/Калькуляция/Конструктор (vertical)
-    drawLine(repKpi.cx, repKpi.bottom + 2, repBuild.cx, repBuild.top - 2);
-    drawLabel(repKpi.cx + 60, (repKpi.bottom + repBuild.top)/2, 'kpi-to-prognoz');
+    // Внутри rep2: KPI → Прогноз
+    drawLine(repKpi.cx, repKpi.bottom + 4, repBuild.cx, repBuild.top - 2);
+    drawLabel(repKpi.cx + 70, (repKpi.bottom + repBuild.top)/2, 'kpi-to-prognoz');
 
-    // ФАЗА 2 → 3 (Конструктор → Блок подготовки заказа)
-    const rep3 = rectOf('c-rep-3');
-    drawLine(repBuild.right + 4, repBuild.cy, rep3.left + 20, rep3.cy);
-    drawLabel((repBuild.right + rep3.left)/2, (repBuild.cy + rep3.cy)/2, 'ready-order');
+    // ФАЗА 2 → 3: Конструктор → Блок подготовки заказа
+    const tRep3 = rectOf('t-rep-3');
+    drawLine(repBuild.right + 4, repBuild.cy, tRep3.left - 2, tRep3.cy);
+    // Подпись поднята над «Блок подготовки заказа», чтобы не налезать на угол карточки
+    drawLabel((repBuild.right + tRep3.left)/2, tRep3.top - 14, 'ready-order');
 
-    // ФАЗА 3: Replenishment (Блок подготовки заказа) → Адаптер провайдеров (Маршрутизация каналов)
-    const prv3 = rectOf('c-prv-3');
-    drawLine(rep3.cx, rep3.bottom - 20, prv3.cx, prv3.top + 20);
-    drawLabel(rep3.cx, (rep3.bottom + prv3.top)/2, 'order-to-routing');
+    // ФАЗА 3: Блок подготовки заказа → Маршрутизация каналов
+    const tPrv3 = rectOf('t-prv-3');
+    drawLine(tRep3.cx, tRep3.bottom + 4, tPrv3.cx, tPrv3.top - 2);
+    drawLabel(tRep3.cx, (tRep3.bottom + tPrv3.top)/2, 'order-to-routing');
 
-    // ФАЗА 3 → 4: Адаптер провайдеров (Маршрутизация каналов) → ERP×Ф4 (Регистрация заказа).
-    // Диагональ вверх-вправо через пустые ячейки Ф3 (X-Flow, Адаптер источников) и Ф4 (Адаптер источников, X-Flow, Replenishment, Адаптер провайдеров).
-    const erp4 = rectOf('c-erp-4');
+    // ФАЗА 3 → 4: Маршрутизация каналов → Регистрация заказа.
+    // Выход из правого края prv3 и горизонталь по середине строки (а не сверху),
+    // чтобы подпись не налезала на «Готовый заказ → Маршрутизация».
+    const tErp4 = rectOf('t-erp-4');
     drawLine(
-      prv3.cx, prv3.top + 14,
-      erp4.cx, erp4.bottom - 14,
-      { via: { x: erp4.cx, y: prv3.top + 14 } }
+      tPrv3.right + 4, tPrv3.cy,
+      tErp4.cx, tErp4.bottom + 4,
+      { via: { x: tErp4.cx, y: tPrv3.cy } }
     );
-    drawLabel((prv3.cx + erp4.cx)/2, prv3.top + 14, 'channel-orders');
+    drawLabel((tPrv3.right + tErp4.cx)/2, tPrv3.cy, 'channel-orders');
 
   }
 
