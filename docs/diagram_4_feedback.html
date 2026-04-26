@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Процесс 4. Приёмка и обратная связь</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --ink: #2C2C2A;
+    --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15);
+    --lane-bg: rgba(255,255,255,0.6);
+    --amber-50:#FAEEDA; --amber-600:#854F0B; --amber-800:#633806;
+    --gray-50:#F1EFE8;  --gray-600:#5F5E5A;  --gray-800:#444441;
+    --blue-50:#E6F1FB;  --blue-600:#185FA5;  --blue-800:#0C447C;
+    --purple-50:#EEEDFE;--purple-600:#534AB7;--purple-800:#3C3489;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 40px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+  .diagram {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .lane-label {
+    border-radius: 10px;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid;
+  }
+  .lane-label .title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .lane-label .subt { font-size: 13px; opacity: 0.8; }
+  .lane-label.amber  { background: var(--amber-50);  border-color: var(--amber-600); color: var(--amber-800); }
+  .lane-label.gray   { background: var(--gray-50);   border-color: var(--gray-600); color: var(--gray-800); }
+  .lane-label.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .lane-label.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .lane-content {
+    background: var(--lane-bg);
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 20px;
+    display: grid;
+    gap: 14px;
+  }
+  .lane-row { display: grid; gap: 16px; }
+  .lane-row.c3 { grid-template-columns: repeat(3, 1fr); }
+  .lane-row.c4 { grid-template-columns: repeat(4, 1fr); }
+  .card {
+    border-radius: 8px;
+    border: 1px solid;
+    padding: 14px 16px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+  }
+  .card .card-title { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+  .card ul { list-style: none; font-size: 12.5px; line-height: 1.55; opacity: 0.88; }
+  .card ul li { padding-left: 10px; position: relative; }
+  .card ul li::before {
+    content: ""; position: absolute; left: 0; top: 8px;
+    width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0.5;
+  }
+  .card.amber  { background: var(--amber-50);  border-color: var(--amber-600); color: var(--amber-800); }
+  .card.gray   { background: var(--gray-50);   border-color: var(--gray-600); color: var(--gray-800); }
+  .card.blue   { background: var(--blue-50);   border-color: var(--blue-600); color: var(--blue-800); }
+  .card.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+
+  .flow-arrows {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    margin: -6px 0;
+  }
+  .flow-arrows .arrows {
+    display: grid;
+    gap: 16px;
+    padding: 0 20px;
+  }
+  .arrows.c3 { grid-template-columns: repeat(3, 1fr); }
+  .arrows.c4 { grid-template-columns: repeat(4, 1fr); }
+  .arrow-col {
+    display: flex; flex-direction: column; align-items: center; padding: 4px 8px;
+  }
+  .arrow-line { width: 1.5px; height: 14px; background: var(--ink); opacity: 0.45; }
+  .arrow-head {
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid var(--ink);
+    opacity: 0.45;
+  }
+  .arrow-label {
+    font-size: 11.5px; color: var(--muted);
+    padding: 4px 10px; background: var(--bg);
+    border-radius: 4px; margin: 4px 0;
+    text-align: center; max-width: 280px;
+  }
+  .legend {
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: var(--lane-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .legend b { color: var(--ink); font-weight: 500; }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line);
+  }
+  .kpi {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid var(--line);
+  }
+  .kpi .k-name {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .kpi .k-desc { font-size: 13px; color: var(--ink); }
+</style>
+</head>
+<body>
+<h1>Процесс 4. Приёмка товара и обратная связь</h1>
+<p class="subtitle">Путь факта от физической приёмки обратно в контур прогнозирования</p>
+
+<div class="diagram">
+  <div class="lane-label amber">
+    <div class="title">Магазин / склад</div>
+    <div class="subt">Приёмка и продажи</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c3">
+      <div class="card amber">
+        <div class="card-title">Физическая приёмка</div>
+        <ul>
+          <li>Сканирование SSCC-кодов</li>
+          <li>Сверка с DESADV</li>
+          <li>Контроль сроков годности</li>
+          <li>Пересчёт количества</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <div class="card-title">Расхождения и брак</div>
+        <ul>
+          <li>Недостача и пересорт</li>
+          <li>Брак, повреждённая упаковка</li>
+          <li>Короткие сроки годности</li>
+          <li>Фиксация причин отклонения</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <div class="card-title">Формирование RECADV</div>
+        <ul>
+          <li>Факт принятого количества</li>
+          <li>Причины расхождений по позициям</li>
+          <li>Отправка поставщику и в ERP</li>
+          <li>Основа для возвратных документов</li>
+        </ul>
+      </div>
+    </div>
+    <div class="lane-row c3">
+      <div class="card amber">
+        <div class="card-title">Выкладка на полку</div>
+        <ul>
+          <li>Заполнение фейсов по MSP</li>
+          <li>Дополнительная выкладка</li>
+          <li>Перемещение со склада магазина</li>
+          <li>Обновление shelf planning</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <div class="card-title">Продажи по чекам</div>
+        <ul>
+          <li>Номер чека, SKU, кол-во</li>
+          <li>Цена, маркдаун</li>
+          <li>Дата и время продажи</li>
+          <li>Канал: офлайн / онлайн</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <div class="card-title">Движения и инвентаризация</div>
+        <ul>
+          <li>Перемещения между точками</li>
+          <li>Списания (брак, порча, истёк срок)</li>
+          <li>Пересчёты остатков</li>
+          <li>Корректировка фактического стока</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows c3">
+    <div class="arrow-col">
+      <div class="arrow-label">Факт приёмки, RECADV</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Чеки с касс (POS)</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Списания и перемещения</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label gray">
+    <div class="title">ERP клиента</div>
+    <div class="subt">Учёт фактов</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c4">
+      <div class="card gray">
+        <div class="card-title">Оприходование</div>
+        <ul>
+          <li>SKU-объект-дата-время</li>
+          <li>Привязка к заказу</li>
+          <li>Учёт партий и сроков</li>
+          <li>Генерация проводок</li>
+        </ul>
+      </div>
+      <div class="card gray">
+        <div class="card-title">Обновление остатков</div>
+        <ul>
+          <li>Реальный сток по точкам</li>
+          <li>Резервы и блокировки</li>
+          <li>Товар в перемещении</li>
+          <li>Доступный к продаже остаток</li>
+        </ul>
+      </div>
+      <div class="card gray">
+        <div class="card-title">Регистрация чеков</div>
+        <ul>
+          <li>Номер чека, SKU, кол-во, цена</li>
+          <li>Маркдаун и промо-флаги</li>
+          <li>Канал продажи</li>
+          <li>Фискальная регистрация</li>
+        </ul>
+      </div>
+      <div class="card gray">
+        <div class="card-title">Прочие движения</div>
+        <ul>
+          <li>Списания SKU-объект-дата</li>
+          <li>Перемещения объект1 → объект2</li>
+          <li>Результаты инвентаризаций</li>
+          <li>Корректировки стока</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows c4">
+    <div class="arrow-col">
+      <div class="arrow-label">Статус заказа</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Снимок остатков</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Продажи по чекам или агрегат</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Движения и списания</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label blue">
+    <div class="title">X-Flow</div>
+    <div class="subt">Возврат в прогноз</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c4">
+      <div class="card blue">
+        <div class="card-title">Передача приёмки</div>
+        <ul>
+          <li>Закрытие заказа полностью</li>
+          <li>Частичное закрытие</li>
+          <li>Расхождения по позициям</li>
+          <li>Расчёт OTIF поставщика</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <div class="card-title">Передача остатков</div>
+        <ul>
+          <li>CDC по изменениям</li>
+          <li>Ежедневный снимок</li>
+          <li>Разрез по точкам</li>
+          <li>Фактический сток</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <div class="card-title">Передача продаж</div>
+        <ul>
+          <li>Поток чеков (в реальном времени)</li>
+          <li>Агрегат по дням</li>
+          <li>SKU-точка-дата</li>
+          <li>Данные для прогноза</li>
+        </ul>
+      </div>
+      <div class="card blue">
+        <div class="card-title">Передача прочих движений</div>
+        <ul>
+          <li>Списания и причины</li>
+          <li>Перемещения между точками</li>
+          <li>Результаты инвентаризаций</li>
+          <li>Корректировки остатков</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrows">
+  <div></div>
+  <div class="arrows c3">
+    <div class="arrow-col">
+      <div class="arrow-label">Сервисные метрики OTIF</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Факт для сравнения с прогнозом</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-col">
+      <div class="arrow-label">Обновлённые витрины</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+</div>
+
+<div class="diagram">
+  <div class="lane-label purple">
+    <div class="title">Replenishment</div>
+    <div class="subt">KPI и следующий цикл</div>
+  </div>
+  <div class="lane-content">
+    <div class="lane-row c3">
+      <div class="card purple">
+        <div class="card-title">Мониторинг KPI</div>
+        <ul>
+          <li>OSA — доступность на полке</li>
+          <li>OTIF — сервис онлайн-клиентов</li>
+          <li>Stock days — покрытие стока</li>
+          <li>Доля автоматических заказов</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Оценка точности прогноза</div>
+        <ul>
+          <li>Прогноз vs факт продаж</li>
+          <li>MAPE, bias по SKU-точка</li>
+          <li>Калибровка моделей</li>
+          <li>Выявление проблемных SKU</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <div class="card-title">Следующий цикл расчёта</div>
+        <ul>
+          <li>Обновление прогноза</li>
+          <li>Пересчёт потребности</li>
+          <li>Новая итерация заказа</li>
+          <li>Адаптация к факту</li>
+        </ul>
+      </div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="k-name">OSA</div>
+        <div class="k-desc">Товар доступен покупателю на полке, когда он нужен</div>
+      </div>
+      <div class="kpi">
+        <div class="k-name">OTIF</div>
+        <div class="k-desc">Онлайн-заказ собран полностью и вовремя</div>
+      </div>
+      <div class="kpi">
+        <div class="k-name">Stock days</div>
+        <div class="k-desc">Сколько дней продаж покрывает текущий остаток</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <b>Как замыкается цикл.</b> Магазин принимает товар (с фиксацией расхождений), выкладывает его на полку и продаёт через кассу. ERP регистрирует все факты: оприходование, обновление остатков, чеки, списания, перемещения и инвентаризации. X-Flow возвращает эти данные в Replenishment — и цикл замыкается. Replenishment считает KPI (OSA, OTIF, Stock days), оценивает точность прогноза относительно факта и запускает следующую итерацию расчёта. Так система учится на своих ошибках и улучшает показатели с каждым циклом.
+</div>
+</body>
+</html>

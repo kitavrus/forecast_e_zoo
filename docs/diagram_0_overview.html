@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>E-Zoo Replenishment. Общая swimlane-диаграмма</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --ink: #2C2C2A;
+    --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15);
+    --lane-bg: rgba(255,255,255,0.5);
+    --gray-50:#F1EFE8;   --gray-600:#5F5E5A;   --gray-800:#444441;
+    --blue-50:#E6F1FB;   --blue-600:#185FA5;   --blue-800:#0C447C;
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+    --teal-50:#E1F5EE;   --teal-600:#0F6E56;   --teal-800:#085041;
+    --amber-50:#FAEEDA;  --amber-600:#854F0B;  --amber-800:#633806;
+    --indigo-50:#E8E7F8; --indigo-600:#4C3FAA; --indigo-800:#332877;
+    --rose-50:#FDE6EE;   --rose-600:#B92864;   --rose-800:#841845;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 40px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    max-width: 900px;
+  }
+  .hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--purple-50);
+    border: 1px solid var(--purple-600);
+    color: var(--purple-800);
+    border-radius: 20px;
+    font-size: 12.5px;
+    margin-bottom: 24px;
+    font-weight: 500;
+  }
+  .hint::before {
+    content: "ⓘ";
+    font-size: 14px;
+  }
+
+  .swimlane-wrap {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .swimlane-canvas {
+    min-width: 1200px;
+    position: relative;
+  }
+  .swimlane {
+    display: grid;
+    grid-template-columns: 160px repeat(4, 1fr);
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--lane-bg);
+  }
+
+  .phase-header {
+    background: rgba(255,255,255,0.7);
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .phase-header:nth-child(5) { border-right: none; }
+  .phase-header.corner {
+    background: rgba(0,0,0,0.025);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+  }
+  .phase-header .ph-num {
+    font-size: 10.5px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    font-weight: 500;
+  }
+  .phase-header .ph-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .lane-name {
+    padding: 18px 16px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    font-size: 13px;
+  }
+  .lane-row-last .lane-name { border-bottom: none; }
+  .lane-name .ln-title { font-weight: 500; margin-bottom: 3px; font-size: 14px; }
+  .lane-name .ln-sub { font-size: 12px; opacity: 0.75; }
+  .lane-name.gray   { background: var(--gray-50);   color: var(--gray-800);   }
+  .lane-name.blue   { background: var(--blue-50);   color: var(--blue-800);   }
+  .lane-name.purple { background: var(--purple-50); color: var(--purple-800); }
+  .lane-name.teal   { background: var(--teal-50);   color: var(--teal-800);   }
+  .lane-name.amber  { background: var(--amber-50);  color: var(--amber-800);  }
+  .lane-name.indigo { background: var(--indigo-50); color: var(--indigo-800); }
+  .lane-name.rose   { background: var(--rose-50);   color: var(--rose-800);   }
+
+  .cell {
+    padding: 18px 14px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    min-height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .cell:nth-child(5n) { border-right: none; }
+  .cell.empty { background: rgba(0,0,0,0.015); }
+  .lane-row-last .cell { border-bottom: none; }
+
+  .task {
+    border-radius: 7px;
+    border: 1px solid;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    width: 100%;
+    max-width: 230px;
+    text-align: left;
+    position: relative;
+    z-index: 2;
+  }
+  .task .t-title {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .task .t-desc {
+    font-size: 11.5px;
+    opacity: 0.85;
+    line-height: 1.45;
+  }
+  .task.gray   { background: var(--gray-50);   border-color: var(--gray-600);   color: var(--gray-800);   }
+  .task.blue   { background: var(--blue-50);   border-color: var(--blue-600);   color: var(--blue-800);   }
+  .task.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .task.teal   { background: var(--teal-50);   border-color: var(--teal-600);   color: var(--teal-800);   }
+  .task.amber  { background: var(--amber-50);  border-color: var(--amber-600);  color: var(--amber-800);  }
+  .task.indigo { background: var(--indigo-50); border-color: var(--indigo-600); color: var(--indigo-800); }
+  .task.rose   { background: var(--rose-50);   border-color: var(--rose-600);   color: var(--rose-800);   }
+
+  .cell.stacked {
+    flex-direction: column;
+    gap: 38px;
+    align-items: stretch;
+    justify-content: center;
+    padding: 14px;
+    min-height: 240px;
+  }
+  .cell.stacked .task { max-width: none; }
+
+  .arrows-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+    overflow: visible;
+  }
+
+  /* Интерактивные подписи стрелок */
+  .arrow-label {
+    position: absolute;
+    z-index: 4;
+    transform: translate(-50%, -50%);
+    padding: 4px 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-size: 10.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    cursor: help;
+    transition: all 0.15s ease;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .arrow-label::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--purple-600);
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+  }
+  .arrow-label:hover {
+    background: white;
+    color: var(--ink);
+    border-color: var(--purple-600);
+    box-shadow: 0 4px 12px rgba(83,74,183,0.15);
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  .arrow-label:hover::after {
+    opacity: 1;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    z-index: 100;
+    background: white;
+    border: 1px solid var(--purple-600);
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 260px;
+    max-width: 340px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .tooltip.visible {
+    opacity: 1;
+  }
+  .tooltip .tt-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--purple-800);
+    margin-bottom: 4px;
+  }
+  .tooltip .tt-meta {
+    font-size: 10.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .tooltip ul {
+    list-style: none;
+    padding: 0;
+  }
+  .tooltip ul li {
+    padding: 3px 0 3px 14px;
+    position: relative;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .tooltip ul li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 11px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--purple-600);
+    opacity: 0.5;
+  }
+  .tooltip .tt-section {
+    font-size: 10.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .goals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .goal {
+    padding: 12px 14px;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--purple-600);
+  }
+  .goal .g-name {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: var(--purple-800);
+    font-weight: 500;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+  }
+  .goal .g-desc { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+  .legend-row {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    margin: 20px 0 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch {
+    width: 36px;
+    height: 2px;
+    background: var(--ink);
+    opacity: 0.55;
+    position: relative;
+  }
+  .legend-swatch.dashed {
+    background: repeating-linear-gradient(to right, var(--ink) 0 4px, transparent 4px 8px);
+  }
+  .legend-swatch::after {
+    content: "";
+    position: absolute;
+    right: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-left: 7px solid var(--ink);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+  }
+
+  .footer {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: var(--lane-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .footer b { color: var(--ink); font-weight: 500; }
+  .section-title {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    margin-bottom: 12px;
+    padding-left: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h1>E-Zoo Replenishment. Общая swimlane-диаграмма</h1>
+<p class="subtitle">Пять ролей-дорожек и четыре фазы процесса. Задачи показывают зону ответственности каждой роли, стрелки — передачу данных и документов.</p>
+
+<div class="hint">Наведите курсор на подпись стрелки — увидите, какие именно поля передаются</div>
+
+<div class="section-title">Бизнес-цели</div>
+<div class="goals">
+  <div class="goal"><div class="g-name">OSA</div><div class="g-desc">Доступность товара на полке</div></div>
+  <div class="goal"><div class="g-name">OTIF</div><div class="g-desc">Сервис онлайн-клиентов</div></div>
+  <div class="goal"><div class="g-name">Stock days</div><div class="g-desc">Оптимальное покрытие стока</div></div>
+  <div class="goal"><div class="g-name">Автоматизация</div><div class="g-desc">Максимум автозаказов</div></div>
+</div>
+
+<div class="swimlane-wrap">
+<div class="swimlane-canvas">
+
+<div class="swimlane">
+  <div class="phase-header corner">Роль / Фаза</div>
+  <div class="phase-header"><div class="ph-num">Фаза 1</div><div class="ph-title">Сбор данных</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 2</div><div class="ph-title">Расчёт заказа</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 3</div><div class="ph-title">Подготовка заказа</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 4</div><div class="ph-title">Регистрация заказов</div></div>
+
+  <div class="lane-name gray">
+    <div class="ln-title">ERP клиента</div>
+    <div class="ln-sub">E-Zoo</div>
+  </div>
+  <div class="cell" id="c-erp-1">
+    <div class="task gray" id="t-erp-1">
+      <div class="t-title">Выгрузка данных</div>
+      <div class="t-desc">Справочники, остатки, чеки, движения</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-erp-2"></div>
+  <div class="cell empty" id="c-erp-3"></div>
+  <div class="cell" id="c-erp-4">
+    <div class="task gray" id="t-erp-4">
+      <div class="t-title">Регистрация заказа</div>
+      <div class="t-desc">Документ закупки, статусы</div>
+    </div>
+  </div>
+
+  <div class="lane-name indigo">
+    <div class="ln-title">Адаптер источников</div>
+    <div class="ln-sub">Коннекторы и канонизация</div>
+  </div>
+  <div class="cell" id="c-adp-1">
+    <div class="task indigo" id="t-adp-1">
+      <div class="t-title">Адаптер источников</div>
+      <div class="t-desc">1С, ERP, WMS, OMS — единый формат</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-adp-2"></div>
+  <div class="cell empty" id="c-adp-3"></div>
+  <div class="cell empty" id="c-adp-4"></div>
+
+  <div class="lane-name blue">
+    <div class="ln-title">X-Flow</div>
+    <div class="ln-sub">Интеграция и EDI</div>
+  </div>
+  <div class="cell" id="c-xf-1">
+    <div class="task blue" id="t-xf-1">
+      <div class="t-title">ETL и валидация</div>
+      <div class="t-desc">Нормализация, мэппинг, CDC-обмен</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-xf-2"></div>
+  <div class="cell empty" id="c-xf-3"></div>
+  <div class="cell empty" id="c-xf-4"></div>
+
+  <div class="lane-name purple">
+    <div class="ln-title">Replenishment</div>
+    <div class="ln-sub">Прогноз и расчёт</div>
+  </div>
+  <div class="cell" id="c-rep-1">
+    <div class="task purple" id="t-rep-1">
+      <div class="t-title">Витрины данных</div>
+      <div class="t-desc">SKU, точки, движения, планирование</div>
+    </div>
+  </div>
+  <div class="cell stacked" id="c-rep-2">
+    <div class="task purple" id="rep2-kpi">
+      <div class="t-title">KPI и калибровка</div>
+      <div class="t-desc">OSA, OTIF, Stock days</div>
+    </div>
+    <div class="task purple" id="rep2-build">
+      <div class="t-title">Прогноз → калькуляция → конструктор</div>
+      <div class="t-desc">Спрос, потребность, правила, готовый заказ</div>
+    </div>
+  </div>
+  <div class="cell" id="c-rep-3">
+    <div class="task purple" id="t-rep-3">
+      <div class="t-title">Блок подготовки заказа</div>
+      <div class="t-desc">Финальный документ заказа</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-rep-4"></div>
+
+  <div class="lane-name rose lane-row-last">
+    <div class="ln-title">Адаптер провайдеров</div>
+    <div class="ln-sub">Маршрутизация и форматы</div>
+  </div>
+  <div class="cell empty lane-row-last" id="c-prv-1"></div>
+  <div class="cell empty lane-row-last" id="c-prv-2"></div>
+  <div class="cell lane-row-last" id="c-prv-3">
+    <div class="task rose" id="t-prv-3">
+      <div class="t-title">Маршрутизация каналов</div>
+      <div class="t-desc">EDI / 1С / ERP / CRM по описи поставщика</div>
+    </div>
+  </div>
+  <div class="cell empty lane-row-last" id="c-prv-4"></div>
+</div>
+
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels-layer"></div>
+
+</div>
+</div>
+
+<div class="legend-row">
+  <div class="legend-item">
+    <div class="legend-swatch"></div>
+    <span>Прямой поток — данные, заказы, документы</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-swatch dashed"></div>
+    <span>Обратный поток — факт, подтверждения, статусы</span>
+  </div>
+</div>
+
+<div class="footer">
+  <b>Как читать диаграмму.</b> Каждая строка — роль, каждая колонка — фаза процесса. Задача живёт на пересечении «роль × фаза». Стрелки показывают передачу ответственности: сплошные — прямой поток, пунктирные — обратная связь. <b>Наведите курсор на любую подпись стрелки</b>, чтобы увидеть детальный список передаваемых полей. KPI и калибровка внутри Replenishment Ф2 замыкают цикл — данные о фактах используются для следующего прогноза.
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+  // ============================================
+  // СЛОВАРЬ: подпись стрелки → детали потока
+  // ============================================
+  const FLOWS = {
+    'raw-extract': {
+      title: 'Сырые данные источника',
+      meta: 'ERP / WMS / OMS → Адаптер источников · по описи поддерживаемых API',
+      sections: [
+        {
+          name: 'Поддерживаемые типы источников',
+          items: [
+            '1С: УТ / ERP / Розница (документы реализации, регистры остатков, регистры продаж)',
+            'SAP / Oracle / прочие enterprise-ERP (IDoc, BAPI, REST)',
+            'WMS-системы (movements, stock snapshots, receiving/picking events)',
+            'OMS / e-commerce backend (orders, POS feeds, online-резервы)'
+          ]
+        },
+        {
+          name: 'Каналы получения',
+          items: [
+            'REST / SOAP API (по описи методов источника)',
+            'Файловые выгрузки (CSV, XML, JSON) через S3 / SFTP',
+            'Прямой доступ к БД источника (read-replica)',
+            'CDC / change-streams (Debezium, Kafka Connect)',
+            'EDI (для коммерческих документов между системами клиента)'
+          ]
+        },
+        {
+          name: 'Сырые сущности',
+          items: [
+            'Справочники в схемах источника (товары, точки, поставщики)',
+            'Документы движения: реализации, поступления, перемещения',
+            'Регистры: остатки, продажи, резервы',
+            'Чеки POS со всеми атрибутами кассового слоя',
+            'Промо и ценовые регистры'
+          ]
+        }
+      ]
+    },
+    'canonical': {
+      title: 'Канонический формат → X-Flow',
+      meta: 'Адаптер источников → X-Flow · единый контракт независимо от типа источника',
+      sections: [
+        {
+          name: 'Что делает адаптер',
+          items: [
+            'Мэппинг полей источника в каноническую модель (по описи на тип источника)',
+            'Привязка к нашим справочникам (SKU-кросс, GLN точек, иерархия)',
+            'Валидация обязательных полей и контроль типов',
+            'Дедупликация и формирование диффов CDC',
+            'Унификация единиц измерения, валют, временных зон'
+          ]
+        },
+        {
+          name: 'Канонические справочники',
+          items: [
+            'Товары: SKU, штрих-код, название, упаковка, вес, кол-во в паллете, срок и температура хранения, страна, УКТ ВЭД',
+            'Иерархия: классификатор, родитель, уровень',
+            'Точки: тип (магазин/склад/крос-хаб/даркстор), GLN, адрес, GPS, график, площадь, приоритет по обороту',
+            'Поставщики: ЕДРПОУ/ИНН, GLN, EDI-статусы (ORDERS, ORDRSP, DESADV, РН з ЕЦП, RECADV)',
+            'Ассортимент: пара магазин-SKU, MSP, фейсы, цена реализации с НДС',
+            'Спецификации поставок: мин. партия, приоритет поставщика, закупочная цена с НДС',
+            'План поставок: расписание по дням недели, периодичность (1×/2×/3×/4× в неделю), время отправки, лимиты, бизнес-правила',
+            'Промо: тип акции, даты, промо-цена с НДС'
+          ]
+        },
+        {
+          name: 'Канонические движения',
+          items: [
+            'Остатки: SKU-объект-дата-время',
+            'Чеки: номер-SKU-объект-время, маркдаун',
+            'Перемещения: SKU-объект1-объект2-время',
+            'Оприходования, списания, инвентаризации'
+          ]
+        }
+      ]
+    },
+    'vitrines': {
+      title: 'Витрины данных',
+      meta: 'X-Flow → Replenishment · после ETL и валидации',
+      sections: [
+        {
+          name: 'Пять готовых витрин',
+          items: [
+            'Витрина SKU: товар + иерархия + спецификации',
+            'Витрина точек: магазины, склады, ассортимент',
+            'Витрина движений: продажи, остатки, перемещения',
+            'Витрина планирования: расписание, лимиты, правила',
+            'Витрина коммерческих условий: промо, цены, приоритеты'
+          ]
+        }
+      ]
+    },
+    'inputs': {
+      title: 'Входные данные для расчёта',
+      meta: 'Витрины → Прогнозирование и калькуляция',
+      sections: [
+        {
+          name: 'Для прогноза',
+          items: [
+            'История продаж по SKU-точка-день',
+            'Промо-календарь и типы акций',
+            'Сезонные паттерны, государственные праздники',
+            'Маркдауны и корректировки цен'
+          ]
+        },
+        {
+          name: 'Для калькуляции',
+          items: [
+            'Текущие остатки по всем точкам',
+            'Заказы в пути с датами прихода',
+            'Резервы и блокировки',
+            'Бизнес-правила, точка заказа, MSP',
+            'Правила приоритета поставщика (если SKU поставляют несколько)',
+            'Лимиты: сумма, кол-во, паллеты, вес, объём'
+          ]
+        }
+      ]
+    },
+    'ready-order': {
+      title: 'Данные для подготовки заказа',
+      meta: 'Replenishment Ф2 (Конструктор) → Replenishment Ф3 (Блок подготовки заказа)',
+      sections: [
+        {
+          name: 'Шапка документа',
+          items: [
+            'Номер заказа, дата создания',
+            'Поставщик (GLN), точка выгрузки (GLN)',
+            'Дата поставки (на основе lead time)',
+            'Валюта, статус: готов к отправке'
+          ]
+        },
+        {
+          name: 'Позиции',
+          items: [
+            'SKU, штрих-код, название',
+            'Количество (с учётом кратности упаковки)',
+            'Закупочная цена с НДС',
+            'Сумма по позиции'
+          ]
+        }
+      ]
+    },
+    'order-to-routing': {
+      title: 'Готовый заказ → Маршрутизация',
+      meta: 'Replenishment Ф3 (Блок подготовки) → Адаптер провайдеров (Маршрутизация каналов)',
+      sections: [
+        {
+          name: 'Что передаётся',
+          items: [
+            'Финальный документ заказа в каноническом формате',
+            'Шапка: поставщик, точка выгрузки, дата поставки, валюта, статус «готов к отправке»',
+            'Позиции: SKU, количество (с учётом кратности), цена, сумма',
+            'Метаданные стратегии: тип заказа (регулярный / промо / спот), приоритет поставщика',
+            'Ссылка на расчётный пакет (прогноз / калькуляция) для аудита'
+          ]
+        }
+      ]
+    },
+    'channel-orders': {
+      title: 'Передача заказа в формате целевой системы',
+      meta: 'Адаптер провайдеров → ERP (Регистрация заказа) · передаёт заказ в формате для регистрации в зависимости от целевой системы (1С / ERP / CRM / EDI). Параллельно отправка во внешнюю систему поставщика; ответ и факты возвращаются через Фазу 1 (Адаптер источников).',
+      sections: [
+        {
+          name: 'Как адаптер выбирает канал',
+          items: [
+            'По описи поставщика: какие каналы поддерживает (EDI / 1С / ERP / CRM / REST)',
+            'По типу заказа и стратегии: регулярная поставка, спот, под клиента, дроп-шип',
+            'Приоритет канала + fallback (если EDI недоступен → REST → ручная выгрузка)',
+            'SLA канала и историческая надёжность доставки'
+          ]
+        },
+        {
+          name: 'EDI (EDIFACT / GS1 EANCOM)',
+          items: [
+            'ORDERS: GLN покупателя/поставщика/точки доставки, валюта, условия оплаты',
+            'Позиции LIN: EAN-13 или SKU, количество, цена PRI, дата поставки DTM',
+            'Профиль и версия EDIFACT — по описи провайдера'
+          ]
+        },
+        {
+          name: '1С (HTTP-сервис, обмен файлами)',
+          items: [
+            'Документ «Заказ поставщику» в формате 1С (XDTO/JSON)',
+            'Web-сервис 1С или файловый обмен через S3/SFTP',
+            'Контрагент-поставщик и точка доставки по справочнику 1С'
+          ]
+        },
+        {
+          name: 'ERP enterprise (SAP / Oracle / другие)',
+          items: [
+            'IDoc ORDERS05 / BAPI_PO_CREATE1 (SAP)',
+            'REST-вызов purchase-order endpoint с JSON-payload',
+            'Идентификаторы поставщика и точки в схеме целевого ERP'
+          ]
+        },
+        {
+          name: 'CRM / REST API поставщика',
+          items: [
+            'POST /orders или эквивалент в CRM-системе поставщика',
+            'JSON по схеме провайдера + аутентификация (OAuth, API key)',
+            'Связка заказа со сделкой/лидом если CRM использует продажный пайплайн'
+          ]
+        }
+      ]
+    },
+    'kpi-to-prognoz': {
+      title: 'KPI → Прогноз',
+      meta: 'Внутри Replenishment Ф2: KPI и калибровка → Прогноз → калькуляция → конструктор',
+      sections: [
+        {
+          name: 'Что передаётся',
+          items: [
+            'OSA, OTIF, Stock days за прошедший цикл',
+            'MAPE / bias прошлого прогноза против факта',
+            'Доля автоматических vs ручных заказов',
+            'Отклонения lead time, отказы поставщиков, расхождения приёмки'
+          ]
+        },
+        {
+          name: 'Эффект',
+          items: [
+            'Калибровка моделей прогнозирования',
+            'Корректировка точек заказа и MSP',
+            'Уточнение бизнес-правил конструктора',
+            'Сигнал об ассортименте/поставщиках с проблемой'
+          ]
+        }
+      ]
+    }
+  };
+
+  // ============================================
+  // РЕНДЕР СТРЕЛОК И ПОДПИСЕЙ
+  // ============================================
+  const canvas = document.querySelector('.swimlane-canvas');
+  const svg = document.getElementById('arrows');
+  const labelsLayer = document.getElementById('labels-layer');
+  const tooltip = document.getElementById('tooltip');
+
+  function rectOf(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const p = canvas.getBoundingClientRect();
+    return {
+      left:   r.left - p.left,
+      right:  r.right - p.left,
+      top:    r.top - p.top,
+      bottom: r.bottom - p.top,
+      cx:     r.left - p.left + r.width/2,
+      cy:     r.top - p.top + r.height/2,
+      width:  r.width,
+      height: r.height
+    };
+  }
+
+  function drawLine(x1, y1, x2, y2, opts = {}) {
+    const { dashed = false, via = null } = opts;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    let d = `M ${x1} ${y1}`;
+    if (Array.isArray(via)) {
+      for (const pt of via) d += ` L ${pt.x} ${pt.y}`;
+    } else if (via) {
+      d += ` L ${via.x} ${via.y}`;
+    }
+    d += ` L ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#2C2C2A');
+    path.setAttribute('stroke-width', '1.4');
+    path.setAttribute('opacity', '0.55');
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+    svg.appendChild(path);
+  }
+
+  function drawLabel(x, y, flowKey) {
+    const flow = FLOWS[flowKey];
+    if (!flow) return;
+    const label = document.createElement('div');
+    label.className = 'arrow-label';
+    label.style.left = x + 'px';
+    label.style.top = y + 'px';
+    label.textContent = flow.title;
+    label.dataset.flowKey = flowKey;
+
+    label.addEventListener('mouseenter', showTooltip);
+    label.addEventListener('mousemove', moveTooltip);
+    label.addEventListener('mouseleave', hideTooltip);
+
+    labelsLayer.appendChild(label);
+  }
+
+  function showTooltip(e) {
+    const key = e.currentTarget.dataset.flowKey;
+    const flow = FLOWS[key];
+    if (!flow) return;
+
+    let html = `<div class="tt-title">${flow.title}</div>`;
+    if (flow.meta) html += `<div class="tt-meta">${flow.meta}</div>`;
+    flow.sections.forEach((sec, idx) => {
+      if (sec.name && flow.sections.length > 1) {
+        html += `<div class="tt-section" ${idx === 0 ? 'style="margin-top:0"' : ''}>${sec.name}</div>`;
+      }
+      html += '<ul>';
+      sec.items.forEach(item => {
+        html += `<li>${item}</li>`;
+      });
+      html += '</ul>';
+    });
+    tooltip.innerHTML = html;
+    tooltip.classList.add('visible');
+    moveTooltip(e);
+  }
+
+  function moveTooltip(e) {
+    const padding = 14;
+    const ttRect = tooltip.getBoundingClientRect();
+    let x = e.clientX + padding;
+    let y = e.clientY + padding;
+    if (x + ttRect.width > window.innerWidth - padding) {
+      x = e.clientX - ttRect.width - padding;
+    }
+    if (y + ttRect.height > window.innerHeight - padding) {
+      y = e.clientY - ttRect.height - padding;
+    }
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+
+  function hideTooltip() {
+    tooltip.classList.remove('visible');
+  }
+
+  function render() {
+    svg.innerHTML = '';
+    labelsLayer.innerHTML = '';
+    const pr = canvas.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${pr.width} ${pr.height}`);
+    svg.setAttribute('width',  pr.width);
+    svg.setAttribute('height', pr.height);
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = `
+      <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      </marker>
+    `;
+    svg.appendChild(defs);
+
+    // ФАЗА 1 — стрелки от карточек к карточкам, чтобы стрелки касались блоков
+    const tErp1 = rectOf('t-erp-1');
+    const tAdp1 = rectOf('t-adp-1');
+    const tXf1  = rectOf('t-xf-1');
+    const tRep1 = rectOf('t-rep-1');
+
+    drawLine(tErp1.cx, tErp1.bottom + 4, tAdp1.cx, tAdp1.top - 2);
+    drawLabel(tErp1.cx, (tErp1.bottom + tAdp1.top)/2, 'raw-extract');
+
+    drawLine(tAdp1.cx, tAdp1.bottom + 4, tXf1.cx, tXf1.top - 2);
+    drawLabel(tAdp1.cx, (tAdp1.bottom + tXf1.top)/2, 'canonical');
+
+    drawLine(tXf1.cx, tXf1.bottom + 4, tRep1.cx, tRep1.top - 2);
+    drawLabel(tXf1.cx, (tXf1.bottom + tRep1.top)/2, 'vitrines');
+
+    // ФАЗА 1 → 2: Витрины → KPI и калибровка
+    const repKpi   = rectOf('rep2-kpi');
+    const repBuild = rectOf('rep2-build');
+    drawLine(tRep1.right + 4, tRep1.cy, repKpi.left - 2, repKpi.cy, { via: { x: repKpi.left - 24, y: tRep1.cy } });
+    drawLabel((tRep1.right + repKpi.left)/2, tRep1.cy - 14, 'inputs');
+
+    // Внутри rep2: KPI → Прогноз
+    drawLine(repKpi.cx, repKpi.bottom + 4, repBuild.cx, repBuild.top - 2);
+    drawLabel(repKpi.cx + 70, (repKpi.bottom + repBuild.top)/2, 'kpi-to-prognoz');
+
+    // ФАЗА 2 → 3: Конструктор → Блок подготовки заказа
+    const tRep3 = rectOf('t-rep-3');
+    drawLine(repBuild.right + 4, repBuild.cy, tRep3.left - 2, tRep3.cy);
+    // Подпись поднята над «Блок подготовки заказа», чтобы не налезать на угол карточки
+    drawLabel((repBuild.right + tRep3.left)/2, tRep3.top - 14, 'ready-order');
+
+    // ФАЗА 3: Блок подготовки заказа → Маршрутизация каналов
+    const tPrv3 = rectOf('t-prv-3');
+    drawLine(tRep3.cx, tRep3.bottom + 4, tPrv3.cx, tPrv3.top - 2);
+    drawLabel(tRep3.cx, (tRep3.bottom + tPrv3.top)/2, 'order-to-routing');
+
+    // ФАЗА 3 → 4: Маршрутизация каналов → Регистрация заказа.
+    // Выход из правого края prv3 и горизонталь по середине строки (а не сверху),
+    // чтобы подпись не налезала на «Готовый заказ → Маршрутизация».
+    const tErp4 = rectOf('t-erp-4');
+    drawLine(
+      tPrv3.right + 4, tPrv3.cy,
+      tErp4.cx, tErp4.bottom + 4,
+      { via: { x: tErp4.cx, y: tPrv3.cy } }
+    );
+    drawLabel((tPrv3.right + tErp4.cx)/2, tPrv3.cy, 'channel-orders');
+
+  }
+
+  function rerender() { requestAnimationFrame(render); }
+
+  function initialRender() {
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(rerender);
+    } else {
+      setTimeout(rerender, 120);
+    }
+  }
+
+  if (document.readyState === 'complete') {
+    initialRender();
+  } else {
+    window.addEventListener('load', initialRender);
+  }
+  window.addEventListener('resize', () => setTimeout(rerender, 50));
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(rerender).observe(canvas);
+  }
+</script>
+
+</body>
+</html>
