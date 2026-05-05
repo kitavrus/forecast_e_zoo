@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Карточка «Маршрутизация каналов» (Адаптер провайдеров)</title>
+<link rel="stylesheet" href="_shared.css">
+</head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 3: по карточкам</a> · <span>«Маршрутизация каналов» (Adapter providers × Ф3)</span></div>
+<h1>Карточка «Маршрутизация каналов»</h1>
+<p class="subtitle">Зум в карточку из общей диаграммы. Лейны — каналы доставки заказа. Колонки — стадии передачи: приём → выбор канала → конвертация → транспорт → ack.</p>
+<div class="hint">Наведите курсор — увидите EDIFACT-сегменты, IDoc, REST-схемы</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Канал / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Inbox</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Выбор</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Конвертация</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Транспорт</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Ack</div></div>
+
+  <div class="lane-name rose"><div class="ln-title">Inbox</div><div class="ln-sub">От Block prep</div></div>
+  <div class="cell" id="c-1"><div class="task rose" id="t-1"><div class="t-title">Документ</div><div class="t-desc">Канонический + метаданные</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Channel registry</div><div class="ln-sub">Опись поставщиков</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-2"><div class="task amber" id="t-2"><div class="t-title">Выбор канала</div><div class="t-desc">EDI/1С/SAP/REST/SFTP по описи; приоритет + fallback</div><div class="t-branch">Все down → manual fallback</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name blue"><div class="ln-title">EDI</div><div class="ln-sub">EDIFACT/AS2</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-edi-3"><div class="task blue" id="t-edi-3"><div class="t-title">EDIFACT ORDERS</div><div class="t-desc">UNB/UNH/LIN/PRI/DTM по профилю</div></div></div>
+  <div class="cell" id="c-edi-4"><div class="task blue" id="t-edi-4"><div class="t-title">VAN AS2</div><div class="t-desc">MIME, S/MIME, MDN-квитанция</div></div></div>
+  <div class="cell" id="c-edi-5"><div class="task blue" id="t-edi-5"><div class="t-title">ORDRSP</div><div class="t-desc">Подтверждение / изменения / отказ</div></div></div>
+
+  <div class="lane-name teal"><div class="ln-title">Enterprise ERP</div><div class="ln-sub">1С / SAP</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-erp-3"><div class="task teal" id="t-erp-3"><div class="t-title">XDTO / IDoc</div><div class="t-desc">1С web-сервис; SAP IDoc ORDERS05 / BAPI</div></div></div>
+  <div class="cell" id="c-erp-4"><div class="task teal" id="t-erp-4"><div class="t-title">HTTP / RFC</div><div class="t-desc">Sync ack или tRFC commit</div></div></div>
+  <div class="cell" id="c-erp-5"><div class="task teal" id="t-erp-5"><div class="t-title">Регистрация у поставщика</div><div class="t-desc">Документ закупки в их системе</div></div></div>
+
+  <div class="lane-name indigo lane-row-last"><div class="ln-title">REST / CRM</div><div class="ln-sub">API провайдера</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-rst-3"><div class="task indigo" id="t-rst-3"><div class="t-title">JSON по схеме</div><div class="t-desc">POST /orders + OAuth/HMAC</div></div></div>
+  <div class="cell lane-row-last" id="c-rst-4"><div class="task indigo" id="t-rst-4"><div class="t-title">HTTPS POST</div><div class="t-desc">TLS 1.2+, idempotency-key</div></div></div>
+  <div class="cell lane-row-last" id="c-rst-5"><div class="task indigo" id="t-rst-5"><div class="t-title">2xx ответ</div><div class="t-desc">order_id, status, links</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой канал</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Fallback</span></div></div>
+<div class="timing"><h3>Тайминг по каналам</h3>
+<table><thead><tr><th>Канал</th><th>Доставка</th><th>Подтверждение</th></tr></thead><tbody>
+<tr><td>EDI EDIFACT (VAN AS2)</td><td>≤ 15 мин</td><td class="tag">MDN ≤ 30 мин, ORDRSP ≤ 2 ч</td></tr>
+<tr><td>SAP IDoc / RFC</td><td>≤ 1 мин</td><td class="tag">Sync ack</td></tr>
+<tr><td>1С web-сервис</td><td>≤ 30 сек</td><td class="tag">Sync ack</td></tr>
+<tr><td>REST / CRM</td><td>≤ 5 сек</td><td class="tag">2xx ответ</td></tr>
+<tr><td>SFTP файл</td><td>≤ 10 мин</td><td class="tag">Polling статуса</td></tr>
+<tr><td>Manual fallback</td><td>≤ 1 ч</td><td class="tag">Email ack</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Маршрутизатор — это «развилка»: один документ выходит из inbox, и на стадии 2 выбирается одна из трёх дорожек (EDI / Enterprise ERP / REST). Если все недоступны — manual. См. также <a href="../variant_4_by_flow/flow_order_to_routing.html">flow_order_to_routing</a>.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку task</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+window.FLOWS = {
+  'inbox':{title:'Документ → Channel registry',sections:[{name:'Что',items:['Канонический документ','trace_id','Метаданные стратегии']}]},
+  'pick':{title:'Канал выбран',sections:[{name:'Логика',items:['Опись поставщика','Приоритет канала','SLA канала','Тип заказа']}]},
+  'edi-conv':{title:'EDIFACT ORDERS',sections:[{name:'Сегменты',items:['UNB/UNH','LIN: EAN/SKU/qty','PRI: цена','DTM: дата','GLN покупателя/поставщика']}]},
+  'edi-trans':{title:'VAN AS2',sections:[{name:'Доставка',items:['AS2/MIME','S/MIME подпись','MDN sync/async','Retry при network error']}]},
+  'edi-ack':{title:'EDI ack',sections:[{name:'ORDRSP',items:['Status ACCEPTED/CHANGED/REJECTED','Изменения по позициям','Reference на ORDERS']}]},
+  'erp-conv':{title:'1С / SAP',sections:[{name:'1С',items:['Документ.ЗаказПоставщику','XDTO/JSON','Контрагент из справочника']},{name:'SAP',items:['IDoc ORDERS05','BAPI_PO_CREATE1','tRFC commit']}]},
+  'erp-trans':{title:'HTTP / RFC',sections:[{name:'Транспорт',items:['1С web-сервис','SAP RFC через Gateway','Sync или tRFC']}]},
+  'erp-ack':{title:'ERP ack',sections:[{name:'Регистрация',items:['Документ продажи у поставщика','Reference на наш номер','Sync ack или async']}]},
+  'rst-conv':{title:'JSON провайдера',sections:[{name:'Схема',items:['По OpenAPI','POST /orders','header + items','Idempotency-Key']}]},
+  'rst-trans':{title:'HTTPS POST',sections:[{name:'Безопасность',items:['TLS 1.2+','OAuth 2.0','HMAC-подпись','Token rotation']}]},
+  'rst-ack':{title:'REST ack',sections:[{name:'Ответ',items:['HTTP 201','Body: order_id, status, links','Webhook для статусов']}]}
+};
+window.WIRING = function(){return [
+  { from:'t-1', to:'t-2', key:'inbox' },
+  { from:'t-2', to:'t-edi-3', key:'pick' },
+  { from:'t-edi-3', to:'t-edi-4', key:'edi-conv' },
+  { from:'t-edi-4', to:'t-edi-5', key:'edi-trans' },
+  { from:'t-edi-5', kind:'output', key:'edi-ack' },
+  { from:'t-erp-3', to:'t-erp-4', key:'erp-conv' },
+  { from:'t-erp-4', to:'t-erp-5', key:'erp-trans' },
+  { from:'t-erp-5', kind:'output', key:'erp-ack' },
+  { from:'t-rst-3', to:'t-rst-4', key:'rst-conv' },
+  { from:'t-rst-4', to:'t-rst-5', key:'rst-trans' },
+  { from:'t-rst-5', kind:'output', key:'rst-ack' }
+];};
+</script><script src="_shared.js"></script>
+</body></html>

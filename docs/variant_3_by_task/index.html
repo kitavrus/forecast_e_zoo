@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Вариант 3: декомпозиция по карточкам</title>
+<style>
+  :root { --bg:#FAF9F5; --ink:#2C2C2A; --muted:#5F5E5A; --line:rgba(44,44,42,0.15); --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489; --gray-50:#F1EFE8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); padding: 32px 40px; line-height: 1.55; max-width: 980px; }
+  h1 { font-size: 24px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+  .breadcrumb { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .breadcrumb a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); }
+  .pros { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
+  .pros .card { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.55); }
+  .pros .card h3 { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+  .pros .card.pros-card { border-left: 3px solid var(--purple-600); }
+  .pros .card.cons-card { border-left: 3px solid #B92864; }
+  .pros .card ul { list-style: none; padding: 0; }
+  .pros .card li { padding: 3px 0 3px 14px; position: relative; font-size: 13px; }
+  .pros .card li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: var(--purple-600); opacity: 0.55; }
+  .files { border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.5); overflow: hidden; }
+  .file { display: grid; grid-template-columns: 240px 1fr auto; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: center; }
+  .file:last-child { border-bottom: none; }
+  .file .name { font-weight: 500; font-size: 14px; }
+  .file .desc { font-size: 12.5px; color: var(--muted); }
+  .file .status { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 4px 10px; border-radius: 12px; background: var(--gray-50); }
+  .file.ready .status { color: var(--purple-800); background: var(--purple-50); border: 1px solid var(--purple-600); }
+  .file a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); }
+  .nav { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
+  .nav a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); margin-right: 16px; }
+</style>
+</head>
+<body>
+
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a></div>
+
+<h1>Вариант 3. Декомпозиция по карточкам (task-zoom)</h1>
+<p class="subtitle">Каждая карточка с общей диаграммы (например, «Прогноз → калькуляция → конструктор» или «Маршрутизация каналов») раскрывается в собственный swimlane с подмодулями и шагами.</p>
+
+<div class="pros">
+  <div class="card pros-card">
+    <h3>Когда удобно</h3>
+    <ul>
+      <li>Максимальная глубина — каждая важная функция в фокусе</li>
+      <li>Хорошо для технического дизайна и оценки скоупа</li>
+      <li>Можно дёрнуть нужную диаграмму прямо из общей по клику</li>
+    </ul>
+  </div>
+  <div class="card cons-card">
+    <h3>Минусы</h3>
+    <ul>
+      <li>~10 файлов — больше всего работы по поддержке</li>
+      <li>Связь между карточками теряется внутри отдельного файла</li>
+      <li>Часть карточек тривиальна (1-2 шага) — диаграмма для них избыточна</li>
+    </ul>
+  </div>
+</div>
+
+<div class="files">
+  <div class="file ready">
+    <div class="name">task_rep_build.html</div>
+    <div class="desc">Прогноз → калькуляция → конструктор (самая важная карточка)</div>
+    <div><a href="task_rep_build.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_erp_extract.html</div>
+    <div class="desc">«Выгрузка данных» из ERP клиента</div>
+    <div><a href="task_erp_extract.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_adapter_canonical.html</div>
+    <div class="desc">«Адаптер источников → канонизация»</div>
+    <div><a href="task_adapter_canonical.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_xflow_etl.html</div>
+    <div class="desc">«ETL и валидация» внутри X-Flow</div>
+    <div><a href="task_xflow_etl.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_rep_vitrines.html</div>
+    <div class="desc">«Витрины данных» Replenishment</div>
+    <div><a href="task_rep_vitrines.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_rep_kpi.html</div>
+    <div class="desc">«KPI и калибровка»</div>
+    <div><a href="task_rep_kpi.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_rep_order.html</div>
+    <div class="desc">«Блок подготовки заказа»</div>
+    <div><a href="task_rep_order.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_provider_routing.html</div>
+    <div class="desc">«Маршрутизация каналов»</div>
+    <div><a href="task_provider_routing.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">task_erp_register.html</div>
+    <div class="desc">«Регистрация заказа» в ERP</div>
+    <div><a href="task_erp_register.html">открыть →</a></div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="../diagram_0_overview.html">← Общая</a>
+  <a href="../variant_1_by_lane/index.html">Вариант 1: по ролям</a>
+  <a href="../variant_2_by_phase/index.html">Вариант 2: по фазам</a>
+  <a href="../variant_4_by_flow/index.html">Вариант 4: по потокам</a>
+</div>
+
+</body>
+</html>

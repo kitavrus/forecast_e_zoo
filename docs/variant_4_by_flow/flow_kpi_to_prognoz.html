@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Поток kpi→prognoz: петля обратной связи</title>
+<style>
+:root{--bg:#FAF9F5;--ink:#2C2C2A;--muted:#5F5E5A;--line:rgba(44,44,42,0.15);--lane-bg:rgba(255,255,255,0.5);--gray-50:#F1EFE8;--gray-600:#5F5E5A;--gray-800:#444441;--blue-50:#E6F1FB;--blue-600:#185FA5;--blue-800:#0C447C;--purple-50:#EEEDFE;--purple-600:#534AB7;--purple-800:#3C3489;--teal-50:#E1F5EE;--teal-600:#0F6E56;--teal-800:#085041;--amber-50:#FAEEDA;--amber-600:#854F0B;--amber-800:#633806;--indigo-50:#E8E7F8;--indigo-600:#4C3FAA;--indigo-800:#332877;--rose-50:#FDE6EE;--rose-600:#B92864;--rose-800:#841845}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);padding:32px 40px;line-height:1.5}
+h1{font-size:24px;font-weight:500;margin-bottom:6px;letter-spacing:-0.01em}.subtitle{font-size:14px;color:var(--muted);margin-bottom:20px;max-width:900px}
+.breadcrumb{font-size:12.5px;color:var(--muted);margin-bottom:14px}.breadcrumb a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600)}
+.hint{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--purple-50);border:1px solid var(--purple-600);color:var(--purple-800);border-radius:20px;font-size:12.5px;margin-bottom:24px;font-weight:500}.hint::before{content:"ⓘ";font-size:14px}
+.swimlane-wrap{overflow-x:auto;padding-bottom:8px}.swimlane-canvas{min-width:1280px;position:relative}
+.swimlane{display:grid;grid-template-columns:180px repeat(5,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--lane-bg)}
+.phase-header{background:rgba(255,255,255,0.7);padding:14px 18px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-size:13px}.phase-header:nth-child(6){border-right:none}
+.phase-header.corner{background:rgba(0,0,0,0.025);font-size:11px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;font-weight:500}
+.phase-header .ph-num{font-size:10.5px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px;font-weight:500}.phase-header .ph-title{font-size:14px;font-weight:500;color:var(--ink)}
+.lane-name{padding:18px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;font-size:13px}.lane-row-last .lane-name{border-bottom:none}
+.lane-name .ln-title{font-weight:500;margin-bottom:3px;font-size:14px}.lane-name .ln-sub{font-size:12px;opacity:0.75}
+.lane-name.gray{background:var(--gray-50);color:var(--gray-800)}.lane-name.teal{background:var(--teal-50);color:var(--teal-800)}.lane-name.amber{background:var(--amber-50);color:var(--amber-800)}.lane-name.indigo{background:var(--indigo-50);color:var(--indigo-800)}.lane-name.purple{background:var(--purple-50);color:var(--purple-800)}
+.cell{padding:18px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-height:130px;display:flex;align-items:center;justify-content:center;position:relative}
+.cell:nth-child(6n){border-right:none}.cell.empty{background:rgba(0,0,0,0.015)}.lane-row-last .cell{border-bottom:none}
+.task{border-radius:7px;border:1px solid;padding:10px 12px;font-size:12.5px;line-height:1.45;width:100%;max-width:230px;text-align:left;position:relative;z-index:2}
+.task .t-title{font-size:13px;font-weight:500;margin-bottom:4px}.task .t-desc{font-size:11.5px;opacity:0.85;line-height:1.45}
+.task .t-branch{font-size:10.5px;margin-top:6px;padding-top:6px;border-top:1px dashed currentColor;opacity:0.7}
+.task.gray{background:var(--gray-50);border-color:var(--gray-600);color:var(--gray-800)}.task.teal{background:var(--teal-50);border-color:var(--teal-600);color:var(--teal-800)}.task.amber{background:var(--amber-50);border-color:var(--amber-600);color:var(--amber-800)}.task.indigo{background:var(--indigo-50);border-color:var(--indigo-600);color:var(--indigo-800)}.task.purple{background:var(--purple-50);border-color:var(--purple-600);color:var(--purple-800)}
+.arrows-layer{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:visible}
+.arrow-label{position:absolute;z-index:4;transform:translate(-50%,-50%);padding:4px 10px;background:var(--bg);border:1px solid var(--line);border-radius:12px;font-size:10.5px;color:var(--muted);white-space:nowrap;cursor:help;transition:all 0.15s ease;pointer-events:auto;display:flex;align-items:center;gap:5px}
+.arrow-label::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--purple-600);opacity:0.5;transition:opacity 0.15s ease}
+.arrow-label:hover{background:white;color:var(--ink);border-color:var(--purple-600);box-shadow:0 4px 12px rgba(83,74,183,0.15);transform:translate(-50%,-50%) scale(1.05)}.arrow-label:hover::after{opacity:1}
+.tooltip{position:fixed;z-index:100;background:white;border:1px solid var(--purple-600);border-radius:10px;padding:14px 16px;min-width:260px;max-width:380px;box-shadow:0 8px 28px rgba(0,0,0,0.12);opacity:0;pointer-events:none;transition:opacity 0.15s ease;font-size:12px;line-height:1.5}.tooltip.visible{opacity:1}
+.tooltip .tt-title{font-size:13px;font-weight:500;color:var(--purple-800);margin-bottom:4px}
+.tooltip .tt-meta{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.tooltip ul{list-style:none;padding:0}.tooltip ul li{padding:3px 0 3px 14px;position:relative;font-size:12px;color:var(--ink)}
+.tooltip ul li::before{content:"";position:absolute;left:2px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--purple-600);opacity:0.5}
+.tooltip .tt-section{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:10px;margin-bottom:4px;font-weight:500}
+.timing{margin-top:24px;padding:18px 22px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px}
+.timing h3{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:12px}
+.timing table{width:100%;border-collapse:collapse;font-size:12.5px}.timing th,.timing td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+.timing th{font-weight:500;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em}.timing tr:last-child td{border-bottom:none}.timing td.tag{color:var(--purple-800);font-weight:500}
+.legend-row{display:flex;gap:24px;align-items:center;margin:20px 0 8px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}.legend-item{display:flex;align-items:center;gap:8px}
+.legend-swatch{width:36px;height:2px;background:var(--ink);opacity:0.55;position:relative}.legend-swatch.dashed{background:repeating-linear-gradient(to right,var(--ink) 0 4px,transparent 4px 8px)}
+.legend-swatch::after{content:"";position:absolute;right:-4px;top:50%;transform:translateY(-50%);border-left:7px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent}
+.footer{margin-top:24px;padding:16px 20px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--muted);line-height:1.7}
+.footer b{color:var(--ink);font-weight:500}.nav{margin-top:14px;font-size:12.5px;color:var(--muted)}.nav a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600);margin:0 8px}
+</style></head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 4: по потокам</a> · <span>kpi→prognoz: петля обратной связи</span></div>
+<h1>Поток kpi→prognoz: замыкание цикла обучения</h1>
+<p class="subtitle">Зум в стрелку «KPI → Прогноз». Факты приёмки и продаж превращаются в KPI, KPI — в калибровочные сигналы, которые корректируют forecaster и rules engine для следующего цикла. Это та самая петля «замыкания цикла», которая делает систему обучаемой.</p>
+<div class="hint">Наведите курсор на подпись стрелки — увидите формулы KPI и сигналы калибровки</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Слой / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Сбор фактов</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Расчёт KPI</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Аналитика и эскалация</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Калибровочные сигналы</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Применение к моделям</div></div>
+
+  <div class="lane-name gray"><div class="ln-title">Facts collector</div><div class="ln-sub">vitrine.movements</div></div>
+  <div class="cell" id="c-fc-1"><div class="task gray" id="t-fc-1"><div class="t-title">Сбор фактов</div><div class="t-desc">Чеки POS, RECADV-факты, движения, отказы поставщиков, отклонения lead time</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name teal"><div class="ln-title">KPI engine</div><div class="ln-sub">Метрики</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-kp-2"><div class="task teal" id="t-kp-2"><div class="t-title">OSA / OTIF / Stock days</div><div class="t-desc">OSA = (SKU-точки в наличии) / (всего ассортимент); OTIF по поставщику; Stock days = on_hand / avg_daily_sales</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Analytics</div><div class="ln-sub">Дашборды и алерты</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-an-3"><div class="task amber" id="t-an-3"><div class="t-title">Дашборды и эскалации</div><div class="t-desc">Тренд OSA; топ-10 проблемных SKU; алерт если bias &gt; 5%</div><div class="t-branch">Алерт → Slack/email + блокировка автоприёма</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name indigo"><div class="ln-title">Calibrator</div><div class="ln-sub">Сигналы калибровки</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-cl-4"><div class="task indigo" id="t-cl-4"><div class="t-title">Перевзвешивание</div><div class="t-desc">MAPE/bias → веса ансамбля; OSA-провалы → ROP↑; OTIF → приоритет поставщика↓</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name purple lane-row-last"><div class="ln-title">Forecaster + Rules</div><div class="ln-sub">Получатели</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-mr-5"><div class="task purple" id="t-mr-5"><div class="t-title">Применение к моделям</div><div class="t-desc">Forecaster: новые веса ансамбля; Rules: новые ROP/MSP/приоритеты; следующий цикл Ф2 — с учётом</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой контур обратной связи</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Эскалация / блокировка</span></div></div>
+<div class="timing"><h3>Тайминг петли</h3>
+<table><thead><tr><th>Сигнал</th><th>Период расчёта</th><th>Эффект</th></tr></thead><tbody>
+<tr><td>OSA / OTIF / Stock days</td><td>Cron 04:00 UTC</td><td class="tag">1×/сутки</td></tr>
+<tr><td>MAPE / bias по прогнозу</td><td>После каждого прогноза vs факт</td><td class="tag">непрерывно</td></tr>
+<tr><td>Tracking signal (CFE / MAD)</td><td>Скользящее окно 28 дней</td><td class="tag">stream</td></tr>
+<tr><td>Перевзвешивание моделей</td><td>Cron 04:30 UTC</td><td class="tag">1×/сутки</td></tr>
+<tr><td>Корректировка ROP/MSP</td><td>Weekly review</td><td class="tag">1×/неделю</td></tr>
+<tr><td>Алерт критических метрик</td><td>OSA &lt; целевой% или bias &gt; 5%</td><td class="tag">≤ 5 мин</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Это «нерв» системы пополнения: без петли обратной связи прогнозы не калибруются, и со временем ошибки накапливаются. KPI отвечают на вопрос «как мы сделали последний цикл?», а сигналы калибровки — на «что поправить, чтобы следующий был лучше».
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку flow</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const FLOWS={
+  'facts':{title:'Факты собраны',meta:'Facts collector → KPI engine',sections:[{name:'Источники',items:['Чеки POS из vitrine.movements','RECADV-факты приёмки','Отказы поставщиков (ORDRSP rejected)','Отклонения lead time (план vs факт)','Маркдауны и списания']}]},
+  'kpi-out':{title:'KPI рассчитаны',meta:'KPI engine → Analytics',sections:[{name:'OSA',items:['(SKU-точки в наличии) / (ассортиментная матрица)','По категориям и форматам точек','Сравнение с целевым значением']},{name:'OTIF',items:['(заказы доставлены on-time AND in-full) / всего','По поставщику и каналу','Сегментация по типу заказа']},{name:'Stock days',items:['on_hand / avg_daily_sales (28d)','Сравнение с targeted_stock_days','Outliers: SKU с stock days > 60']},{name:'Прогнозные',items:['MAPE = mean(|forecast-actual|/actual)','bias = mean(forecast-actual)','Tracking signal CFE/MAD']}]},
+  'signals':{title:'Сигналы и эскалации',meta:'Analytics → Calibrator',sections:[{name:'Алерты',items:['OSA &lt; целевого% по точке/категории','bias &gt; 5% по горизонту','Stock days &gt; 60 по SKU','3+ отказа от одного поставщика подряд']},{name:'Действия',items:['Slack/email алерт','Блокировка автоприёма расчётов','Эскалация ML-команде или закупщику','Создание тикета в трекере']}]},
+  'calibration':{title:'Сигналы калибровки',meta:'Calibrator → Forecaster + Rules',sections:[{name:'Forecaster',items:['Новые веса ансамбля (ARIMA/GBM/uplift)','Перетренировка cold-start кластеров','Корректировка горизонта по SKU','Включение/выключение моделей']},{name:'Rules engine',items:['Корректировка ROP / MSP по SKU','Изменение приоритета поставщика','Корректировка safety-stock','Обновление лимитов на заказ']}]},
+  'applied':{title:'Применено в моделях',meta:'Forecaster + Rules → следующий цикл Ф2',sections:[{name:'Следующий цикл',items:['Прогноз с новыми весами','Калькуляция с новыми ROP','Замыкание петли обучения','Метрика «improvement vs prev cycle»']}]}
+};
+const canvas=document.querySelector('.swimlane-canvas');const svg=document.getElementById('arrows');const labelsLayer=document.getElementById('labels-layer');const tooltip=document.getElementById('tooltip');
+function rectOf(id){const el=document.getElementById(id);if(!el)return null;const r=el.getBoundingClientRect();const p=canvas.getBoundingClientRect();return{left:r.left-p.left,right:r.right-p.left,top:r.top-p.top,bottom:r.bottom-p.top,cx:r.left-p.left+r.width/2,cy:r.top-p.top+r.height/2,width:r.width,height:r.height}}
+function drawLine(x1,y1,x2,y2,opts={}){const{dashed=false,via=null}=opts;const path=document.createElementNS('http://www.w3.org/2000/svg','path');let d=`M ${x1} ${y1}`;if(Array.isArray(via))for(const pt of via)d+=` L ${pt.x} ${pt.y}`;else if(via)d+=` L ${via.x} ${via.y}`;d+=` L ${x2} ${y2}`;path.setAttribute('d',d);path.setAttribute('fill','none');path.setAttribute('stroke','#2C2C2A');path.setAttribute('stroke-width','1.4');path.setAttribute('opacity','0.55');path.setAttribute('marker-end','url(#arrowhead)');if(dashed)path.setAttribute('stroke-dasharray','5 4');svg.appendChild(path)}
+function drawLabel(x,y,k){const f=FLOWS[k];if(!f)return;const l=document.createElement('div');l.className='arrow-label';l.style.left=x+'px';l.style.top=y+'px';l.textContent=f.title;l.dataset.flowKey=k;l.addEventListener('mouseenter',showTooltip);l.addEventListener('mousemove',moveTooltip);l.addEventListener('mouseleave',hideTooltip);labelsLayer.appendChild(l)}
+function showTooltip(e){const k=e.currentTarget.dataset.flowKey;const f=FLOWS[k];if(!f)return;let h=`<div class="tt-title">${f.title}</div>`;if(f.meta)h+=`<div class="tt-meta">${f.meta}</div>`;f.sections.forEach((s,i)=>{if(s.name&&f.sections.length>1)h+=`<div class="tt-section" ${i===0?'style="margin-top:0"':''}>${s.name}</div>`;h+='<ul>';s.items.forEach(it=>{h+=`<li>${it}</li>`});h+='</ul>'});tooltip.innerHTML=h;tooltip.classList.add('visible');moveTooltip(e)}
+function moveTooltip(e){const pad=14;const r=tooltip.getBoundingClientRect();let x=e.clientX+pad,y=e.clientY+pad;if(x+r.width>window.innerWidth-pad)x=e.clientX-r.width-pad;if(y+r.height>window.innerHeight-pad)y=e.clientY-r.height-pad;tooltip.style.left=x+'px';tooltip.style.top=y+'px'}
+function hideTooltip(){tooltip.classList.remove('visible')}
+function render(){svg.innerHTML='';labelsLayer.innerHTML='';const pr=canvas.getBoundingClientRect();svg.setAttribute('viewBox',`0 0 ${pr.width} ${pr.height}`);svg.setAttribute('width',pr.width);svg.setAttribute('height',pr.height);const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');defs.innerHTML=`<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/></marker>`;svg.appendChild(defs);
+  const fc=rectOf('t-fc-1'),kp=rectOf('t-kp-2'),an=rectOf('t-an-3'),cl=rectOf('t-cl-4'),mr=rectOf('t-mr-5');
+  drawLine(fc.right+4,fc.cy,kp.cx,kp.top-2,{via:{x:kp.cx,y:fc.cy}});drawLabel((fc.right+kp.cx)/2,fc.cy-14,'facts');
+  drawLine(kp.right+4,kp.cy,an.cx,an.top-2,{via:{x:an.cx,y:kp.cy}});drawLabel((kp.right+an.cx)/2,kp.cy-14,'kpi-out');
+  drawLine(an.right+4,an.cy,cl.cx,cl.top-2,{via:{x:cl.cx,y:an.cy}});drawLabel((an.right+cl.cx)/2,an.cy-14,'signals');
+  drawLine(cl.right+4,cl.cy,mr.cx,mr.top-2,{via:{x:mr.cx,y:cl.cy}});drawLabel((cl.right+mr.cx)/2,cl.cy-14,'calibration');
+  drawLine(mr.cx,mr.bottom+4,mr.cx,mr.bottom+18);drawLabel(mr.cx,mr.bottom+30,'applied');
+  // Эскалация: Analytics dashed loop back to KPI engine
+  drawLine(an.left-4,an.cy,kp.right+4,kp.bottom+18,{dashed:true,via:[{x:an.left-22,y:an.cy},{x:an.left-22,y:kp.bottom+18}]});
+}
+function rerender(){requestAnimationFrame(render)}function initialRender(){if(document.fonts&&document.fonts.ready)document.fonts.ready.then(rerender);else setTimeout(rerender,120)}
+if(document.readyState==='complete')initialRender();else window.addEventListener('load',initialRender);window.addEventListener('resize',()=>setTimeout(rerender,50));
+if(window.ResizeObserver)new ResizeObserver(rerender).observe(canvas);
+</script></body></html>

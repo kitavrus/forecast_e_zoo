@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Карточка «Адаптер источников → канонизация»</title>
+<link rel="stylesheet" href="_shared.css">
+</head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 3: по карточкам</a> · <span>«Адаптер источников» (Адаптер × Ф1)</span></div>
+<h1>Карточка «Адаптер источников → канонизация»</h1>
+<p class="subtitle">Зум в карточку из общей диаграммы. Лейны — подмодули адаптера. Колонки — стадии превращения сырого сообщения в каноническое.</p>
+<div class="hint">Наведите курсор на подпись стрелки — увидите типы коннекторов и резолверов</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Подмодуль / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Соединение</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Парсинг</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Резолвинг</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Quality control</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Out</div></div>
+
+  <div class="lane-name indigo"><div class="ln-title">Connector pool</div><div class="ln-sub">Транспорты</div></div>
+  <div class="cell" id="c-1"><div class="task indigo" id="t-1"><div class="t-title">Подключение</div><div class="t-desc">REST/SOAP/Kafka/Debezium/SFTP/EDI VAN; health-check + reconnect</div><div class="t-branch">Падение источника → DLQ + алерт</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name teal"><div class="ln-title">Parser</div><div class="ln-sub">Десериализация</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-2"><div class="task teal" id="t-2"><div class="t-title">Парсинг</div><div class="t-desc">JSON/XML/EDIFACT/CSV в плоский dict; конверсия типов</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Resolver</div><div class="ln-sub">Cross-tables</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-3"><div class="task amber" id="t-3"><div class="t-title">Резолвинг ID</div><div class="t-desc">SKU-кросс, GLN, ИНН, валюты ISO 4217, единицы ISO</div><div class="t-branch">Не найдено → staging.unmatched_*</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name rose"><div class="ln-title">Quality control</div><div class="ln-sub">Бизнес-проверки</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-4"><div class="task rose" id="t-4"><div class="t-title">QC checks</div><div class="t-desc">Выбросы, дубли, согласованность сумм; quality_flag</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name blue lane-row-last"><div class="ln-title">Publisher</div><div class="ln-sub">К X-Flow</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-5"><div class="task blue" id="t-5"><div class="t-title">Каноническое сообщение</div><div class="t-desc">Kafka <code>xflow.canonical</code>; trace_id, source_meta</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Staging / DLQ</span></div></div>
+<div class="timing"><h3>Тайминг</h3>
+<table><thead><tr><th>Сценарий</th><th>Транспорт</th><th>SLA</th></tr></thead><tbody>
+<tr><td>CDC остатки</td><td>Debezium → Kafka</td><td class="tag">≤ 2 сек</td></tr>
+<tr><td>POS чек</td><td>Kafka stream</td><td class="tag">≤ 30 сек</td></tr>
+<tr><td>Файловый snapshot</td><td>SFTP → S3</td><td class="tag">≤ 30 мин</td></tr>
+<tr><td>Staging-парковка</td><td>UI оператора</td><td class="tag">SLA опер. дня</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Карточка «Адаптер источников» — это пять подмодулей, последовательно превращающих сырьё в канон. См. также <a href="../variant_4_by_flow/flow_canonical.html">flow_canonical</a> (тот же поток с другого ракурса).
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку task</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+window.FLOWS = {
+  'parsed':{title:'Парсенный объект',meta:'Connector → Parser',sections:[{name:'Что',items:['JSON.parse / XML SAX / EDIFACT split','Конверсия типов: даты, числа, валюты','Сохранение raw_payload + trace_id']}]},
+  'mapped':{title:'Каноничные поля',meta:'Parser → Resolver',sections:[{name:'Преобразования',items:['sku_code → sku_canonical','shop_code → location_canonical','currency → ISO 4217','date → UTC + business_date']}]},
+  'resolved':{title:'Привязанные ID',meta:'Resolver → Quality control',sections:[{name:'Cross-tables',items:['SKU кросс по (source × code)','GLN точек','ИНН поставщиков','Промо-коды']},{name:'Парковка',items:['staging.unmatched_*','UI Drag&Drop матчинг','Replay после фикса']}]},
+  'qc-pass':{title:'QC пройдено',meta:'QC → Publisher',sections:[{name:'Проверки',items:['Выбросы по qty / цене','Дубликаты по бизнес-ключу','Sum=qty×price ±0.01','Согласованность дат']}]},
+  'canonical':{title:'Канонический output',meta:'Publisher → X-Flow',sections:[{name:'Где',items:['Kafka <code>xflow.canonical</code>','По типу: sku/movement/receipt/order','С trace_id и source_meta']}]}
+};
+window.WIRING = function(rectOf){
+  return [
+    { from:'t-1', to:'t-2', key:'parsed' },
+    { from:'t-2', to:'t-3', key:'mapped' },
+    { from:'t-3', to:'t-4', key:'resolved' },
+    { from:'t-4', to:'t-5', key:'qc-pass' },
+    { from:'t-5', kind:'output', key:'canonical' }
+  ];
+};
+</script>
+<script src="_shared.js"></script>
+</body></html>

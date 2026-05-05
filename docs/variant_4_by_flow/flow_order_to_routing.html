@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Поток order-to-routing: Подготовка → Маршрутизация → Внешние</title>
+<style>
+:root{--bg:#FAF9F5;--ink:#2C2C2A;--muted:#5F5E5A;--line:rgba(44,44,42,0.15);--lane-bg:rgba(255,255,255,0.5);--gray-50:#F1EFE8;--gray-600:#5F5E5A;--gray-800:#444441;--blue-50:#E6F1FB;--blue-600:#185FA5;--blue-800:#0C447C;--purple-50:#EEEDFE;--purple-600:#534AB7;--purple-800:#3C3489;--teal-50:#E1F5EE;--teal-600:#0F6E56;--teal-800:#085041;--amber-50:#FAEEDA;--amber-600:#854F0B;--amber-800:#633806;--indigo-50:#E8E7F8;--indigo-600:#4C3FAA;--indigo-800:#332877;--rose-50:#FDE6EE;--rose-600:#B92864;--rose-800:#841845}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);padding:32px 40px;line-height:1.5}
+h1{font-size:24px;font-weight:500;margin-bottom:6px;letter-spacing:-0.01em}.subtitle{font-size:14px;color:var(--muted);margin-bottom:20px;max-width:900px}
+.breadcrumb{font-size:12.5px;color:var(--muted);margin-bottom:14px}.breadcrumb a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600)}
+.hint{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--purple-50);border:1px solid var(--purple-600);color:var(--purple-800);border-radius:20px;font-size:12.5px;margin-bottom:24px;font-weight:500}.hint::before{content:"ⓘ";font-size:14px}
+.swimlane-wrap{overflow-x:auto;padding-bottom:8px}.swimlane-canvas{min-width:1400px;position:relative}
+.swimlane{display:grid;grid-template-columns:200px repeat(5,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--lane-bg)}
+.phase-header{background:rgba(255,255,255,0.7);padding:14px 18px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-size:13px}.phase-header:nth-child(6){border-right:none}
+.phase-header.corner{background:rgba(0,0,0,0.025);font-size:11px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;font-weight:500}
+.phase-header .ph-num{font-size:10.5px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px;font-weight:500}.phase-header .ph-title{font-size:14px;font-weight:500;color:var(--ink)}
+.lane-name{padding:18px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;font-size:13px}.lane-row-last .lane-name{border-bottom:none}
+.lane-name .ln-title{font-weight:500;margin-bottom:3px;font-size:14px}.lane-name .ln-sub{font-size:12px;opacity:0.75}
+.lane-name.purple{background:var(--purple-50);color:var(--purple-800)}.lane-name.amber{background:var(--amber-50);color:var(--amber-800)}.lane-name.blue{background:var(--blue-50);color:var(--blue-800)}.lane-name.teal{background:var(--teal-50);color:var(--teal-800)}.lane-name.gray{background:var(--gray-50);color:var(--gray-800)}.lane-name.rose{background:var(--rose-50);color:var(--rose-800)}.lane-name.indigo{background:var(--indigo-50);color:var(--indigo-800)}
+.cell{padding:18px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-height:130px;display:flex;align-items:center;justify-content:center;position:relative}
+.cell:nth-child(6n){border-right:none}.cell.empty{background:rgba(0,0,0,0.015)}.lane-row-last .cell{border-bottom:none}
+.task{border-radius:7px;border:1px solid;padding:10px 12px;font-size:12.5px;line-height:1.45;width:100%;max-width:240px;text-align:left;position:relative;z-index:2}
+.task .t-title{font-size:13px;font-weight:500;margin-bottom:4px}.task .t-desc{font-size:11.5px;opacity:0.85;line-height:1.45}
+.task .t-branch{font-size:10.5px;margin-top:6px;padding-top:6px;border-top:1px dashed currentColor;opacity:0.7}
+.task.purple{background:var(--purple-50);border-color:var(--purple-600);color:var(--purple-800)}.task.amber{background:var(--amber-50);border-color:var(--amber-600);color:var(--amber-800)}.task.blue{background:var(--blue-50);border-color:var(--blue-600);color:var(--blue-800)}.task.teal{background:var(--teal-50);border-color:var(--teal-600);color:var(--teal-800)}.task.gray{background:var(--gray-50);border-color:var(--gray-600);color:var(--gray-800)}.task.rose{background:var(--rose-50);border-color:var(--rose-600);color:var(--rose-800)}.task.indigo{background:var(--indigo-50);border-color:var(--indigo-600);color:var(--indigo-800)}
+.arrows-layer{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:visible}
+.arrow-label{position:absolute;z-index:4;transform:translate(-50%,-50%);padding:4px 10px;background:var(--bg);border:1px solid var(--line);border-radius:12px;font-size:10.5px;color:var(--muted);white-space:nowrap;cursor:help;transition:all 0.15s ease;pointer-events:auto;display:flex;align-items:center;gap:5px}
+.arrow-label::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--purple-600);opacity:0.5;transition:opacity 0.15s ease}
+.arrow-label:hover{background:white;color:var(--ink);border-color:var(--purple-600);box-shadow:0 4px 12px rgba(83,74,183,0.15);transform:translate(-50%,-50%) scale(1.05)}.arrow-label:hover::after{opacity:1}
+.tooltip{position:fixed;z-index:100;background:white;border:1px solid var(--purple-600);border-radius:10px;padding:14px 16px;min-width:280px;max-width:400px;box-shadow:0 8px 28px rgba(0,0,0,0.12);opacity:0;pointer-events:none;transition:opacity 0.15s ease;font-size:12px;line-height:1.5}.tooltip.visible{opacity:1}
+.tooltip .tt-title{font-size:13px;font-weight:500;color:var(--purple-800);margin-bottom:4px}
+.tooltip .tt-meta{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.tooltip ul{list-style:none;padding:0}.tooltip ul li{padding:3px 0 3px 14px;position:relative;font-size:12px;color:var(--ink)}
+.tooltip ul li::before{content:"";position:absolute;left:2px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--purple-600);opacity:0.5}
+.tooltip .tt-section{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:10px;margin-bottom:4px;font-weight:500}
+.timing{margin-top:24px;padding:18px 22px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px}
+.timing h3{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:12px}
+.timing table{width:100%;border-collapse:collapse;font-size:12.5px}.timing th,.timing td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+.timing th{font-weight:500;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em}.timing tr:last-child td{border-bottom:none}.timing td.tag{color:var(--purple-800);font-weight:500}
+.legend-row{display:flex;gap:24px;align-items:center;margin:20px 0 8px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}.legend-item{display:flex;align-items:center;gap:8px}
+.legend-swatch{width:36px;height:2px;background:var(--ink);opacity:0.55;position:relative}.legend-swatch.dashed{background:repeating-linear-gradient(to right,var(--ink) 0 4px,transparent 4px 8px)}
+.legend-swatch::after{content:"";position:absolute;right:-4px;top:50%;transform:translateY(-50%);border-left:7px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent}
+.footer{margin-top:24px;padding:16px 20px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--muted);line-height:1.7}
+.footer b{color:var(--ink);font-weight:500}.nav{margin-top:14px;font-size:12.5px;color:var(--muted)}.nav a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600);margin:0 8px}
+</style></head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 4: по потокам</a> · <span>order-to-routing → внешние системы</span></div>
+<h1>Поток order-to-routing: маршрутизация во внешние системы</h1>
+<p class="subtitle">Зум в комбинированную стрелку из общей диаграммы. Готовый заказ из Block prep маршрутизируется через адаптер провайдеров и доставляется в нужный канал: EDI, 1С, SAP/Oracle, REST/CRM или ручная выгрузка как fallback.</p>
+<div class="hint">Наведите курсор — увидите EDIFACT-сегменты, IDoc-структуры, REST-схемы</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Канал / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Готовый заказ</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Выбор канала</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Конвертация формата</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Транспорт</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Получение поставщиком</div></div>
+
+  <div class="lane-name purple"><div class="ln-title">Block prep</div><div class="ln-sub">Источник документа</div></div>
+  <div class="cell" id="c-bp-1"><div class="task purple" id="t-bp-1"><div class="t-title">Готовый документ</div><div class="t-desc">Канонический формат: шапка + позиции + метаданные</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Channel registry</div><div class="ln-sub">Опись поставщиков</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-cr-2"><div class="task amber" id="t-cr-2"><div class="t-title">Выбор канала</div><div class="t-desc">EDI / 1С / SAP / REST / SFTP по описи поставщика; приоритет + fallback</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name blue"><div class="ln-title">EDI converter</div><div class="ln-sub">EDIFACT</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-edi-3"><div class="task blue" id="t-edi-3"><div class="t-title">EDIFACT ORDERS</div><div class="t-desc">UNB/UNH/LIN/PRI/DTM по профилю провайдера; GS1 EANCOM</div></div></div>
+  <div class="cell" id="c-edi-4"><div class="task blue" id="t-edi-4"><div class="t-title">VAN AS2</div><div class="t-desc">AS2/MIME с MDN-квитанцией; шифрование S/MIME</div></div></div>
+  <div class="cell" id="c-edi-5"><div class="task blue" id="t-edi-5"><div class="t-title">EDI inbox поставщика</div><div class="t-desc">Quote / X12 850 / EDIFACT ORDERS — формат пакеты</div></div></div>
+
+  <div class="lane-name teal"><div class="ln-title">1С / SAP converter</div><div class="ln-sub">Enterprise ERP</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-erp-3"><div class="task teal" id="t-erp-3"><div class="t-title">1С XDTO / SAP IDoc</div><div class="t-desc">«Заказ поставщику» в 1С; IDoc ORDERS05 / BAPI_PO_CREATE1 в SAP</div></div></div>
+  <div class="cell" id="c-erp-4"><div class="task teal" id="t-erp-4"><div class="t-title">HTTP / RFC</div><div class="t-desc">1С web-сервис; SAP RFC; контрагент по справочнику целевой системы</div></div></div>
+  <div class="cell" id="c-erp-5"><div class="task teal" id="t-erp-5"><div class="t-title">ERP поставщика</div><div class="t-desc">Регистрация документа закупки в их 1С/SAP/Oracle</div></div></div>
+
+  <div class="lane-name rose"><div class="ln-title">REST / CRM converter</div><div class="ln-sub">API провайдера</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-rest-3"><div class="task rose" id="t-rest-3"><div class="t-title">JSON по схеме провайдера</div><div class="t-desc">POST /orders + OAuth/API key; связка со сделкой/лидом если CRM</div></div></div>
+  <div class="cell" id="c-rest-4"><div class="task rose" id="t-rest-4"><div class="t-title">HTTPS POST</div><div class="t-desc">TLS 1.2+, OAuth 2 / HMAC-подпись; idempotency-key</div></div></div>
+  <div class="cell" id="c-rest-5"><div class="task rose" id="t-rest-5"><div class="t-title">CRM/REST поставщика</div><div class="t-desc">2xx ответ + body со статусом и order_id</div></div></div>
+
+  <div class="lane-name indigo lane-row-last"><div class="ln-title">Manual fallback</div><div class="ln-sub">Если все каналы down</div></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-mf-4"><div class="task indigo" id="t-mf-4"><div class="t-title">Ручная выгрузка</div><div class="t-desc">Excel/PDF документ для отправки по email; алерт оператору</div><div class="t-branch">Только когда EDI + REST + 1С все недоступны</div></div></div>
+  <div class="cell empty lane-row-last"></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой канал</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Fallback</span></div></div>
+<div class="timing"><h3>Тайминг и SLA по каналам</h3>
+<table><thead><tr><th>Канал</th><th>Доставка</th><th>Подтверждение</th></tr></thead><tbody>
+<tr><td>EDI EDIFACT (VAN AS2)</td><td>≤ 15 мин</td><td class="tag">MDN ≤ 30 мин, ORDRSP ≤ 2 ч</td></tr>
+<tr><td>SAP IDoc / RFC</td><td>≤ 1 мин</td><td class="tag">Sync ack</td></tr>
+<tr><td>1С web-сервис</td><td>≤ 30 сек</td><td class="tag">Sync ack</td></tr>
+<tr><td>REST / CRM</td><td>≤ 5 сек</td><td class="tag">2xx ответ</td></tr>
+<tr><td>SFTP файл</td><td>≤ 10 мин</td><td class="tag">Polling статуса</td></tr>
+<tr><td>Ручная выгрузка</td><td>≤ 1 ч (по SLA оператора)</td><td class="tag">Email ack</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Это «развилка» одного потока: один документ выходит из Block prep, и в зависимости от выбранного канала идёт по одной из трёх параллельных дорожек (EDI / Enterprise ERP / REST). Если все три недоступны — manual fallback. На стадии 5 поставщик регистрирует заказ у себя; ack возвращается через flow_kpi_to_prognoz и Ф4.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку flow</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const FLOWS={
+  'doc-ready':{title:'Готовый документ',meta:'Block prep → Channel registry',sections:[{name:'Что приходит',items:['Канонический документ заказа','trace_id, strategy_type','Метаданные стратегии','Ссылка на расчётный пакет']}]},
+  'channel':{title:'Канал выбран',meta:'Channel registry → формат-конвертеры',sections:[{name:'Логика выбора',items:['По описи: какие каналы поддерживает поставщик','Приоритет канала + fallback','SLA канала и историческая надёжность','Тип заказа влияет (промо может ехать только REST)']},{name:'Все недоступны',items:['Алерт оператору','Manual fallback с шаблоном Excel/PDF','SLA = 1 ч до отправки email']}]},
+  'edi-format':{title:'EDIFACT ORDERS',meta:'EDI converter',sections:[{name:'Сегменты',items:['UNB: интерчейндж header','UNH: header сообщения','LIN: позиция (EAN-13/SKU)','PRI: цена','DTM: дата поставки','GLN покупателя/поставщика']},{name:'Профиль',items:['EDIFACT D.96A или D.01B','GS1 EANCOM субсет','Версия по описи провайдера']}]},
+  'edi-transport':{title:'VAN AS2',meta:'EDI transport',sections:[{name:'Доставка',items:['AS2/MIME-конверт','S/MIME подпись и шифрование','MDN-квитанция (sync или async)','Retry при network error']}]},
+  'erp-format':{title:'1С XDTO / SAP IDoc',meta:'1С/SAP converter',sections:[{name:'1С',items:['Документ.ЗаказПоставщику','XDTO/JSON конверт','Контрагент-поставщик из справочника 1С','Web-сервис или файлообмен S3/SFTP']},{name:'SAP',items:['IDoc ORDERS05','BAPI_PO_CREATE1','Идентификаторы в схеме SAP','Транзакция ME21N для проверки']}]},
+  'erp-transport':{title:'HTTP / RFC',meta:'Enterprise transport',sections:[{name:'1С',items:['HTTP-сервис web-сервиса 1С','POST /sapi/order','Авторизация: Basic / Token']},{name:'SAP',items:['RFC через SAP Gateway','tRFC/qRFC для гарантированной доставки','Logical system ID']}]},
+  'rest-format':{title:'JSON провайдера',meta:'REST/CRM converter',sections:[{name:'Схема',items:['По OpenAPI поставщика','POST /orders или эквивалент','Body: header + items','Idempotency-Key header']},{name:'CRM',items:['Связка со сделкой/лидом','Стадия pipeline = ordered','Owner = аккаунт-менеджер']}]},
+  'rest-transport':{title:'HTTPS POST',meta:'REST transport',sections:[{name:'Безопасность',items:['TLS 1.2+','OAuth 2.0 client_credentials','HMAC-подпись body','Token rotation по описи']},{name:'Retry',items:['429 → exponential backoff','5xx → 3 попытки','4xx (кроме 429) → manual']}]},
+  'received-edi':{title:'Поставщик принял EDI',meta:'EDI inbox supplier',sections:[{name:'Что происходит',items:['EDI router поставщика парсит ORDERS','Регистрация в его системе','Возврат ORDRSP с подтверждением/изменениями','Возврат идёт обратно через тот же канал']}]},
+  'received-erp':{title:'Поставщик принял в ERP',meta:'ERP inbox supplier',sections:[{name:'Регистрация',items:['Документ продажи у поставщика','Reference на наш номер заказа','Sync ack или tRFC commit','При несоответствии цен → ORDRSP-аналог']}]},
+  'received-rest':{title:'Поставщик принял REST',meta:'REST/CRM inbox supplier',sections:[{name:'Ответ',items:['HTTP 201 + Location header','Body: order_id, status, links','Sync ack','Webhook callback для статусов']}]},
+  'manual':{title:'Ручная выгрузка',meta:'Manual fallback',sections:[{name:'Когда',items:['Все 3 канала недоступны','Поставщик не поддерживает автоматику','Документ требует физической подписи']},{name:'Как',items:['Шаблон Excel / PDF','Email на закупщика','Подтверждение по email back']}]}
+};
+const canvas=document.querySelector('.swimlane-canvas');const svg=document.getElementById('arrows');const labelsLayer=document.getElementById('labels-layer');const tooltip=document.getElementById('tooltip');
+function rectOf(id){const el=document.getElementById(id);if(!el)return null;const r=el.getBoundingClientRect();const p=canvas.getBoundingClientRect();return{left:r.left-p.left,right:r.right-p.left,top:r.top-p.top,bottom:r.bottom-p.top,cx:r.left-p.left+r.width/2,cy:r.top-p.top+r.height/2,width:r.width,height:r.height}}
+function drawLine(x1,y1,x2,y2,opts={}){const{dashed=false,via=null}=opts;const path=document.createElementNS('http://www.w3.org/2000/svg','path');let d=`M ${x1} ${y1}`;if(Array.isArray(via))for(const pt of via)d+=` L ${pt.x} ${pt.y}`;else if(via)d+=` L ${via.x} ${via.y}`;d+=` L ${x2} ${y2}`;path.setAttribute('d',d);path.setAttribute('fill','none');path.setAttribute('stroke','#2C2C2A');path.setAttribute('stroke-width','1.4');path.setAttribute('opacity','0.55');path.setAttribute('marker-end','url(#arrowhead)');if(dashed)path.setAttribute('stroke-dasharray','5 4');svg.appendChild(path)}
+function drawLabel(x,y,k){const f=FLOWS[k];if(!f)return;const l=document.createElement('div');l.className='arrow-label';l.style.left=x+'px';l.style.top=y+'px';l.textContent=f.title;l.dataset.flowKey=k;l.addEventListener('mouseenter',showTooltip);l.addEventListener('mousemove',moveTooltip);l.addEventListener('mouseleave',hideTooltip);labelsLayer.appendChild(l)}
+function showTooltip(e){const k=e.currentTarget.dataset.flowKey;const f=FLOWS[k];if(!f)return;let h=`<div class="tt-title">${f.title}</div>`;if(f.meta)h+=`<div class="tt-meta">${f.meta}</div>`;f.sections.forEach((s,i)=>{if(s.name&&f.sections.length>1)h+=`<div class="tt-section" ${i===0?'style="margin-top:0"':''}>${s.name}</div>`;h+='<ul>';s.items.forEach(it=>{h+=`<li>${it}</li>`});h+='</ul>'});tooltip.innerHTML=h;tooltip.classList.add('visible');moveTooltip(e)}
+function moveTooltip(e){const pad=14;const r=tooltip.getBoundingClientRect();let x=e.clientX+pad,y=e.clientY+pad;if(x+r.width>window.innerWidth-pad)x=e.clientX-r.width-pad;if(y+r.height>window.innerHeight-pad)y=e.clientY-r.height-pad;tooltip.style.left=x+'px';tooltip.style.top=y+'px'}
+function hideTooltip(){tooltip.classList.remove('visible')}
+function render(){svg.innerHTML='';labelsLayer.innerHTML='';const pr=canvas.getBoundingClientRect();svg.setAttribute('viewBox',`0 0 ${pr.width} ${pr.height}`);svg.setAttribute('width',pr.width);svg.setAttribute('height',pr.height);const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');defs.innerHTML=`<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/></marker>`;svg.appendChild(defs);
+  const bp=rectOf('t-bp-1'),cr=rectOf('t-cr-2'),edi3=rectOf('t-edi-3'),edi4=rectOf('t-edi-4'),edi5=rectOf('t-edi-5'),erp3=rectOf('t-erp-3'),erp4=rectOf('t-erp-4'),erp5=rectOf('t-erp-5'),rst3=rectOf('t-rest-3'),rst4=rectOf('t-rest-4'),rst5=rectOf('t-rest-5'),mf=rectOf('t-mf-4');
+  drawLine(bp.right+4,bp.cy,cr.cx,cr.top-2,{via:{x:cr.cx,y:bp.cy}});drawLabel((bp.right+cr.cx)/2,bp.cy-14,'doc-ready');
+  // cr -> 3 fan-out
+  drawLine(cr.right+4,cr.cy,edi3.cx,edi3.top-2,{via:[{x:cr.right+30,y:cr.cy},{x:cr.right+30,y:edi3.top-30},{x:edi3.cx,y:edi3.top-30}]});
+  drawLine(cr.right+4,cr.cy,erp3.cx,erp3.top-2,{via:{x:erp3.cx,y:cr.cy}});drawLabel((cr.right+erp3.cx)/2,cr.cy-14,'channel');
+  drawLine(cr.right+4,cr.cy,rst3.cx,rst3.top-2,{via:[{x:cr.right+30,y:cr.cy},{x:cr.right+30,y:rst3.top-30},{x:rst3.cx,y:rst3.top-30}]});
+  // EDI chain
+  drawLine(edi3.right+4,edi3.cy,edi4.left-2,edi4.cy);drawLabel((edi3.right+edi4.left)/2,edi3.cy-14,'edi-format');
+  drawLine(edi4.right+4,edi4.cy,edi5.left-2,edi5.cy);drawLabel((edi4.right+edi5.left)/2,edi4.cy-14,'edi-transport');
+  drawLabel(edi5.cx,edi5.bottom+18,'received-edi');drawLine(edi5.cx,edi5.bottom+4,edi5.cx,edi5.bottom+10);
+  // ERP chain
+  drawLine(erp3.right+4,erp3.cy,erp4.left-2,erp4.cy);drawLabel((erp3.right+erp4.left)/2,erp3.cy-14,'erp-format');
+  drawLine(erp4.right+4,erp4.cy,erp5.left-2,erp5.cy);drawLabel((erp4.right+erp5.left)/2,erp4.cy-14,'erp-transport');
+  drawLabel(erp5.cx,erp5.bottom+18,'received-erp');drawLine(erp5.cx,erp5.bottom+4,erp5.cx,erp5.bottom+10);
+  // REST chain
+  drawLine(rst3.right+4,rst3.cy,rst4.left-2,rst4.cy);drawLabel((rst3.right+rst4.left)/2,rst3.cy-14,'rest-format');
+  drawLine(rst4.right+4,rst4.cy,rst5.left-2,rst5.cy);drawLabel((rst4.right+rst5.left)/2,rst4.cy-14,'rest-transport');
+  drawLabel(rst5.cx,rst5.bottom+18,'received-rest');drawLine(rst5.cx,rst5.bottom+4,rst5.cx,rst5.bottom+10);
+  // Manual fallback dashed
+  drawLine(cr.cx,cr.bottom+4,mf.cx,mf.top-2,{dashed:true,via:[{x:cr.cx,y:mf.top-30},{x:mf.cx,y:mf.top-30}]});drawLabel(cr.cx-30,mf.top-30,'manual');
+}
+function rerender(){requestAnimationFrame(render)}function initialRender(){if(document.fonts&&document.fonts.ready)document.fonts.ready.then(rerender);else setTimeout(rerender,120)}
+if(document.readyState==='complete')initialRender();else window.addEventListener('load',initialRender);window.addEventListener('resize',()=>setTimeout(rerender,50));
+if(window.ResizeObserver)new ResizeObserver(rerender).observe(canvas);
+</script></body></html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Карточка «Регистрация заказа» (ERP)</title>
+<link rel="stylesheet" href="_shared.css">
+</head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 3: по карточкам</a> · <span>«Регистрация заказа» (ERP × Ф4)</span></div>
+<h1>Карточка «Регистрация заказа»</h1>
+<p class="subtitle">Зум в карточку из общей диаграммы. Лейны — этапы регистрации и жизненного цикла. Колонки — стадии: получение → создание документа → жизненный цикл → приёмка → закрытие.</p>
+<div class="hint">Наведите курсор — увидите EDI-сегменты ack/desadv и форматы регистрации</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Подсистема / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Ack от поставщика</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Создание документа</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Жизненный цикл</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Приёмка</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Закрытие</div></div>
+
+  <div class="lane-name rose"><div class="ln-title">Inbound queue</div><div class="ln-sub">От adapter providers</div></div>
+  <div class="cell" id="c-1"><div class="task rose" id="t-1"><div class="t-title">EDI ORDRSP / REST 2xx</div><div class="t-desc">Status ACCEPTED/CHANGED/REJECTED + reference</div><div class="t-branch">Reject → возврат в Constructor</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name gray"><div class="ln-title">Document engine</div><div class="ln-sub">Заказ в 1С/SAP</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-2"><div class="task gray" id="t-2"><div class="t-title">«Заказ поставщику»</div><div class="t-desc">1С: РегистрНакопления.ЗаказыПоставщикам; SAP: ME21N</div><div class="t-branch">Идемпотентность по trace_id</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Lifecycle tracker</div><div class="ln-sub">Статусы заказа</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-3"><div class="task amber" id="t-3"><div class="t-title">Шаги жизненного цикла</div><div class="t-desc">acked → shipped (DESADV) → received (RECADV) → closed</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name blue"><div class="ln-title">Receiving / WMS</div><div class="ln-sub">Приёмка</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-4"><div class="task blue" id="t-4"><div class="t-title">Сверка с DESADV</div><div class="t-desc">SSCC, партии, сроки годности; формирование RECADV</div><div class="t-branch">Расхождения → акт + claim</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name purple lane-row-last"><div class="ln-title">Closure</div><div class="ln-sub">Передача фактов</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-5"><div class="task purple" id="t-5"><div class="t-title">Закрытие и факты</div><div class="t-desc">Статус closed; факты в Адаптер источников → X-Flow → KPI</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Reject / акт расхождений</span></div></div>
+<div class="timing"><h3>Тайминг жизненного цикла</h3>
+<table><thead><tr><th>Событие</th><th>Канал</th><th>SLA</th></tr></thead><tbody>
+<tr><td>ORDRSP</td><td>EDI VAN AS2</td><td class="tag">≤ 2 ч</td></tr>
+<tr><td>Регистрация в ERP</td><td>1С/SAP</td><td class="tag">≤ 5 мин</td></tr>
+<tr><td>DESADV</td><td>EDI</td><td class="tag">за 24ч до прибытия</td></tr>
+<tr><td>РН с ЭЦП</td><td>EDI / СЭД</td><td class="tag">в момент отгрузки</td></tr>
+<tr><td>Приёмка → RECADV</td><td>WMS</td><td class="tag">≤ 4 ч после приёмки</td></tr>
+<tr><td>KPI пересчёт</td><td>Cron 04:00 UTC</td><td class="tag">1×/сутки</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Регистрация — это не одномоментное событие, а последовательность: acked → shipped → received → closed. На каждой стадии генерируются события, которые возвращаются в Replenishment KPI.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку task</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+window.FLOWS = {
+  'ack-in':{title:'ORDRSP ack',sections:[{name:'EDI',items:['UNB/UNH/BGM ORDRSP','Status ACCEPTED/CHANGED/REJECTED','Изменения по позициям']},{name:'Прочие',items:['REST: 2xx + JSON','MDN-квитанция AS2']}]},
+  'reg':{title:'Регистрация в ERP',sections:[{name:'Документ',items:['«Заказ поставщику»','Те же GLN/SKU/qty что в исходнике','trace_id для связки','Статус: confirmed/changed']},{name:'Идемпотентность',items:['По (supplier, order_number, trace_id)','Дубль → лог + skip']}]},
+  'lifecycle':{title:'Жизненный цикл',sections:[{name:'Шаги',items:['order.acknowledged (после ORDRSP)','order.shipped (после DESADV)','order.received (после RECADV)','order.closed']}]},
+  'recadv':{title:'RECADV приёмка',sections:[{name:'Сверка',items:['DESADV qty vs факт','Дата прибытия vs план','Состояние упаковки, t°']},{name:'Расхождения',items:['Недостача → акт + claim','Брак → списание + return','Излишки → отдельный документ']}]},
+  'closed':{title:'Заказ закрыт',sections:[{name:'Что происходит',items:['Статус closed','Факты в Адаптер источников','Через X-Flow в KPI','Цикл замыкается → Ф2 след. цикла']}]}
+};
+window.WIRING = function(){return [
+  { from:'t-1', to:'t-2', key:'ack-in' },
+  { from:'t-2', to:'t-3', key:'reg' },
+  { from:'t-3', to:'t-4', key:'lifecycle' },
+  { from:'t-4', to:'t-5', key:'recadv' },
+  { from:'t-5', kind:'output', key:'closed' }
+];};
+</script><script src="_shared.js"></script>
+</body></html>

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Поток canonical: Адаптер источников → X-Flow</title>
+<style>
+  :root {
+    --bg: #FAF9F5; --ink: #2C2C2A; --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15); --lane-bg: rgba(255,255,255,0.5);
+    --gray-50:#F1EFE8;   --gray-600:#5F5E5A;   --gray-800:#444441;
+    --blue-50:#E6F1FB;   --blue-600:#185FA5;   --blue-800:#0C447C;
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+    --teal-50:#E1F5EE;   --teal-600:#0F6E56;   --teal-800:#085041;
+    --amber-50:#FAEEDA;  --amber-600:#854F0B;  --amber-800:#633806;
+    --indigo-50:#E8E7F8; --indigo-600:#4C3FAA; --indigo-800:#332877;
+    --rose-50:#FDE6EE;   --rose-600:#B92864;   --rose-800:#841845;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); padding: 32px 40px; line-height: 1.5; }
+  h1 { font-size: 24px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 20px; max-width: 900px; }
+  .breadcrumb { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .breadcrumb a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); }
+  .hint { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--purple-50); border: 1px solid var(--purple-600); color: var(--purple-800); border-radius: 20px; font-size: 12.5px; margin-bottom: 24px; font-weight: 500; }
+  .hint::before { content: "ⓘ"; font-size: 14px; }
+
+  .swimlane-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .swimlane-canvas { min-width: 1280px; position: relative; }
+  .swimlane { display: grid; grid-template-columns: 180px repeat(5, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--lane-bg); }
+
+  .phase-header { background: rgba(255,255,255,0.7); padding: 14px 18px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); font-size: 13px; }
+  .phase-header:nth-child(6) { border-right: none; }
+  .phase-header.corner { background: rgba(0,0,0,0.025); font-size: 11px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; font-weight: 500; }
+  .phase-header .ph-num { font-size: 10.5px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 2px; font-weight: 500; }
+  .phase-header .ph-title { font-size: 14px; font-weight: 500; color: var(--ink); }
+
+  .lane-name { padding: 18px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; font-size: 13px; }
+  .lane-row-last .lane-name { border-bottom: none; }
+  .lane-name .ln-title { font-weight: 500; margin-bottom: 3px; font-size: 14px; }
+  .lane-name .ln-sub { font-size: 12px; opacity: 0.75; }
+  .lane-name.gray   { background: var(--gray-50);   color: var(--gray-800);   }
+  .lane-name.indigo { background: var(--indigo-50); color: var(--indigo-800); }
+  .lane-name.teal   { background: var(--teal-50);   color: var(--teal-800);   }
+  .lane-name.blue   { background: var(--blue-50);   color: var(--blue-800);   }
+  .lane-name.amber  { background: var(--amber-50);  color: var(--amber-800);  }
+
+  .cell { padding: 18px 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-height: 130px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .cell:nth-child(6n) { border-right: none; }
+  .cell.empty { background: rgba(0,0,0,0.015); }
+  .lane-row-last .cell { border-bottom: none; }
+
+  .task { border-radius: 7px; border: 1px solid; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; width: 100%; max-width: 230px; text-align: left; position: relative; z-index: 2; }
+  .task .t-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .task .t-desc { font-size: 11.5px; opacity: 0.85; line-height: 1.45; }
+  .task .t-branch { font-size: 10.5px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed currentColor; opacity: 0.7; }
+  .task.gray   { background: var(--gray-50);   border-color: var(--gray-600);   color: var(--gray-800);   }
+  .task.indigo { background: var(--indigo-50); border-color: var(--indigo-600); color: var(--indigo-800); }
+  .task.teal   { background: var(--teal-50);   border-color: var(--teal-600);   color: var(--teal-800);   }
+  .task.blue   { background: var(--blue-50);   border-color: var(--blue-600);   color: var(--blue-800);   }
+  .task.amber  { background: var(--amber-50);  border-color: var(--amber-600);  color: var(--amber-800);  }
+
+  .arrows-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+  .arrow-label { position: absolute; z-index: 4; transform: translate(-50%, -50%); padding: 4px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; font-size: 10.5px; color: var(--muted); white-space: nowrap; cursor: help; transition: all 0.15s ease; pointer-events: auto; display: flex; align-items: center; gap: 5px; }
+  .arrow-label::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--purple-600); opacity: 0.5; transition: opacity 0.15s ease; }
+  .arrow-label:hover { background: white; color: var(--ink); border-color: var(--purple-600); box-shadow: 0 4px 12px rgba(83,74,183,0.15); transform: translate(-50%, -50%) scale(1.05); }
+  .arrow-label:hover::after { opacity: 1; }
+
+  .tooltip { position: fixed; z-index: 100; background: white; border: 1px solid var(--purple-600); border-radius: 10px; padding: 14px 16px; min-width: 260px; max-width: 380px; box-shadow: 0 8px 28px rgba(0,0,0,0.12); opacity: 0; pointer-events: none; transition: opacity 0.15s ease; font-size: 12px; line-height: 1.5; }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .tt-title { font-size: 13px; font-weight: 500; color: var(--purple-800); margin-bottom: 4px; }
+  .tooltip .tt-meta { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+  .tooltip ul { list-style: none; padding: 0; }
+  .tooltip ul li { padding: 3px 0 3px 14px; position: relative; font-size: 12px; color: var(--ink); }
+  .tooltip ul li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 5px; height: 5px; border-radius: 50%; background: var(--purple-600); opacity: 0.5; }
+  .tooltip .tt-section { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 10px; margin-bottom: 4px; font-weight: 500; }
+
+  .timing { margin-top: 24px; padding: 18px 22px; background: var(--lane-bg); border: 1px solid var(--line); border-radius: 10px; }
+  .timing h3 { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 500; margin-bottom: 12px; }
+  .timing table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .timing th, .timing td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .timing th { font-weight: 500; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .timing tr:last-child td { border-bottom: none; }
+  .timing td.tag { color: var(--purple-800); font-weight: 500; }
+
+  .legend-row { display: flex; gap: 24px; align-items: center; margin: 20px 0 8px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch { width: 36px; height: 2px; background: var(--ink); opacity: 0.55; position: relative; }
+  .legend-swatch.dashed { background: repeating-linear-gradient(to right, var(--ink) 0 4px, transparent 4px 8px); }
+  .legend-swatch::after { content: ""; position: absolute; right: -4px; top: 50%; transform: translateY(-50%); border-left: 7px solid var(--ink); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+
+  .footer { margin-top: 24px; padding: 16px 20px; background: var(--lane-bg); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .footer b { color: var(--ink); font-weight: 500; }
+  .nav { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .nav a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); margin: 0 8px; }
+</style>
+</head>
+<body>
+
+<div class="breadcrumb">
+  <a href="../diagram_0_overview.html">← Общая диаграмма</a> &nbsp;·&nbsp;
+  <a href="index.html">Вариант 4: по потокам</a> &nbsp;·&nbsp;
+  <span>canonical: Адаптер источников → X-Flow</span>
+</div>
+
+<h1>Поток «canonical»: превращение сырых данных в каноническую модель</h1>
+<p class="subtitle">Зум в одну стрелку общей диаграммы — между Адаптером источников и X-Flow. Лейны — участники потока (источник, парсер, маппер, schema registry, приёмник). Колонки — последовательные стадии трансформации одного сообщения.</p>
+
+<div class="hint">Наведите курсор на подпись стрелки — увидите детальные поля и формат на каждой стадии</div>
+
+<div class="swimlane-wrap">
+<div class="swimlane-canvas">
+
+<div class="swimlane">
+  <div class="phase-header corner">Участник / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Сырое сообщение</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Парсинг</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Мэппинг полей</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Привязка к справочникам</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Канонический выход</div></div>
+
+  <!-- Source ERP -->
+  <div class="lane-name gray">
+    <div class="ln-title">Source ERP</div>
+    <div class="ln-sub">1С / SAP / WMS / OMS</div>
+  </div>
+  <div class="cell" id="c-src-1">
+    <div class="task gray" id="t-src-1">
+      <div class="t-title">Сырое сообщение</div>
+      <div class="t-desc">JSON / XML / EDIFACT / CSV в нативной схеме источника</div>
+      <div class="t-branch">Транспорты: Kafka, REST, SFTP, S3, прямая БД</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+
+  <!-- Adapter parser -->
+  <div class="lane-name indigo">
+    <div class="ln-title">Adapter parser</div>
+    <div class="ln-sub">Десериализация</div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-par-2">
+    <div class="task indigo" id="t-par-2">
+      <div class="t-title">Парсинг</div>
+      <div class="t-desc">JSON.parse / XML SAX / EDIFACT-парсер; типы дат, чисел, валют</div>
+      <div class="t-branch">Невалидный синтаксис → DLQ raw, алерт</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+
+  <!-- Mapper -->
+  <div class="lane-name teal">
+    <div class="ln-title">Field mapper</div>
+    <div class="ln-sub">Source → Canonical</div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-map-3">
+    <div class="task teal" id="t-map-3">
+      <div class="t-title">Мэппинг полей</div>
+      <div class="t-desc">Опись маппинга на тип источника: code → SKU, gln → location_id, date → ISO 8601</div>
+      <div class="t-branch">Неизвестное поле → пропуск + лог; обязательное отсутствует → reject</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+
+  <!-- Schema registry -->
+  <div class="lane-name amber">
+    <div class="ln-title">Schema registry</div>
+    <div class="ln-sub">Контракты и кросс-таблицы</div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-sch-4">
+    <div class="task amber" id="t-sch-4">
+      <div class="t-title">Привязка к справочникам</div>
+      <div class="t-desc">SKU-кросс, GLN точек, валюты ISO 4217, единицы ISO, иерархия</div>
+      <div class="t-branch">Нет соответствия → staging.unmatched_* + UI-матчинг оператором</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+
+  <!-- X-Flow receiver -->
+  <div class="lane-name blue lane-row-last">
+    <div class="ln-title">X-Flow receiver</div>
+    <div class="ln-sub">Приёмник канонических событий</div>
+  </div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-rcv-5">
+    <div class="task blue" id="t-rcv-5">
+      <div class="t-title">Каноническое сообщение</div>
+      <div class="t-desc">Унифицированная модель E-Zoo: SKU, GLN, ISO-валюта, UTC-ts, бизнес-дата</div>
+      <div class="t-branch">Готово к ETL/CDC и записи в витрины</div>
+    </div>
+  </div>
+</div>
+
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels-layer"></div>
+
+</div>
+</div>
+
+<div class="legend-row">
+  <div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток сообщения</span></div>
+  <div class="legend-item"><div class="legend-swatch dashed"></div><span>DLQ / staging / ручной матчинг</span></div>
+</div>
+
+<div class="timing">
+  <h3>Тайминг и SLA потока canonical</h3>
+  <table>
+    <thead><tr><th>Сценарий</th><th>Транспорт</th><th>SLA сквозной</th></tr></thead>
+    <tbody>
+      <tr><td>Чек POS</td><td>Kafka <code>pos.receipts</code></td><td class="tag">≤ 30 сек</td></tr>
+      <tr><td>Снимок остатка</td><td>Debezium CDC</td><td class="tag">≤ 2 сек</td></tr>
+      <tr><td>Документ реализации</td><td>REST webhook</td><td class="tag">≤ 1 мин</td></tr>
+      <tr><td>Справочник SKU (полный)</td><td>SFTP-файл</td><td class="tag">≤ 30 мин</td></tr>
+      <tr><td>EDI ORDRSP/DESADV</td><td>VAN AS2</td><td class="tag">≤ 15 мин</td></tr>
+      <tr><td>Парковка → ручной матчинг</td><td>UI оператора</td><td class="tag">SLA опер. дня</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  <b>Как читать.</b> Это «зум» в одну подписанную стрелку общей диаграммы — поток canonical между Адаптером источников и X-Flow. Лейны — участники этого конкретного потока, колонки — последовательные стадии превращения сообщения. Ветка staging для непривязанных полей показана пунктиром: оператор разбирает её через UI, после чего маппинг повторно прогоняется. Эта диаграмма — шаблон для остальных flow_*.html.
+  <div class="nav">
+    <a href="../diagram_0_overview.html">← Общая диаграмма</a>
+    <a href="index.html">К списку flow-диаграмм</a>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+  const FLOWS = {
+    'raw-message': {
+      title: 'Сырое сообщение',
+      meta: 'Source ERP → Adapter parser',
+      sections: [
+        { name: 'Конверт', items: [
+          'source_id, source_type, payload_format',
+          'received_at (ts транспорта), trace_id',
+          'raw_payload — байты неизменно для аудита',
+          'sigature/checksum для anti-tampering'
+        ]},
+        { name: 'Примеры пейлоадов', items: [
+          '1С УТ: <code>Документ.РеализацияТоваровУслуг</code> в XDTO',
+          'SAP: IDoc <code>WMMBXY01</code> для движения товара',
+          'WMS: JSON event <code>stock.snapshot</code>',
+          'POS: чек в формате SAF-T retail'
+        ]}
+      ]
+    },
+    'parsed': {
+      title: 'Парсенный объект',
+      meta: 'Adapter parser → Field mapper · структурированное представление',
+      sections: [
+        { name: 'Что произошло', items: [
+          'JSON.parse / XML SAX / EDIFACT split на сегменты',
+          'Конверсия типов: строки → даты, валюты → decimal',
+          'Развёртка вложенных структур в плоский dict',
+          'Сохранение ссылки на raw_payload через trace_id'
+        ]},
+        { name: 'Ошибки парсинга', items: [
+          'Невалидный синтаксис → DLQ <code>parse.invalid</code>',
+          'Кодировка не та → попытка перекодировки + лог',
+          'Усечённый payload → ожидание следующих частей (chunk reassembly)'
+        ]}
+      ]
+    },
+    'mapped': {
+      title: 'Каноничные поля (без справочников)',
+      meta: 'Field mapper → Schema registry · поля переименованы и приведены к ISO',
+      sections: [
+        { name: 'Преобразования', items: [
+          'sku_code (источник) → sku_canonical (после кросса)',
+          'shop_code → location_canonical',
+          'currency: <code>UAH</code>/<code>980</code> → ISO 4217',
+          'unit_of_measure: <code>шт</code>/<code>штука</code> → <code>PCE</code>',
+          'date: локальный TZ → UTC + business_date'
+        ]},
+        { name: 'Опись маппинга на источник', items: [
+          '1С УТ: <code>mapping.1c.ut.v3.yaml</code>',
+          'SAP IDoc: <code>mapping.sap.idoc.v2.yaml</code>',
+          'WMS: <code>mapping.wms.v1.yaml</code>',
+          'EDI EANCOM: профиль провайдера'
+        ]}
+      ]
+    },
+    'resolved': {
+      title: 'Привязанная запись',
+      meta: 'Schema registry → X-Flow receiver · все ID разрешены к нашим справочникам',
+      sections: [
+        { name: 'Резолверы', items: [
+          'SKU: cross-reference table (source × source_code → SKU)',
+          'Location: GLN или (network, store_code) → location_id',
+          'Supplier: ЕДРПОУ/ИНН → supplier_id',
+          'Promo: source_promo_code → promo_id'
+        ]},
+        { name: 'Парковка', items: [
+          'staging.unmatched_sku — нет в кросс-таблице',
+          'staging.unmatched_location — нет такого GLN',
+          'staging.unmatched_supplier — нет в справочнике',
+          'UI оператора: Drag&Drop матчинг + правило для replay'
+        ]}
+      ]
+    },
+    'canonical-final': {
+      title: 'Каноническое сообщение',
+      meta: 'X-Flow receiver принимает контракт E-Zoo',
+      sections: [
+        { name: 'Сущности', items: [
+          'Товар: SKU, EAN-13, упаковка, паллет, t° хранения',
+          'Точка: GLN, тип, GPS, график',
+          'Поставщик: ЕДРПОУ/ИНН, GLN, EDI-флаги',
+          'Движение: SKU × point × ts (остаток / чек / перемещение)'
+        ]},
+        { name: 'Гарантии', items: [
+          'Все ID — внутренние E-Zoo (не источника)',
+          'Время — UTC + бизнес-дата точки',
+          'Цены — отдельно с НДС и без',
+          'Дубликаты убраны на уровне CDC engine'
+        ]}
+      ]
+    },
+    'staging-loop': {
+      title: 'Парковка → ручной матчинг → replay',
+      meta: 'Schema registry ↔ Source ERP · обратный контур',
+      sections: [
+        { name: 'Цикл', items: [
+          'Сообщение паркуется в staging.unmatched_*',
+          'Оператор открывает UI, привязывает к справочнику',
+          'Правило сохраняется в cross-reference table',
+          'Replay: парковка → mapper → resolved (на тех же trace_id)',
+          'Метрика: % matched first-try / SLA операторской очереди'
+        ]}
+      ]
+    }
+  };
+
+  const canvas = document.querySelector('.swimlane-canvas');
+  const svg = document.getElementById('arrows');
+  const labelsLayer = document.getElementById('labels-layer');
+  const tooltip = document.getElementById('tooltip');
+
+  function rectOf(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const p = canvas.getBoundingClientRect();
+    return { left: r.left - p.left, right: r.right - p.left, top: r.top - p.top, bottom: r.bottom - p.top, cx: r.left - p.left + r.width/2, cy: r.top - p.top + r.height/2, width: r.width, height: r.height };
+  }
+
+  function drawLine(x1, y1, x2, y2, opts = {}) {
+    const { dashed = false, via = null } = opts;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    let d = `M ${x1} ${y1}`;
+    if (Array.isArray(via)) for (const pt of via) d += ` L ${pt.x} ${pt.y}`;
+    else if (via) d += ` L ${via.x} ${via.y}`;
+    d += ` L ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#2C2C2A');
+    path.setAttribute('stroke-width', '1.4');
+    path.setAttribute('opacity', '0.55');
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+    svg.appendChild(path);
+  }
+
+  function drawLabel(x, y, flowKey) {
+    const flow = FLOWS[flowKey];
+    if (!flow) return;
+    const label = document.createElement('div');
+    label.className = 'arrow-label';
+    label.style.left = x + 'px';
+    label.style.top = y + 'px';
+    label.textContent = flow.title;
+    label.dataset.flowKey = flowKey;
+    label.addEventListener('mouseenter', showTooltip);
+    label.addEventListener('mousemove', moveTooltip);
+    label.addEventListener('mouseleave', hideTooltip);
+    labelsLayer.appendChild(label);
+  }
+
+  function showTooltip(e) {
+    const key = e.currentTarget.dataset.flowKey;
+    const flow = FLOWS[key];
+    if (!flow) return;
+    let html = `<div class="tt-title">${flow.title}</div>`;
+    if (flow.meta) html += `<div class="tt-meta">${flow.meta}</div>`;
+    flow.sections.forEach((sec, idx) => {
+      if (sec.name && flow.sections.length > 1) html += `<div class="tt-section" ${idx === 0 ? 'style="margin-top:0"' : ''}>${sec.name}</div>`;
+      html += '<ul>';
+      sec.items.forEach(item => { html += `<li>${item}</li>`; });
+      html += '</ul>';
+    });
+    tooltip.innerHTML = html;
+    tooltip.classList.add('visible');
+    moveTooltip(e);
+  }
+  function moveTooltip(e) {
+    const padding = 14;
+    const ttRect = tooltip.getBoundingClientRect();
+    let x = e.clientX + padding, y = e.clientY + padding;
+    if (x + ttRect.width > window.innerWidth - padding) x = e.clientX - ttRect.width - padding;
+    if (y + ttRect.height > window.innerHeight - padding) y = e.clientY - ttRect.height - padding;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+  function hideTooltip() { tooltip.classList.remove('visible'); }
+
+  function render() {
+    svg.innerHTML = '';
+    labelsLayer.innerHTML = '';
+    const pr = canvas.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${pr.width} ${pr.height}`);
+    svg.setAttribute('width', pr.width);
+    svg.setAttribute('height', pr.height);
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = `
+      <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      </marker>
+    `;
+    svg.appendChild(defs);
+
+    const src = rectOf('t-src-1');
+    const par = rectOf('t-par-2');
+    const map = rectOf('t-map-3');
+    const sch = rectOf('t-sch-4');
+    const rcv = rectOf('t-rcv-5');
+
+    // лестница вниз-вправо
+    drawLine(src.right + 4, src.cy, par.cx, par.top - 2, { via: { x: par.cx, y: src.cy } });
+    drawLabel((src.right + par.cx)/2, src.cy - 14, 'raw-message');
+
+    drawLine(par.right + 4, par.cy, map.cx, map.top - 2, { via: { x: map.cx, y: par.cy } });
+    drawLabel((par.right + map.cx)/2, par.cy - 14, 'parsed');
+
+    drawLine(map.right + 4, map.cy, sch.cx, sch.top - 2, { via: { x: sch.cx, y: map.cy } });
+    drawLabel((map.right + sch.cx)/2, map.cy - 14, 'mapped');
+
+    drawLine(sch.right + 4, sch.cy, rcv.cx, rcv.top - 2, { via: { x: rcv.cx, y: sch.cy } });
+    drawLabel((sch.right + rcv.cx)/2, sch.cy - 14, 'resolved');
+
+    // финальный output
+    drawLine(rcv.cx, rcv.bottom + 4, rcv.cx, rcv.bottom + 16);
+    drawLabel(rcv.cx, rcv.bottom + 26, 'canonical-final');
+
+    // staging loop пунктир: schema registry → src обратно
+    drawLine(sch.left - 4, sch.cy, src.right + 4, src.bottom + 18,
+      { dashed: true, via: [{ x: sch.left - 30, y: sch.cy }, { x: sch.left - 30, y: src.bottom + 18 }] });
+    drawLabel(sch.left - 60, src.bottom + 18, 'staging-loop');
+  }
+
+  function rerender() { requestAnimationFrame(render); }
+  function initialRender() {
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(rerender);
+    else setTimeout(rerender, 120);
+  }
+  if (document.readyState === 'complete') initialRender();
+  else window.addEventListener('load', initialRender);
+  window.addEventListener('resize', () => setTimeout(rerender, 50));
+  if (window.ResizeObserver) new ResizeObserver(rerender).observe(canvas);
+</script>
+
+</body>
+</html>

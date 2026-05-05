@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Адаптер провайдеров — внутреннее устройство (lane)</title>
+<style>
+:root{--bg:#FAF9F5;--ink:#2C2C2A;--muted:#5F5E5A;--line:rgba(44,44,42,0.15);--lane-bg:rgba(255,255,255,0.5);--gray-50:#F1EFE8;--gray-600:#5F5E5A;--gray-800:#444441;--blue-50:#E6F1FB;--blue-600:#185FA5;--blue-800:#0C447C;--purple-50:#EEEDFE;--purple-600:#534AB7;--purple-800:#3C3489;--teal-50:#E1F5EE;--teal-600:#0F6E56;--teal-800:#085041;--amber-50:#FAEEDA;--amber-600:#854F0B;--amber-800:#633806;--indigo-50:#E8E7F8;--indigo-600:#4C3FAA;--indigo-800:#332877;--rose-50:#FDE6EE;--rose-600:#B92864;--rose-800:#841845}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);padding:32px 40px;line-height:1.5}
+h1{font-size:24px;font-weight:500;margin-bottom:6px;letter-spacing:-0.01em}.subtitle{font-size:14px;color:var(--muted);margin-bottom:20px;max-width:900px}
+.breadcrumb{font-size:12.5px;color:var(--muted);margin-bottom:14px}.breadcrumb a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600)}
+.hint{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--purple-50);border:1px solid var(--purple-600);color:var(--purple-800);border-radius:20px;font-size:12.5px;margin-bottom:24px;font-weight:500}.hint::before{content:"ⓘ";font-size:14px}
+.swimlane-wrap{overflow-x:auto;padding-bottom:8px}.swimlane-canvas{min-width:1280px;position:relative}
+.swimlane{display:grid;grid-template-columns:180px repeat(5,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--lane-bg)}
+.phase-header{background:rgba(255,255,255,0.7);padding:14px 18px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-size:13px}.phase-header:nth-child(6){border-right:none}
+.phase-header.corner{background:rgba(0,0,0,0.025);font-size:11px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;font-weight:500}
+.phase-header .ph-num{font-size:10.5px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px;font-weight:500}.phase-header .ph-title{font-size:14px;font-weight:500;color:var(--ink)}
+.lane-name{padding:18px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;font-size:13px}.lane-row-last .lane-name{border-bottom:none}
+.lane-name .ln-title{font-weight:500;margin-bottom:3px;font-size:14px}.lane-name .ln-sub{font-size:12px;opacity:0.75}
+.lane-name.rose{background:var(--rose-50);color:var(--rose-800)}.lane-name.amber{background:var(--amber-50);color:var(--amber-800)}.lane-name.blue{background:var(--blue-50);color:var(--blue-800)}.lane-name.indigo{background:var(--indigo-50);color:var(--indigo-800)}.lane-name.teal{background:var(--teal-50);color:var(--teal-800)}
+.cell{padding:18px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-height:130px;display:flex;align-items:center;justify-content:center;position:relative}
+.cell:nth-child(6n){border-right:none}.cell.empty{background:rgba(0,0,0,0.015)}.lane-row-last .cell{border-bottom:none}
+.task{border-radius:7px;border:1px solid;padding:10px 12px;font-size:12.5px;line-height:1.45;width:100%;max-width:230px;text-align:left;position:relative;z-index:2}
+.task .t-title{font-size:13px;font-weight:500;margin-bottom:4px}.task .t-desc{font-size:11.5px;opacity:0.85;line-height:1.45}
+.task .t-branch{font-size:10.5px;margin-top:6px;padding-top:6px;border-top:1px dashed currentColor;opacity:0.7}
+.task.rose{background:var(--rose-50);border-color:var(--rose-600);color:var(--rose-800)}.task.amber{background:var(--amber-50);border-color:var(--amber-600);color:var(--amber-800)}.task.blue{background:var(--blue-50);border-color:var(--blue-600);color:var(--blue-800)}.task.indigo{background:var(--indigo-50);border-color:var(--indigo-600);color:var(--indigo-800)}.task.teal{background:var(--teal-50);border-color:var(--teal-600);color:var(--teal-800)}
+.arrows-layer{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:visible}
+.arrow-label{position:absolute;z-index:4;transform:translate(-50%,-50%);padding:4px 10px;background:var(--bg);border:1px solid var(--line);border-radius:12px;font-size:10.5px;color:var(--muted);white-space:nowrap;cursor:help;transition:all 0.15s ease;pointer-events:auto;display:flex;align-items:center;gap:5px}
+.arrow-label::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--purple-600);opacity:0.5;transition:opacity 0.15s ease}
+.arrow-label:hover{background:white;color:var(--ink);border-color:var(--purple-600);box-shadow:0 4px 12px rgba(83,74,183,0.15);transform:translate(-50%,-50%) scale(1.05)}.arrow-label:hover::after{opacity:1}
+.tooltip{position:fixed;z-index:100;background:white;border:1px solid var(--purple-600);border-radius:10px;padding:14px 16px;min-width:260px;max-width:360px;box-shadow:0 8px 28px rgba(0,0,0,0.12);opacity:0;pointer-events:none;transition:opacity 0.15s ease;font-size:12px;line-height:1.5}.tooltip.visible{opacity:1}
+.tooltip .tt-title{font-size:13px;font-weight:500;color:var(--purple-800);margin-bottom:4px}
+.tooltip .tt-meta{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.tooltip ul{list-style:none;padding:0}.tooltip ul li{padding:3px 0 3px 14px;position:relative;font-size:12px;color:var(--ink)}
+.tooltip ul li::before{content:"";position:absolute;left:2px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--purple-600);opacity:0.5}
+.tooltip .tt-section{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:10px;margin-bottom:4px;font-weight:500}
+.timing{margin-top:24px;padding:18px 22px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px}
+.timing h3{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:12px}
+.timing table{width:100%;border-collapse:collapse;font-size:12.5px}.timing th,.timing td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+.timing th{font-weight:500;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em}.timing tr:last-child td{border-bottom:none}.timing td.tag{color:var(--purple-800);font-weight:500}
+.legend-row{display:flex;gap:24px;align-items:center;margin:20px 0 8px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}.legend-item{display:flex;align-items:center;gap:8px}
+.legend-swatch{width:36px;height:2px;background:var(--ink);opacity:0.55;position:relative}.legend-swatch.dashed{background:repeating-linear-gradient(to right,var(--ink) 0 4px,transparent 4px 8px)}
+.legend-swatch::after{content:"";position:absolute;right:-4px;top:50%;transform:translateY(-50%);border-left:7px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent}
+.footer{margin-top:24px;padding:16px 20px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--muted);line-height:1.7}
+.footer b{color:var(--ink);font-weight:500}.nav{margin-top:14px;font-size:12.5px;color:var(--muted)}.nav a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600);margin:0 8px}
+</style></head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 1: по ролям</a> · <span>Адаптер провайдеров</span></div>
+<h1>Адаптер провайдеров — внутреннее устройство</h1>
+<p class="subtitle">Декомпозиция дорожки «Адаптер провайдеров». Лейны — реестр каналов, конвертер форматов, исходящая очередь, обработчик ack-ов, аудит. Колонки — стадии передачи одного готового заказа.</p>
+<div class="hint">Наведите курсор на подпись стрелки — увидите EDIFACT-сегменты, IDoc-структуры, REST-форматы</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Подмодуль / Шаг</div>
+  <div class="phase-header"><div class="ph-num">Шаг 1</div><div class="ph-title">Приём документа</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 2</div><div class="ph-title">Выбор канала</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 3</div><div class="ph-title">Конвертация</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 4</div><div class="ph-title">Отправка</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 5</div><div class="ph-title">Трекинг ack</div></div>
+
+  <div class="lane-name rose"><div class="ln-title">Inbound queue</div><div class="ln-sub">Приём от Replenishment</div></div>
+  <div class="cell" id="c-iq-1"><div class="task rose" id="t-iq-1"><div class="t-title">Приём документа</div><div class="t-desc">Каноническая модель заказа из Block prep; trace_id; метаданные стратегии</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Channel registry</div><div class="ln-sub">Опись поставщиков</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-cr-2"><div class="task amber" id="t-cr-2"><div class="t-title">Выбор канала</div><div class="t-desc">По описи: EDI/1С/SAP/CRM/REST; приоритет канала + fallback по SLA</div><div class="t-branch">Канал down → следующий по приоритету; все down → ручной режим</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name blue"><div class="ln-title">Format converters</div><div class="ln-sub">EDI/1С/SAP/REST/CRM</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-fc-3"><div class="task blue" id="t-fc-3"><div class="t-title">Конвертация формата</div><div class="t-desc">EDIFACT ORDERS, IDoc ORDERS05, 1С XDTO/JSON, REST JSON, CRM-схема</div><div class="t-branch">Профиль EDIFACT по описи; шаблоны 1С версионируются</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name indigo"><div class="ln-title">Outbound queue</div><div class="ln-sub">Транспорт</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-oq-4"><div class="task indigo" id="t-oq-4"><div class="t-title">Отправка</div><div class="t-desc">VAN AS2 / HTTP POST / SFTP / 1С web-сервис; HMAC/OAuth/MDN-квитанция</div><div class="t-branch">Retry с экспоненциальным backoff; через 3 попытки → manual</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name teal lane-row-last"><div class="ln-title">Ack handler</div><div class="ln-sub">Трекинг и аудит</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-ah-5"><div class="task teal" id="t-ah-5"><div class="t-title">Обработка acks</div><div class="t-desc">EDI ORDRSP / REST 2xx / MDN; статусы accepted/changed/rejected; в ERP и обратно в Replenishment</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Retry / fallback / manual</span></div></div>
+<div class="timing"><h3>Тайминг и SLA по каналам</h3>
+<table><thead><tr><th>Канал</th><th>Транспорт</th><th>SLA отправки</th></tr></thead><tbody>
+<tr><td>EDI EDIFACT</td><td>VAN AS2</td><td class="tag">≤ 15 мин</td></tr>
+<tr><td>SAP IDoc</td><td>RFC / HTTP</td><td class="tag">≤ 1 мин</td></tr>
+<tr><td>1С web-сервис</td><td>HTTP/SOAP</td><td class="tag">≤ 30 сек</td></tr>
+<tr><td>REST API</td><td>HTTPS POST + OAuth</td><td class="tag">≤ 5 сек</td></tr>
+<tr><td>SFTP файл</td><td>SSH</td><td class="tag">≤ 10 мин</td></tr>
+<tr><td>Fallback на ручной режим</td><td>UI оператора</td><td class="tag">≤ 1 ч</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Адаптер провайдеров — зеркало адаптера источников: канонический документ превращается в специфический формат целевой системы. Каналы расположены вертикально как параллельные опции; нужный выбирается на шаге 2. Параллельно копия идёт в ERP клиента в Ф4.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку lane-диаграмм</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const FLOWS={
+  'inbound':{title:'Приём документа',meta:'Replenishment Block prep → Inbound queue',
+    sections:[{name:'Что в очереди',items:['Канонический документ заказа','trace_id для аудита','strategy_type, priority','Срок действия документа (TTL)']}]},
+  'channel-pick':{title:'Выбор канала',meta:'Channel registry → Format converter',
+    sections:[{name:'Логика',items:['Опись поставщика: какие каналы поддерживает','Приоритет канала','SLA канала и историческая надёжность','Тип заказа (промо может ехать только REST)']}]},
+  'converted':{title:'Конвертированный документ',meta:'Format converter → Outbound queue',
+    sections:[{name:'EDI EDIFACT',items:['UNB/UNH заголовки','LIN: EAN-13 / SKU, qty, PRI, DTM','GLN покупателя/поставщика','Профиль по описи провайдера']},
+              {name:'SAP IDoc',items:['ORDERS05 / BAPI_PO_CREATE1','Идентификаторы поставщика и точки в схеме SAP']},
+              {name:'1С',items:['Документ «Заказ поставщику» в XDTO/JSON','Web-сервис или файлообмен']}]},
+  'sent':{title:'Отправлено провайдеру',meta:'Outbound queue → внешняя система',
+    sections:[{name:'Транспорт',items:['VAN AS2 → MDN-квитанция','REST POST + 2xx','SFTP с проверкой checksum','OAuth/HMAC аутентификация']},
+              {name:'Retry',items:['Транзиентная ошибка → backoff 1, 4, 16 сек','3 попытки → manual режим','SLA нарушено → алерт оператору']}]},
+  'ack-tracked':{title:'Ack обработан',meta:'Ack handler → ERP + Replenishment',
+    sections:[{name:'Куда',items:['В ERP: статус заказа + ORDRSP-изменения','В Replenishment: данные для KPI и калибровки','В аудит-лог: полный footprint']}]}
+};
+const canvas=document.querySelector('.swimlane-canvas');const svg=document.getElementById('arrows');const labelsLayer=document.getElementById('labels-layer');const tooltip=document.getElementById('tooltip');
+function rectOf(id){const el=document.getElementById(id);if(!el)return null;const r=el.getBoundingClientRect();const p=canvas.getBoundingClientRect();return{left:r.left-p.left,right:r.right-p.left,top:r.top-p.top,bottom:r.bottom-p.top,cx:r.left-p.left+r.width/2,cy:r.top-p.top+r.height/2,width:r.width,height:r.height}}
+function drawLine(x1,y1,x2,y2,opts={}){const{dashed=false,via=null}=opts;const path=document.createElementNS('http://www.w3.org/2000/svg','path');let d=`M ${x1} ${y1}`;if(Array.isArray(via))for(const pt of via)d+=` L ${pt.x} ${pt.y}`;else if(via)d+=` L ${via.x} ${via.y}`;d+=` L ${x2} ${y2}`;path.setAttribute('d',d);path.setAttribute('fill','none');path.setAttribute('stroke','#2C2C2A');path.setAttribute('stroke-width','1.4');path.setAttribute('opacity','0.55');path.setAttribute('marker-end','url(#arrowhead)');if(dashed)path.setAttribute('stroke-dasharray','5 4');svg.appendChild(path)}
+function drawLabel(x,y,k){const f=FLOWS[k];if(!f)return;const l=document.createElement('div');l.className='arrow-label';l.style.left=x+'px';l.style.top=y+'px';l.textContent=f.title;l.dataset.flowKey=k;l.addEventListener('mouseenter',showTooltip);l.addEventListener('mousemove',moveTooltip);l.addEventListener('mouseleave',hideTooltip);labelsLayer.appendChild(l)}
+function showTooltip(e){const k=e.currentTarget.dataset.flowKey;const f=FLOWS[k];if(!f)return;let h=`<div class="tt-title">${f.title}</div>`;if(f.meta)h+=`<div class="tt-meta">${f.meta}</div>`;f.sections.forEach((s,i)=>{if(s.name&&f.sections.length>1)h+=`<div class="tt-section" ${i===0?'style="margin-top:0"':''}>${s.name}</div>`;h+='<ul>';s.items.forEach(it=>{h+=`<li>${it}</li>`});h+='</ul>'});tooltip.innerHTML=h;tooltip.classList.add('visible');moveTooltip(e)}
+function moveTooltip(e){const pad=14;const r=tooltip.getBoundingClientRect();let x=e.clientX+pad,y=e.clientY+pad;if(x+r.width>window.innerWidth-pad)x=e.clientX-r.width-pad;if(y+r.height>window.innerHeight-pad)y=e.clientY-r.height-pad;tooltip.style.left=x+'px';tooltip.style.top=y+'px'}
+function hideTooltip(){tooltip.classList.remove('visible')}
+function render(){svg.innerHTML='';labelsLayer.innerHTML='';const pr=canvas.getBoundingClientRect();svg.setAttribute('viewBox',`0 0 ${pr.width} ${pr.height}`);svg.setAttribute('width',pr.width);svg.setAttribute('height',pr.height);const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');defs.innerHTML=`<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/></marker>`;svg.appendChild(defs);
+  const iq=rectOf('t-iq-1'),cr=rectOf('t-cr-2'),fc=rectOf('t-fc-3'),oq=rectOf('t-oq-4'),ah=rectOf('t-ah-5');
+  drawLine(iq.right+4,iq.cy,cr.cx,cr.top-2,{via:{x:cr.cx,y:iq.cy}});drawLabel((iq.right+cr.cx)/2,iq.cy-14,'inbound');
+  drawLine(cr.right+4,cr.cy,fc.cx,fc.top-2,{via:{x:fc.cx,y:cr.cy}});drawLabel((cr.right+fc.cx)/2,cr.cy-14,'channel-pick');
+  drawLine(fc.right+4,fc.cy,oq.cx,oq.top-2,{via:{x:oq.cx,y:fc.cy}});drawLabel((fc.right+oq.cx)/2,fc.cy-14,'converted');
+  drawLine(oq.cx,oq.bottom+4,oq.cx,oq.bottom+18);drawLabel(oq.cx,oq.bottom+30,'sent');
+  drawLine(oq.right+4,oq.cy,ah.cx,ah.top-2,{via:{x:ah.cx,y:oq.cy}});drawLabel((oq.right+ah.cx)/2,oq.cy-14,'ack-tracked');
+  drawLine(oq.left-4,oq.cy,fc.right+4,fc.bottom+18,{dashed:true,via:[{x:oq.left-22,y:oq.cy},{x:oq.left-22,y:fc.bottom+18}]});
+}
+function rerender(){requestAnimationFrame(render)}
+function initialRender(){if(document.fonts&&document.fonts.ready)document.fonts.ready.then(rerender);else setTimeout(rerender,120)}
+if(document.readyState==='complete')initialRender();else window.addEventListener('load',initialRender);
+window.addEventListener('resize',()=>setTimeout(rerender,50));
+if(window.ResizeObserver)new ResizeObserver(rerender).observe(canvas);
+</script></body></html>

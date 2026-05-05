@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Фаза 3. Подготовка заказа — детальная swimlane</title>
+<style>
+:root{--bg:#FAF9F5;--ink:#2C2C2A;--muted:#5F5E5A;--line:rgba(44,44,42,0.15);--lane-bg:rgba(255,255,255,0.5);--gray-50:#F1EFE8;--gray-600:#5F5E5A;--gray-800:#444441;--blue-50:#E6F1FB;--blue-600:#185FA5;--blue-800:#0C447C;--purple-50:#EEEDFE;--purple-600:#534AB7;--purple-800:#3C3489;--teal-50:#E1F5EE;--teal-600:#0F6E56;--teal-800:#085041;--amber-50:#FAEEDA;--amber-600:#854F0B;--amber-800:#633806;--indigo-50:#E8E7F8;--indigo-600:#4C3FAA;--indigo-800:#332877;--rose-50:#FDE6EE;--rose-600:#B92864;--rose-800:#841845}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);padding:32px 40px;line-height:1.5}
+h1{font-size:24px;font-weight:500;margin-bottom:6px;letter-spacing:-0.01em}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:20px;max-width:900px}
+.breadcrumb{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.breadcrumb a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600)}
+.hint{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--purple-50);border:1px solid var(--purple-600);color:var(--purple-800);border-radius:20px;font-size:12.5px;margin-bottom:24px;font-weight:500}
+.hint::before{content:"ⓘ";font-size:14px}
+.swimlane-wrap{overflow-x:auto;padding-bottom:8px}.swimlane-canvas{min-width:1280px;position:relative}
+.swimlane{display:grid;grid-template-columns:180px repeat(5,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--lane-bg)}
+.phase-header{background:rgba(255,255,255,0.7);padding:14px 18px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-size:13px}.phase-header:nth-child(6){border-right:none}
+.phase-header.corner{background:rgba(0,0,0,0.025);font-size:11px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;font-weight:500}
+.phase-header .ph-num{font-size:10.5px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px;font-weight:500}.phase-header .ph-title{font-size:14px;font-weight:500;color:var(--ink)}
+.lane-name{padding:18px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;font-size:13px}.lane-row-last .lane-name{border-bottom:none}
+.lane-name .ln-title{font-weight:500;margin-bottom:3px;font-size:14px}.lane-name .ln-sub{font-size:12px;opacity:0.75}
+.lane-name.purple{background:var(--purple-50);color:var(--purple-800)}.lane-name.rose{background:var(--rose-50);color:var(--rose-800)}.lane-name.amber{background:var(--amber-50);color:var(--amber-800)}.lane-name.blue{background:var(--blue-50);color:var(--blue-800)}.lane-name.gray{background:var(--gray-50);color:var(--gray-800)}
+.cell{padding:18px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-height:130px;display:flex;align-items:center;justify-content:center;position:relative}
+.cell:nth-child(6n){border-right:none}.cell.empty{background:rgba(0,0,0,0.015)}.lane-row-last .cell{border-bottom:none}
+.task{border-radius:7px;border:1px solid;padding:10px 12px;font-size:12.5px;line-height:1.45;width:100%;max-width:230px;text-align:left;position:relative;z-index:2}
+.task .t-title{font-size:13px;font-weight:500;margin-bottom:4px}.task .t-desc{font-size:11.5px;opacity:0.85;line-height:1.45}
+.task .t-branch{font-size:10.5px;margin-top:6px;padding-top:6px;border-top:1px dashed currentColor;opacity:0.7}
+.task.purple{background:var(--purple-50);border-color:var(--purple-600);color:var(--purple-800)}.task.rose{background:var(--rose-50);border-color:var(--rose-600);color:var(--rose-800)}.task.amber{background:var(--amber-50);border-color:var(--amber-600);color:var(--amber-800)}.task.blue{background:var(--blue-50);border-color:var(--blue-600);color:var(--blue-800)}.task.gray{background:var(--gray-50);border-color:var(--gray-600);color:var(--gray-800)}
+.arrows-layer{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:visible}
+.arrow-label{position:absolute;z-index:4;transform:translate(-50%,-50%);padding:4px 10px;background:var(--bg);border:1px solid var(--line);border-radius:12px;font-size:10.5px;color:var(--muted);white-space:nowrap;cursor:help;transition:all 0.15s ease;pointer-events:auto;display:flex;align-items:center;gap:5px}
+.arrow-label::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--purple-600);opacity:0.5;transition:opacity 0.15s ease}
+.arrow-label:hover{background:white;color:var(--ink);border-color:var(--purple-600);box-shadow:0 4px 12px rgba(83,74,183,0.15);transform:translate(-50%,-50%) scale(1.05)}
+.arrow-label:hover::after{opacity:1}
+.tooltip{position:fixed;z-index:100;background:white;border:1px solid var(--purple-600);border-radius:10px;padding:14px 16px;min-width:260px;max-width:360px;box-shadow:0 8px 28px rgba(0,0,0,0.12);opacity:0;pointer-events:none;transition:opacity 0.15s ease;font-size:12px;line-height:1.5}
+.tooltip.visible{opacity:1}.tooltip .tt-title{font-size:13px;font-weight:500;color:var(--purple-800);margin-bottom:4px}
+.tooltip .tt-meta{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.tooltip ul{list-style:none;padding:0}.tooltip ul li{padding:3px 0 3px 14px;position:relative;font-size:12px;color:var(--ink)}
+.tooltip ul li::before{content:"";position:absolute;left:2px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--purple-600);opacity:0.5}
+.tooltip .tt-section{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:10px;margin-bottom:4px;font-weight:500}
+.timing{margin-top:24px;padding:18px 22px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px}
+.timing h3{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:12px}
+.timing table{width:100%;border-collapse:collapse;font-size:12.5px}
+.timing th,.timing td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+.timing th{font-weight:500;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em}
+.timing tr:last-child td{border-bottom:none}.timing td.tag{color:var(--purple-800);font-weight:500}
+.legend-row{display:flex;gap:24px;align-items:center;margin:20px 0 8px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:8px}.legend-swatch{width:36px;height:2px;background:var(--ink);opacity:0.55;position:relative}
+.legend-swatch.dashed{background:repeating-linear-gradient(to right,var(--ink) 0 4px,transparent 4px 8px)}
+.legend-swatch::after{content:"";position:absolute;right:-4px;top:50%;transform:translateY(-50%);border-left:7px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent}
+.footer{margin-top:24px;padding:16px 20px;background:var(--lane-bg);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--muted);line-height:1.7}
+.footer b{color:var(--ink);font-weight:500}.nav{margin-top:14px;font-size:12.5px;color:var(--muted)}.nav a{color:var(--purple-800);text-decoration:none;border-bottom:1px dashed var(--purple-600);margin:0 8px}
+</style></head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 2: по фазам</a> · <span>Фаза 3. Подготовка заказа</span></div>
+<h1>Фаза 3. Подготовка заказа — детальная swimlane</h1>
+<p class="subtitle">Готовый из Ф2 заказ проходит финальную валидацию, обогащается метаданными, маршрутизируется через адаптер провайдеров и передаётся внешним системам поставщика. Параллельно копия идёт в ERP клиента для регистрации в Ф4.</p>
+<div class="hint">Наведите курсор на подпись стрелки — увидите формат документа на каждой стадии</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Подмодуль / Шаг Ф3</div>
+  <div class="phase-header"><div class="ph-num">Шаг 1</div><div class="ph-title">Готовый заказ</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 2</div><div class="ph-title">Финальная валидация</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 3</div><div class="ph-title">Метаданные и аудит</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 4</div><div class="ph-title">Выбор канала</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 5</div><div class="ph-title">Передача</div></div>
+
+  <div class="lane-name purple"><div class="ln-title">Constructor</div><div class="ln-sub">Выход Ф2</div></div>
+  <div class="cell" id="c-c-1"><div class="task purple" id="t-c-1"><div class="t-title">Документ заказа</div><div class="t-desc">Каноническая модель: шапка (поставщик GLN, точка GLN, дата, валюта) + позиции</div><div class="t-branch">Статус: ready-to-send или draft</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name rose"><div class="ln-title">Block prep</div><div class="ln-sub">Финал в Replenishment</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-b-2"><div class="task rose" id="t-b-2"><div class="t-title">Финальная валидация</div><div class="t-desc">Проверка лимитов на момент отправки, актуальность остатков, бизнес-окна поставщика</div><div class="t-branch">Lock-failed → возврат в калькулятор Ф2</div></div></div>
+  <div class="cell" id="c-b-3"><div class="task rose" id="t-b-3"><div class="t-title">Метаданные стратегии</div><div class="t-desc">Тип заказа: регулярный/промо/спот; приоритет; ссылка на расчётный пакет</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Adapter providers</div><div class="ln-sub">Маршрутизация</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-a-4"><div class="task amber" id="t-a-4"><div class="t-title">Выбор канала</div><div class="t-desc">По описи поставщика: EDI / 1С / ERP / CRM / REST; приоритет канала + fallback</div><div class="t-branch">EDI down → REST → ручная выгрузка по SLA</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name blue"><div class="ln-title">Format converter</div><div class="ln-sub">EDI/REST/файл</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-fmt-5"><div class="task blue" id="t-fmt-5"><div class="t-title">Форматирование</div><div class="t-desc">EDIFACT ORDERS / REST JSON / 1С XDTO / SAP IDoc — по описи провайдера</div><div class="t-branch">Подпись/HMAC/MDN-квитанция в зависимости от канала</div></div></div>
+
+  <div class="lane-name gray lane-row-last"><div class="ln-title">Внешний поставщик</div><div class="ln-sub">Получатель</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-ext-5"><div class="task gray" id="t-ext-5"><div class="t-title">Получение заказа</div><div class="t-desc">EDI inbox / REST endpoint / 1С web-сервис; ack-квитанция возвращается</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Возврат / fallback</span></div></div>
+
+<div class="timing"><h3>Тайминг и SLA подготовки</h3>
+<table><thead><tr><th>Стадия</th><th>Триггер</th><th>SLA</th></tr></thead>
+<tbody>
+<tr><td>Финальная валидация</td><td>После сборки документа</td><td class="tag">≤ 30 сек</td></tr>
+<tr><td>Lock остатков</td><td>На момент отправки</td><td class="tag">≤ 5 сек</td></tr>
+<tr><td>Выбор канала</td><td>По описи поставщика</td><td class="tag">≤ 1 сек</td></tr>
+<tr><td>EDI ORDERS</td><td>VAN AS2</td><td class="tag">≤ 15 мин</td></tr>
+<tr><td>REST / 1С</td><td>HTTP POST</td><td class="tag">≤ 30 сек</td></tr>
+<tr><td>Fallback на ручную выгрузку</td><td>3 неудачные попытки</td><td class="tag">≤ 1 ч</td></tr>
+</tbody></table></div>
+
+<div class="footer"><b>Как читать.</b> Document проходит через лестницу: Constructor → Block prep → Adapter providers → Format converter → Внешний поставщик. На шаге 4 канал выбирается по описи поставщика и приоритетам с fallback. Параллельно копия документа отправится в ERP в Ф4.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку фаз</a></div></div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const FLOWS = {
+  'doc-out': { title: 'Документ → валидация', meta: 'Constructor → Block prep',
+    sections:[{name:'Что в документе',items:['Шапка: поставщик GLN, точка GLN, дата, валюта','Позиции: SKU, qty, цена, сумма','Метаданные: тип заказа, приоритет','Ссылка на расчётный пакет']}] },
+  'validated': { title: 'Валидация → метаданные', meta: 'Block prep внутри',
+    sections:[{name:'Что проверено',items:['Лимиты на момент отправки','Актуальность остатков (lock на 5 сек)','Бизнес-окна поставщика','Подписи/одобрения если требуются']},
+              {name:'Lock-failed',items:['Возврат в Ф2 калькулятор','Re-расчёт с новым snapshot','Эскалация если повторяется']}] },
+  'enriched': { title: 'Обогащённый документ → Adapter', meta: 'Block prep → Adapter providers',
+    sections:[{name:'Метаданные',items:['trace_id для сквозного аудита','strategy_type: regular/promo/spot','priority_supplier_id','reference_to: расчётный пакет, прогноз']}] },
+  'channel-pick': { title: 'Выбор канала → конвертер', meta: 'Adapter providers → Format converter',
+    sections:[{name:'Логика выбора',items:['Опись поставщика: EDI/1С/ERP/CRM/REST','Приоритет канала + fallback','SLA канала и историческая надёжность','Тип заказа влияет на канал (промо может ехать только REST)']}] },
+  'transmit': { title: 'Передача внешнему поставщику', meta: 'Format converter → Внешний поставщик',
+    sections:[{name:'EDI EDIFACT',items:['ORDERS: GLN покупателя/поставщика, валюта, оплата','LIN: EAN-13/SKU, qty, PRI, DTM','Профиль EDIFACT по описи провайдера']},
+              {name:'1С',items:['Документ Заказ поставщику в XDTO/JSON','HTTP-сервис или файлообмен S3/SFTP']},
+              {name:'SAP/Oracle',items:['IDoc ORDERS05 / BAPI_PO_CREATE1','REST purchase-order endpoint']},
+              {name:'CRM/REST',items:['POST /orders + OAuth/API key','Связка со сделкой/лидом']}] }
+};
+const canvas=document.querySelector('.swimlane-canvas');const svg=document.getElementById('arrows');const labelsLayer=document.getElementById('labels-layer');const tooltip=document.getElementById('tooltip');
+function rectOf(id){const el=document.getElementById(id);if(!el)return null;const r=el.getBoundingClientRect();const p=canvas.getBoundingClientRect();return{left:r.left-p.left,right:r.right-p.left,top:r.top-p.top,bottom:r.bottom-p.top,cx:r.left-p.left+r.width/2,cy:r.top-p.top+r.height/2,width:r.width,height:r.height}}
+function drawLine(x1,y1,x2,y2,opts={}){const{dashed=false,via=null}=opts;const path=document.createElementNS('http://www.w3.org/2000/svg','path');let d=`M ${x1} ${y1}`;if(Array.isArray(via))for(const pt of via)d+=` L ${pt.x} ${pt.y}`;else if(via)d+=` L ${via.x} ${via.y}`;d+=` L ${x2} ${y2}`;path.setAttribute('d',d);path.setAttribute('fill','none');path.setAttribute('stroke','#2C2C2A');path.setAttribute('stroke-width','1.4');path.setAttribute('opacity','0.55');path.setAttribute('marker-end','url(#arrowhead)');if(dashed)path.setAttribute('stroke-dasharray','5 4');svg.appendChild(path)}
+function drawLabel(x,y,k){const f=FLOWS[k];if(!f)return;const l=document.createElement('div');l.className='arrow-label';l.style.left=x+'px';l.style.top=y+'px';l.textContent=f.title;l.dataset.flowKey=k;l.addEventListener('mouseenter',showTooltip);l.addEventListener('mousemove',moveTooltip);l.addEventListener('mouseleave',hideTooltip);labelsLayer.appendChild(l)}
+function showTooltip(e){const k=e.currentTarget.dataset.flowKey;const f=FLOWS[k];if(!f)return;let h=`<div class="tt-title">${f.title}</div>`;if(f.meta)h+=`<div class="tt-meta">${f.meta}</div>`;f.sections.forEach((s,i)=>{if(s.name&&f.sections.length>1)h+=`<div class="tt-section" ${i===0?'style="margin-top:0"':''}>${s.name}</div>`;h+='<ul>';s.items.forEach(it=>{h+=`<li>${it}</li>`});h+='</ul>'});tooltip.innerHTML=h;tooltip.classList.add('visible');moveTooltip(e)}
+function moveTooltip(e){const pad=14;const r=tooltip.getBoundingClientRect();let x=e.clientX+pad,y=e.clientY+pad;if(x+r.width>window.innerWidth-pad)x=e.clientX-r.width-pad;if(y+r.height>window.innerHeight-pad)y=e.clientY-r.height-pad;tooltip.style.left=x+'px';tooltip.style.top=y+'px'}
+function hideTooltip(){tooltip.classList.remove('visible')}
+function render(){svg.innerHTML='';labelsLayer.innerHTML='';const pr=canvas.getBoundingClientRect();svg.setAttribute('viewBox',`0 0 ${pr.width} ${pr.height}`);svg.setAttribute('width',pr.width);svg.setAttribute('height',pr.height);const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');defs.innerHTML=`<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/></marker>`;svg.appendChild(defs);
+  const c1=rectOf('t-c-1'),b2=rectOf('t-b-2'),b3=rectOf('t-b-3'),a4=rectOf('t-a-4'),fmt=rectOf('t-fmt-5'),ext=rectOf('t-ext-5');
+  drawLine(c1.right+4,c1.cy,b2.cx,b2.top-2,{via:{x:b2.cx,y:c1.cy}});drawLabel((c1.right+b2.cx)/2,c1.cy-14,'doc-out');
+  drawLine(b2.right+4,b2.cy,b3.left-2,b3.cy);drawLabel((b2.right+b3.left)/2,b2.cy-14,'validated');
+  drawLine(b3.cx,b3.bottom+4,a4.cx,a4.top-2,{via:{x:a4.cx,y:b3.bottom+18}});drawLabel(a4.cx,(b3.bottom+a4.top)/2,'enriched');
+  drawLine(a4.right+4,a4.cy,fmt.cx,fmt.top-2,{via:{x:fmt.cx,y:a4.cy}});drawLabel((a4.right+fmt.cx)/2,a4.cy-14,'channel-pick');
+  drawLine(fmt.cx,fmt.bottom+4,ext.cx,ext.top-2);drawLabel(fmt.cx,(fmt.bottom+ext.top)/2,'transmit');
+  drawLine(b2.left-4,b2.cy,c1.right+4,c1.bottom+18,{dashed:true,via:[{x:b2.left-22,y:b2.cy},{x:b2.left-22,y:c1.bottom+18}]});
+}
+function rerender(){requestAnimationFrame(render)}
+function initialRender(){if(document.fonts&&document.fonts.ready)document.fonts.ready.then(rerender);else setTimeout(rerender,120)}
+if(document.readyState==='complete')initialRender();else window.addEventListener('load',initialRender);
+window.addEventListener('resize',()=>setTimeout(rerender,50));
+if(window.ResizeObserver)new ResizeObserver(rerender).observe(canvas);
+</script></body></html>

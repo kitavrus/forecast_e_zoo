@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Карточка «Витрины данных» (Replenishment)</title>
+<link rel="stylesheet" href="_shared.css">
+</head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 3: по карточкам</a> · <span>«Витрины данных» (Replenishment × Ф1)</span></div>
+<h1>Карточка «Витрины данных»</h1>
+<p class="subtitle">Зум в карточку из общей диаграммы. Лейны — пять витрин Replenishment. Колонки — стадии жизненного цикла одной строки витрины.</p>
+<div class="hint">Наведите курсор — увидите схемы каждой витрины и индексы</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Витрина / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Запись</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Версионирование</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Индексы</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Чтение</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Подписчики</div></div>
+
+  <div class="lane-name teal"><div class="ln-title">vitrine.sku</div><div class="ln-sub">Товары + спец</div></div>
+  <div class="cell" id="c-sku-1"><div class="task teal" id="t-sku-1"><div class="t-title">SKU + EAN-13 + иерархия</div><div class="t-desc">Упаковка, паллет, t° хранения, страна, УКТ ВЭД</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name indigo"><div class="ln-title">vitrine.locations</div><div class="ln-sub">Точки + ассортимент</div></div>
+  <div class="cell" id="c-loc-1"><div class="task indigo" id="t-loc-1"><div class="t-title">GLN + тип + GPS</div><div class="t-desc">Магазин/склад/даркстор, график, площадь, ассортиментная матрица</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">vitrine.movements</div><div class="ln-sub">Продажи / остатки</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-mv-2"><div class="task amber" id="t-mv-2"><div class="t-title">Партиционирование</div><div class="t-desc">PARTITION BY date; ~1M событий/день; append-only</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name rose"><div class="ln-title">vitrine.planning</div><div class="ln-sub">Расписание поставок</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-pl-3"><div class="task rose" id="t-pl-3"><div class="t-title">Композитный индекс</div><div class="t-desc">(supplier_id, location_id, day_of_week)</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name purple lane-row-last"><div class="ln-title">vitrine.commercial</div><div class="ln-sub">Промо + цены</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-cm-4"><div class="task purple" id="t-cm-4"><div class="t-title">Запросы по дате</div><div class="t-desc">Активное промо на T0; цены с НДС/без; приоритет поставщика</div></div></div>
+  <div class="cell lane-row-last" id="c-cm-5"><div class="task purple" id="t-cm-5"><div class="t-title">Подписчики</div><div class="t-desc">Forecaster, KPI, дашборды, конструктор</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Поток обновлений</span></div></div>
+<div class="timing"><h3>Тайминг и объём витрин</h3>
+<table><thead><tr><th>Витрина</th><th>Объём</th><th>SLA свежести</th></tr></thead><tbody>
+<tr><td>vitrine.sku</td><td>~50K записей</td><td class="tag">≤ 5 мин</td></tr>
+<tr><td>vitrine.locations</td><td>~5K точек</td><td class="tag">≤ 5 мин</td></tr>
+<tr><td>vitrine.movements</td><td>~1M/день</td><td class="tag">≤ 30 сек</td></tr>
+<tr><td>vitrine.planning</td><td>~1K расписаний</td><td class="tag">on-change</td></tr>
+<tr><td>vitrine.commercial</td><td>~100K промо</td><td class="tag">≤ 10 мин</td></tr>
+<tr><td>VACUUM/REINDEX</td><td>weekly</td><td class="tag">воскр. 04:00</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Витрины — единый «контракт» данных Replenishment. Каждая строка = тип витрины с её спецификой (объём, частота обновлений, индексы).
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку task</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+window.FLOWS = {
+  'sku-spec':{title:'vitrine.sku — структура',sections:[{name:'Поля',items:['sku, ean13, name, hierarchy_path','pack_type, pack_qty, pallet_qty','weight, volume, temp_min/max','country_of_origin, hs_code']},{name:'Индексы',items:['PK sku','UNIQUE ean13','GIN на hierarchy_path','BRIN на updated_at']}]},
+  'loc-spec':{title:'vitrine.locations — структура',sections:[{name:'Поля',items:['location_id, gln, type, gps_lat/lon','area_sqm, opening_hours','sales_priority, format','assortment_matrix (JSONB)']}]},
+  'mv-part':{title:'vitrine.movements — партиции',sections:[{name:'Структура',items:['Partitioning: range по date','event_type: sale/stock/transfer/markdown','sku × location × ts','qty, value, reason']}]},
+  'pl-idx':{title:'vitrine.planning — индексы',sections:[{name:'Композитные индексы',items:['(supplier_id, location_id, day_of_week)','(location_id, sku, valid_from)','(supplier_id, lead_time)']}]},
+  'cm-query':{title:'vitrine.commercial — запросы',sections:[{name:'Типичные запросы',items:['Активное промо на T0 для SKU × точка','Цена с НДС / промо-цена','Приоритет поставщика','Маркдаун-флаг']}]},
+  'subscribers':{title:'Подписчики витрин',sections:[{name:'Кто читает',items:['Forecaster — все 5 витрин','KPI engine — movements + commercial','Дашборды — материализованные агрегаты','Constructor — sku, locations, planning']}]}
+};
+window.WIRING = function(){return [
+  { from:'t-sku-1', to:'t-cm-5', key:'sku-spec', via:{x:0,y:0} },
+  { from:'t-loc-1', to:'t-cm-5', key:'loc-spec' },
+  { from:'t-mv-2', to:'t-cm-5', key:'mv-part' },
+  { from:'t-pl-3', to:'t-cm-5', key:'pl-idx' },
+  { from:'t-cm-4', to:'t-cm-5', key:'cm-query' },
+  { from:'t-cm-5', kind:'output', key:'subscribers' }
+];};
+</script><script src="_shared.js"></script>
+</body></html>

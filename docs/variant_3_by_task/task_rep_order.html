@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Карточка «Блок подготовки заказа»</title>
+<link rel="stylesheet" href="_shared.css">
+</head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 3: по карточкам</a> · <span>«Блок подготовки заказа» (Replenishment × Ф3)</span></div>
+<h1>Карточка «Блок подготовки заказа»</h1>
+<p class="subtitle">Зум в карточку из общей диаграммы. Лейны — стадии финальной обработки документа перед отправкой. Колонки — этапы обработки.</p>
+<div class="hint">Наведите курсор — увидите формат документа на каждой стадии</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Подмодуль / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Inbox</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Lock</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Метаданные</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Финальная валидация</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Out</div></div>
+
+  <div class="lane-name purple"><div class="ln-title">Inbox</div><div class="ln-sub">От Constructor</div></div>
+  <div class="cell" id="c-1"><div class="task purple" id="t-1"><div class="t-title">Документ</div><div class="t-desc">Шапка + позиции + статус ready/draft</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name indigo"><div class="ln-title">Stock locker</div><div class="ln-sub">Резервирование</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-2"><div class="task indigo" id="t-2"><div class="t-title">Lock остатков</div><div class="t-desc">in_transit += qty; TTL 5 сек; идемпотентно по trace_id</div><div class="t-branch">Lock-failed → возврат в Calc</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Metadata enricher</div><div class="ln-sub">Стратегия и аудит</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-3"><div class="task amber" id="t-3"><div class="t-title">Метаданные</div><div class="t-desc">trace_id, strategy_type, priority_supplier, ссылка на расчётный пакет</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name teal"><div class="ln-title">Final validator</div><div class="ln-sub">Лимиты + одобрения</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-4"><div class="task teal" id="t-4"><div class="t-title">Финальные проверки</div><div class="t-desc">Сумма ≤ supplier.max_amount; bill window; одобрение если требуется</div><div class="t-branch">Не прошло → manual review</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name rose lane-row-last"><div class="ln-title">Outbound</div><div class="ln-sub">К adapter providers + ERP</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-5"><div class="task rose" id="t-5"><div class="t-title">Передача</div><div class="t-desc">Adapter providers + параллельная копия в ERP</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Возврат / manual review</span></div></div>
+<div class="timing"><h3>Тайминг подготовки</h3>
+<table><thead><tr><th>Стадия</th><th>SLA</th></tr></thead><tbody>
+<tr><td>Inbox → Lock</td><td class="tag">≤ 100 мс</td></tr>
+<tr><td>Lock остатков</td><td class="tag">5 сек hold</td></tr>
+<tr><td>Метаданные</td><td class="tag">≤ 100 мс</td></tr>
+<tr><td>Финальная валидация</td><td class="tag">≤ 30 сек</td></tr>
+<tr><td>Manual review</td><td class="tag">по SLA закупщика</td></tr>
+<tr><td>Передача наружу</td><td class="tag">немедленно</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> Между расчётом (Ф2) и отправкой (Ф3) есть критическая зона: lock защищает от race-condition, валидация ловит превышения. См. также <a href="../variant_4_by_flow/flow_ready_order.html">flow_ready_order</a>.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку task</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+window.FLOWS = {
+  'doc-in':{title:'Документ → Lock',sections:[{name:'Что',items:['Канонический документ','Шапка + позиции','Статус ready-to-send или draft']}]},
+  'locked':{title:'Остатки залочены',sections:[{name:'Что бронируется',items:['in_transit += qty','TTL = 5 сек','Идемпотентно по trace_id','Auto-release если документ не ушёл']},{name:'Lock-failed',items:['Другая ветка успела','Возврат в Calc на пересчёт']}]},
+  'enriched':{title:'Обогащено метаданными',sections:[{name:'Поля',items:['trace_id для аудита','strategy_type: regular/promo/spot','priority_supplier_id','reference_to_calc_package','approval_required: bool']}]},
+  'validated':{title:'Финальная валидация',sections:[{name:'Проверено',items:['Сумма ≤ supplier.max_amount','Bill window актуален','Одобрение если approval_required','Trace_id уникален','Цены не выше прайса +X%']}]},
+  'sent-out':{title:'Передано наружу',sections:[{name:'Куда',items:['Adapter providers (Ф3)','Параллельная копия в ERP (Ф4)','Audit log','Метрика order.dispatched']}]}
+};
+window.WIRING = function(){return [
+  { from:'t-1', to:'t-2', key:'doc-in' },
+  { from:'t-2', to:'t-3', key:'locked' },
+  { from:'t-3', to:'t-4', key:'enriched' },
+  { from:'t-4', to:'t-5', key:'validated' },
+  { from:'t-5', kind:'output', key:'sent-out' }
+];};
+</script><script src="_shared.js"></script>
+</body></html>

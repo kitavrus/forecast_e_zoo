@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Карточка «KPI и калибровка» (Replenishment)</title>
+<link rel="stylesheet" href="_shared.css">
+</head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 3: по карточкам</a> · <span>«KPI и калибровка» (Replenishment × Ф2)</span></div>
+<h1>Карточка «KPI и калибровка»</h1>
+<p class="subtitle">Зум в карточку из общей диаграммы. Лейны — компоненты замкнутого цикла обучения. Колонки — стадии: факты → метрики → анализ → сигналы → применение.</p>
+<div class="hint">Наведите курсор — увидите формулы метрик и сигналы калибровки</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Компонент / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Сбор фактов</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Расчёт KPI</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">Анализ</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Сигналы</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Применение</div></div>
+
+  <div class="lane-name gray"><div class="ln-title">Facts</div><div class="ln-sub">vitrine.movements</div></div>
+  <div class="cell" id="c-1"><div class="task gray" id="t-1"><div class="t-title">Факты приёмок и продаж</div><div class="t-desc">Чеки POS, RECADV, DESADV, отказы поставщиков, lead time</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name teal"><div class="ln-title">KPI engine</div><div class="ln-sub">Метрики</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-2"><div class="task teal" id="t-2"><div class="t-title">OSA / OTIF / Stock days</div><div class="t-desc">+ MAPE / bias / tracking signal по прогнозам</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Analytics</div><div class="ln-sub">Дашборды</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-3"><div class="task amber" id="t-3"><div class="t-title">Тренды и аномалии</div><div class="t-desc">Топ-10 проблемных SKU; алерты при OSA &lt; целевого% или bias &gt; 5%</div><div class="t-branch">Алерт → Slack + блокировка автоприёма</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name indigo"><div class="ln-title">Calibrator</div><div class="ln-sub">Сигналы</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-4"><div class="task indigo" id="t-4"><div class="t-title">Перевзвешивание</div><div class="t-desc">Веса ансамбля, ROP, MSP, приоритеты поставщиков</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name purple lane-row-last"><div class="ln-title">Forecaster + Rules</div><div class="ln-sub">Получатели</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-5"><div class="task purple" id="t-5"><div class="t-title">Применение к моделям</div><div class="t-desc">Forecaster: новые веса; Rules: новые ROP/MSP; следующий цикл Ф2</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Контур обучения</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>Эскалация</span></div></div>
+<div class="timing"><h3>Тайминг петли</h3>
+<table><thead><tr><th>Сигнал</th><th>Период</th></tr></thead><tbody>
+<tr><td>OSA/OTIF/Stock days</td><td class="tag">Cron 04:00 UTC, 1×/сутки</td></tr>
+<tr><td>MAPE / bias</td><td class="tag">непрерывно (после прогноза vs факт)</td></tr>
+<tr><td>Tracking signal CFE/MAD</td><td class="tag">скользящее 28 дней</td></tr>
+<tr><td>Перевзвешивание моделей</td><td class="tag">Cron 04:30 UTC</td></tr>
+<tr><td>Корректировка ROP/MSP</td><td class="tag">weekly review</td></tr>
+<tr><td>Алерт критики</td><td class="tag">≤ 5 мин</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> KPI и калибровка — это «нерв» обучения: без петли прогнозы со временем деградируют. См. также <a href="../variant_4_by_flow/flow_kpi_to_prognoz.html">flow_kpi_to_prognoz</a>.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку task</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+window.FLOWS = {
+  'facts':{title:'Факты → KPI engine',sections:[{name:'Источники',items:['Чеки POS','RECADV-факты приёмки','DESADV-планы отгрузки','Отказы поставщиков (ORDRSP rejected)','Lead time план vs факт']}]},
+  'kpi':{title:'KPI рассчитаны',sections:[{name:'OSA',items:['(SKU-точки в наличии) / (ассортимент)','По категориям/форматам']},{name:'OTIF',items:['(on-time AND in-full) / всего','По поставщику и каналу']},{name:'Stock days',items:['on_hand / avg_daily_sales (28d)','Outliers > 60 дней']},{name:'Прогнозные',items:['MAPE = mean(|f-a|/a)','bias = mean(f-a)','Tracking signal']}]},
+  'signals':{title:'Сигналы и эскалации',sections:[{name:'Алерты',items:['OSA &lt; целевого','bias &gt; 5%','Stock days &gt; 60','3+ отказа подряд']},{name:'Действия',items:['Slack/email','Блокировка автоприёма','Тикет ML-команде']}]},
+  'calibration':{title:'Сигналы калибровки',sections:[{name:'Forecaster',items:['Веса ансамбля','Перетренировка cold-start','Корректировка горизонтов']},{name:'Rules',items:['ROP, MSP по SKU','Приоритет поставщика','Safety-stock']}]},
+  'applied':{title:'Применено в моделях',sections:[{name:'Эффект',items:['Прогноз с новыми весами','Калькуляция с новыми ROP','Замыкание петли','Метрика improvement vs prev cycle']}]}
+};
+window.WIRING = function(){return [
+  { from:'t-1', to:'t-2', key:'facts' },
+  { from:'t-2', to:'t-3', key:'kpi' },
+  { from:'t-3', to:'t-4', key:'signals' },
+  { from:'t-4', to:'t-5', key:'calibration' },
+  { from:'t-5', kind:'output', key:'applied' }
+];};
+</script><script src="_shared.js"></script>
+</body></html>

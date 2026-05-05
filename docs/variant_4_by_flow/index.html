@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Вариант 4: декомпозиция по потокам</title>
+<style>
+  :root { --bg:#FAF9F5; --ink:#2C2C2A; --muted:#5F5E5A; --line:rgba(44,44,42,0.15); --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489; --gray-50:#F1EFE8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); padding: 32px 40px; line-height: 1.55; max-width: 980px; }
+  h1 { font-size: 24px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+  .breadcrumb { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .breadcrumb a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); }
+  .pros { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
+  .pros .card { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.55); }
+  .pros .card h3 { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+  .pros .card.pros-card { border-left: 3px solid var(--purple-600); }
+  .pros .card.cons-card { border-left: 3px solid #B92864; }
+  .pros .card ul { list-style: none; padding: 0; }
+  .pros .card li { padding: 3px 0 3px 14px; position: relative; font-size: 13px; }
+  .pros .card li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: var(--purple-600); opacity: 0.55; }
+  .files { border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.5); overflow: hidden; }
+  .file { display: grid; grid-template-columns: 240px 1fr auto; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: center; }
+  .file:last-child { border-bottom: none; }
+  .file .name { font-weight: 500; font-size: 14px; }
+  .file .desc { font-size: 12.5px; color: var(--muted); }
+  .file .status { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 4px 10px; border-radius: 12px; background: var(--gray-50); }
+  .file.ready .status { color: var(--purple-800); background: var(--purple-50); border: 1px solid var(--purple-600); }
+  .file a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); }
+  .nav { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
+  .nav a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); margin-right: 16px; }
+</style>
+</head>
+<body>
+
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a></div>
+
+<h1>Вариант 4. Декомпозиция по потокам (стрелкам)</h1>
+<p class="subtitle">Каждая подписанная стрелка общей диаграммы превращается в собственный swimlane: на нём показано, как сообщение проходит между ролями и какие поля/форматы у него на каждой стадии.</p>
+
+<div class="pros">
+  <div class="card pros-card">
+    <h3>Когда удобно</h3>
+    <ul>
+      <li>Чётко отвечает на «что между двумя системами летает»</li>
+      <li>Удобно для проектирования контрактов и API</li>
+      <li>Тултипы общей диаграммы расширяются в полноценную диаграмму</li>
+    </ul>
+  </div>
+  <div class="card cons-card">
+    <h3>Минусы</h3>
+    <ul>
+      <li>Нет «своей» роли — фокус на канале, а не на исполнителе</li>
+      <li>Похожие потоки приходится дублировать (canonical из 1С vs SAP)</li>
+      <li>Сценарии «многих ко многим» (channel-orders) тяжело уложить в один файл</li>
+    </ul>
+  </div>
+</div>
+
+<div class="files">
+  <div class="file ready">
+    <div class="name">flow_canonical.html</div>
+    <div class="desc">Адаптер источников → X-Flow: превращение сырого формата в каноническую модель</div>
+    <div><a href="flow_canonical.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">flow_raw_extract.html</div>
+    <div class="desc">ERP клиента → Адаптер источников</div>
+    <div><a href="flow_raw_extract.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">flow_vitrines.html</div>
+    <div class="desc">X-Flow → Replenishment (запись в витрины)</div>
+    <div><a href="flow_vitrines.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">flow_inputs.html</div>
+    <div class="desc">Витрины → Прогноз/Калькуляция</div>
+    <div><a href="flow_inputs.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">flow_ready_order.html</div>
+    <div class="desc">Конструктор → Блок подготовки заказа</div>
+    <div><a href="flow_ready_order.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">flow_order_to_routing.html</div>
+    <div class="desc">Подготовка → Маршрутизация → внешние системы (EDI / 1С / ERP / CRM)</div>
+    <div><a href="flow_order_to_routing.html">открыть →</a></div>
+  </div>
+  <div class="file ready">
+    <div class="name">flow_kpi_to_prognoz.html</div>
+    <div class="desc">KPI ↔ Прогноз — петля обратной связи</div>
+    <div><a href="flow_kpi_to_prognoz.html">открыть →</a></div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="../diagram_0_overview.html">← Общая</a>
+  <a href="../variant_1_by_lane/index.html">Вариант 1: по ролям</a>
+  <a href="../variant_2_by_phase/index.html">Вариант 2: по фазам</a>
+  <a href="../variant_3_by_task/index.html">Вариант 3: по карточкам</a>
+</div>
+
+</body>
+</html>

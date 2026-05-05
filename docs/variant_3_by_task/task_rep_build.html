@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Прогноз → калькуляция → конструктор — детальная swimlane</title>
+<style>
+  :root {
+    --bg: #FAF9F5; --ink: #2C2C2A; --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15); --lane-bg: rgba(255,255,255,0.5);
+    --gray-50:#F1EFE8;   --gray-600:#5F5E5A;   --gray-800:#444441;
+    --blue-50:#E6F1FB;   --blue-600:#185FA5;   --blue-800:#0C447C;
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+    --teal-50:#E1F5EE;   --teal-600:#0F6E56;   --teal-800:#085041;
+    --amber-50:#FAEEDA;  --amber-600:#854F0B;  --amber-800:#633806;
+    --indigo-50:#E8E7F8; --indigo-600:#4C3FAA; --indigo-800:#332877;
+    --rose-50:#FDE6EE;   --rose-600:#B92864;   --rose-800:#841845;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); padding: 32px 40px; line-height: 1.5; }
+  h1 { font-size: 24px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 20px; max-width: 900px; }
+  .breadcrumb { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .breadcrumb a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); }
+  .hint { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--purple-50); border: 1px solid var(--purple-600); color: var(--purple-800); border-radius: 20px; font-size: 12.5px; margin-bottom: 24px; font-weight: 500; }
+  .hint::before { content: "ⓘ"; font-size: 14px; }
+
+  .swimlane-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .swimlane-canvas { min-width: 1280px; position: relative; }
+  .swimlane { display: grid; grid-template-columns: 180px repeat(5, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--lane-bg); }
+
+  .phase-header { background: rgba(255,255,255,0.7); padding: 14px 18px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); font-size: 13px; }
+  .phase-header:nth-child(6) { border-right: none; }
+  .phase-header.corner { background: rgba(0,0,0,0.025); font-size: 11px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; font-weight: 500; }
+  .phase-header .ph-num { font-size: 10.5px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 2px; font-weight: 500; }
+  .phase-header .ph-title { font-size: 14px; font-weight: 500; color: var(--ink); }
+
+  .lane-name { padding: 18px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; font-size: 13px; }
+  .lane-row-last .lane-name { border-bottom: none; }
+  .lane-name .ln-title { font-weight: 500; margin-bottom: 3px; font-size: 14px; }
+  .lane-name .ln-sub { font-size: 12px; opacity: 0.75; }
+  .lane-name.purple { background: var(--purple-50); color: var(--purple-800); }
+  .lane-name.indigo { background: var(--indigo-50); color: var(--indigo-800); }
+  .lane-name.teal   { background: var(--teal-50);   color: var(--teal-800);   }
+  .lane-name.amber  { background: var(--amber-50);  color: var(--amber-800);  }
+  .lane-name.rose   { background: var(--rose-50);   color: var(--rose-800);   }
+
+  .cell { padding: 18px 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-height: 130px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .cell:nth-child(6n) { border-right: none; }
+  .cell.empty { background: rgba(0,0,0,0.015); }
+  .lane-row-last .cell { border-bottom: none; }
+
+  .task { border-radius: 7px; border: 1px solid; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; width: 100%; max-width: 230px; text-align: left; position: relative; z-index: 2; }
+  .task .t-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .task .t-desc { font-size: 11.5px; opacity: 0.85; line-height: 1.45; }
+  .task .t-branch { font-size: 10.5px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed currentColor; opacity: 0.7; }
+  .task.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .task.indigo { background: var(--indigo-50); border-color: var(--indigo-600); color: var(--indigo-800); }
+  .task.teal   { background: var(--teal-50);   border-color: var(--teal-600);   color: var(--teal-800);   }
+  .task.amber  { background: var(--amber-50);  border-color: var(--amber-600);  color: var(--amber-800);  }
+  .task.rose   { background: var(--rose-50);   border-color: var(--rose-600);   color: var(--rose-800);   }
+
+  .arrows-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+  .arrow-label { position: absolute; z-index: 4; transform: translate(-50%, -50%); padding: 4px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; font-size: 10.5px; color: var(--muted); white-space: nowrap; cursor: help; transition: all 0.15s ease; pointer-events: auto; display: flex; align-items: center; gap: 5px; }
+  .arrow-label::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--purple-600); opacity: 0.5; transition: opacity 0.15s ease; }
+  .arrow-label:hover { background: white; color: var(--ink); border-color: var(--purple-600); box-shadow: 0 4px 12px rgba(83,74,183,0.15); transform: translate(-50%, -50%) scale(1.05); }
+  .arrow-label:hover::after { opacity: 1; }
+
+  .tooltip { position: fixed; z-index: 100; background: white; border: 1px solid var(--purple-600); border-radius: 10px; padding: 14px 16px; min-width: 260px; max-width: 360px; box-shadow: 0 8px 28px rgba(0,0,0,0.12); opacity: 0; pointer-events: none; transition: opacity 0.15s ease; font-size: 12px; line-height: 1.5; }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .tt-title { font-size: 13px; font-weight: 500; color: var(--purple-800); margin-bottom: 4px; }
+  .tooltip .tt-meta { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+  .tooltip ul { list-style: none; padding: 0; }
+  .tooltip ul li { padding: 3px 0 3px 14px; position: relative; font-size: 12px; color: var(--ink); }
+  .tooltip ul li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 5px; height: 5px; border-radius: 50%; background: var(--purple-600); opacity: 0.5; }
+  .tooltip .tt-section { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 10px; margin-bottom: 4px; font-weight: 500; }
+
+  .timing { margin-top: 24px; padding: 18px 22px; background: var(--lane-bg); border: 1px solid var(--line); border-radius: 10px; }
+  .timing h3 { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 500; margin-bottom: 12px; }
+  .timing table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .timing th, .timing td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .timing th { font-weight: 500; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .timing tr:last-child td { border-bottom: none; }
+  .timing td.tag { color: var(--purple-800); font-weight: 500; }
+
+  .legend-row { display: flex; gap: 24px; align-items: center; margin: 20px 0 8px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch { width: 36px; height: 2px; background: var(--ink); opacity: 0.55; position: relative; }
+  .legend-swatch.dashed { background: repeating-linear-gradient(to right, var(--ink) 0 4px, transparent 4px 8px); }
+  .legend-swatch::after { content: ""; position: absolute; right: -4px; top: 50%; transform: translateY(-50%); border-left: 7px solid var(--ink); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+
+  .footer { margin-top: 24px; padding: 16px 20px; background: var(--lane-bg); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .footer b { color: var(--ink); font-weight: 500; }
+  .nav { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .nav a { color: var(--purple-800); text-decoration: none; border-bottom: 1px dashed var(--purple-600); margin: 0 8px; }
+</style>
+</head>
+<body>
+
+<div class="breadcrumb">
+  <a href="../diagram_0_overview.html">← Общая диаграмма</a> &nbsp;·&nbsp;
+  <a href="index.html">Вариант 3: по карточкам</a> &nbsp;·&nbsp;
+  <span>Прогноз → калькуляция → конструктор</span>
+</div>
+
+<h1>Прогноз → калькуляция → конструктор</h1>
+<p class="subtitle">Декомпозиция самой важной карточки общей диаграммы (Replenishment, Фаза 2). Внутри одного «блока» работают пять подмодулей в пять последовательных шагов. Здесь же — обратная связь от KPI на калибровку моделей.</p>
+
+<div class="hint">Наведите курсор на подпись стрелки — увидите фичи моделей, формулы и веса бизнес-правил</div>
+
+<div class="swimlane-wrap">
+<div class="swimlane-canvas">
+
+<div class="swimlane">
+  <div class="phase-header corner">Подмодуль / Шаг</div>
+  <div class="phase-header"><div class="ph-num">Шаг 1</div><div class="ph-title">Сбор фич</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 2</div><div class="ph-title">Прогноз спроса</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 3</div><div class="ph-title">Калькуляция потребности</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 4</div><div class="ph-title">Бизнес-правила и лимиты</div></div>
+  <div class="phase-header"><div class="ph-num">Шаг 5</div><div class="ph-title">Сборка документа</div></div>
+
+  <!-- Feature builder -->
+  <div class="lane-name teal">
+    <div class="ln-title">Feature builder</div>
+    <div class="ln-sub">Витрины → фичи</div>
+  </div>
+  <div class="cell" id="c-fb-1">
+    <div class="task teal" id="t-fb-1">
+      <div class="t-title">Сбор фичей</div>
+      <div class="t-desc">История продаж, промо, праздники, маркдауны, погода (опц.)</div>
+      <div class="t-branch">Ветка: новый SKU без истории → cold-start фичи</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+
+  <!-- Forecaster -->
+  <div class="lane-name purple">
+    <div class="ln-title">Demand forecaster</div>
+    <div class="ln-sub">Прогноз продаж</div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-df-2">
+    <div class="task purple" id="t-df-2">
+      <div class="t-title">Модель прогноза</div>
+      <div class="t-desc">SKU × точка × день, горизонт по графику; ансамбль (ARIMA + GBM)</div>
+      <div class="t-branch">Cold-start → cluster-based аналог; промо → uplift-модель</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+
+  <!-- Net req calc -->
+  <div class="lane-name indigo">
+    <div class="ln-title">Net req. calc</div>
+    <div class="ln-sub">Чистая потребность</div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-nr-3">
+    <div class="task indigo" id="t-nr-3">
+      <div class="t-title">Чистая потребность</div>
+      <div class="t-desc">прогноз − остатки − заказы в пути − резервы + страховой запас</div>
+      <div class="t-branch">Отрицательная → исключить SKU из заказа</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+
+  <!-- Rules engine -->
+  <div class="lane-name amber">
+    <div class="ln-title">Rules engine</div>
+    <div class="ln-sub">Правила и лимиты</div>
+  </div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-re-4">
+    <div class="task amber" id="t-re-4">
+      <div class="t-title">Правила и лимиты</div>
+      <div class="t-desc">Точка заказа, MSP, кратность упаковки, выбор поставщика, лимиты сумма/паллет/вес/объём</div>
+      <div class="t-branch">Конфликт лимитов → приоритеты по обороту точки и SLA OSA</div>
+    </div>
+  </div>
+  <div class="cell empty"></div>
+
+  <!-- Constructor -->
+  <div class="lane-name rose lane-row-last">
+    <div class="ln-title">Order constructor</div>
+    <div class="ln-sub">Сборка документа</div>
+  </div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-oc-5">
+    <div class="task rose" id="t-oc-5">
+      <div class="t-title">Готовый заказ</div>
+      <div class="t-desc">Шапка (поставщик GLN, точка GLN, дата, валюта) + позиции (SKU, qty, цена)</div>
+      <div class="t-branch">Если требуется одобрение — статус draft, иначе ready-to-send</div>
+    </div>
+  </div>
+</div>
+
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels-layer"></div>
+
+</div>
+</div>
+
+<div class="legend-row">
+  <div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток</span></div>
+  <div class="legend-item"><div class="legend-swatch dashed"></div><span>Калибровка от KPI / fallback</span></div>
+</div>
+
+<div class="timing">
+  <h3>Тайминг и расписание расчёта</h3>
+  <table>
+    <thead><tr><th>Событие</th><th>Триггер</th><th>SLA</th></tr></thead>
+    <tbody>
+      <tr><td>Полный пересчёт прогнозов</td><td>Cron 03:00 UTC</td><td class="tag">1×/сутки</td></tr>
+      <tr><td>Инкрементальный пересчёт SKU</td><td>Событие <code>rep.sku.changed</code></td><td class="tag">≤ 5 мин</td></tr>
+      <tr><td>Калькуляция заказа</td><td>По графику поставщика</td><td class="tag">за 4 ч до cutoff</td></tr>
+      <tr><td>Внеплановый расчёт</td><td>Падение OSA на точке</td><td class="tag">≤ 30 мин</td></tr>
+      <tr><td>Калибровка моделей</td><td>Cron 04:00 UTC</td><td class="tag">1×/сутки</td></tr>
+      <tr><td>Перебор бизнес-правил</td><td>По изменению</td><td class="tag">on-change</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  <b>Как читать.</b> Это «зум» в одну ячейку общей диаграммы (Replenishment × Фаза 2). Лейны — пять подмодулей: feature builder → forecaster → net requirement calc → rules engine → constructor. Каждый шаг по горизонтали — следующая стадия трансформации. Пунктир от KPI (внешний контур) приходит в forecaster и rules — это контур обучения и калибровки.
+  <div class="nav">
+    <a href="../diagram_0_overview.html">← Общая диаграмма</a>
+    <a href="index.html">К списку task-диаграмм</a>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+  const FLOWS = {
+    'features': {
+      title: 'Фичи → Forecaster',
+      meta: 'Feature builder → Demand forecaster',
+      sections: [
+        { name: 'Базовые фичи', items: [
+          'История продаж SKU × точка × день за 13–104 нед.',
+          'Лаги 1, 7, 14, 28, 364 дней',
+          'Скользящие средние и std',
+          'Дни недели, месяцы, госпраздники'
+        ]},
+        { name: 'Промо и цены', items: [
+          'Тип акции, % скидки, длительность',
+          'Маркдаун-флаг, остаток срока годности',
+          'Цена с НДС, промо-цена с НДС'
+        ]},
+        { name: 'Cold-start', items: [
+          'Кластер аналогов (категория × формат точки)',
+          'Среднее по кластеру, скорректированное на сезон',
+          'Длина истории = 0 → не закладывать в основной ансамбль'
+        ]}
+      ]
+    },
+    'forecast': {
+      title: 'Прогноз → Net req.',
+      meta: 'Forecaster → Net req. calc',
+      sections: [
+        { name: 'Что отдаётся', items: [
+          'forecast[sku, point, date] — точка и интервал (P10/P50/P90)',
+          'horizon = индивидуальный по SKU (из плана поставок)',
+          'Декомпозиция: baseline + промо-uplift + сезонность',
+          'MAPE / bias по последнему окну для трекинга'
+        ]},
+        { name: 'Ансамбль', items: [
+          'ARIMA / Prophet — базовая сезонность',
+          'GBM (LightGBM) — нелинейные фичи',
+          'Uplift-модель — промо',
+          'Веса ансамбля — из калибровки KPI'
+        ]}
+      ]
+    },
+    'net-need': {
+      title: 'Чистая потребность → Rules',
+      meta: 'Net req. calc → Rules engine',
+      sections: [
+        { name: 'Формула', items: [
+          'gross = Σ forecast[d] на горизонт пополнения',
+          'available = on_hand + in_transit − reserved',
+          'safety = z × σ_lead_time × √(lead_time)',
+          'net = gross − available + safety'
+        ]},
+        { name: 'Поля выхода', items: [
+          'sku, point, qty_net, urgency_score',
+          'breakdown причин (промо / страховой / дефицит)',
+          'flag_no_supplier — если нет активного поставщика'
+        ]}
+      ]
+    },
+    'rules-applied': {
+      title: 'Применение правил → Constructor',
+      meta: 'Rules engine → Order constructor',
+      sections: [
+        { name: 'Правила', items: [
+          'Точка заказа: net ≥ ROP → заказывать',
+          'MSP — минимальная партия поставки',
+          'Кратность упаковки (round up до коробки/паллеты)',
+          'Приоритет поставщика для SKU (если несколько)',
+          'Бизнес-окна: не заказывать в blackout-период'
+        ]},
+        { name: 'Лимиты на заказ', items: [
+          'Сумма ≤ supplier.max_amount',
+          'Паллеты ≤ truck.capacity',
+          'Вес ≤ truck.max_weight',
+          'Объём ≤ truck.max_volume',
+          'Конфликт → жадный отбор по urgency_score'
+        ]}
+      ]
+    },
+    'order-doc': {
+      title: 'Готовый заказ → Фаза 3',
+      meta: 'Order constructor → Блок подготовки заказа',
+      sections: [
+        { name: 'Шапка', items: [
+          'Номер, дата создания',
+          'Поставщик GLN, точка выгрузки GLN',
+          'Дата поставки (на основе lead time)',
+          'Валюта, статус ready-to-send или draft'
+        ]},
+        { name: 'Позиции', items: [
+          'SKU, EAN-13, название',
+          'Количество с учётом кратности',
+          'Закупочная цена с НДС',
+          'Сумма по позиции, сумма по документу'
+        ]}
+      ]
+    },
+    'kpi-feedback': {
+      title: 'KPI → калибровка',
+      meta: 'Внешний KPI-блок → Forecaster и Rules · обратная связь',
+      sections: [
+        { name: 'Сигналы', items: [
+          'OSA, OTIF, Stock days за прошедший цикл',
+          'MAPE / bias прошлого прогноза vs факт',
+          'Доля автоматических vs ручных заказов',
+          'Отклонения lead time, отказы поставщиков'
+        ]},
+        { name: 'Эффект', items: [
+          'Перевзвешивание ансамбля моделей',
+          'Корректировка ROP и MSP',
+          'Уточнение приоритетов поставщиков',
+          'Сигналы об «проблемных» SKU/точках в UI'
+        ]}
+      ]
+    }
+  };
+
+  const canvas = document.querySelector('.swimlane-canvas');
+  const svg = document.getElementById('arrows');
+  const labelsLayer = document.getElementById('labels-layer');
+  const tooltip = document.getElementById('tooltip');
+
+  function rectOf(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const p = canvas.getBoundingClientRect();
+    return { left: r.left - p.left, right: r.right - p.left, top: r.top - p.top, bottom: r.bottom - p.top, cx: r.left - p.left + r.width/2, cy: r.top - p.top + r.height/2, width: r.width, height: r.height };
+  }
+
+  function drawLine(x1, y1, x2, y2, opts = {}) {
+    const { dashed = false, via = null } = opts;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    let d = `M ${x1} ${y1}`;
+    if (Array.isArray(via)) for (const pt of via) d += ` L ${pt.x} ${pt.y}`;
+    else if (via) d += ` L ${via.x} ${via.y}`;
+    d += ` L ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#2C2C2A');
+    path.setAttribute('stroke-width', '1.4');
+    path.setAttribute('opacity', '0.55');
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+    svg.appendChild(path);
+  }
+
+  function drawLabel(x, y, flowKey) {
+    const flow = FLOWS[flowKey];
+    if (!flow) return;
+    const label = document.createElement('div');
+    label.className = 'arrow-label';
+    label.style.left = x + 'px';
+    label.style.top = y + 'px';
+    label.textContent = flow.title;
+    label.dataset.flowKey = flowKey;
+    label.addEventListener('mouseenter', showTooltip);
+    label.addEventListener('mousemove', moveTooltip);
+    label.addEventListener('mouseleave', hideTooltip);
+    labelsLayer.appendChild(label);
+  }
+
+  function showTooltip(e) {
+    const key = e.currentTarget.dataset.flowKey;
+    const flow = FLOWS[key];
+    if (!flow) return;
+    let html = `<div class="tt-title">${flow.title}</div>`;
+    if (flow.meta) html += `<div class="tt-meta">${flow.meta}</div>`;
+    flow.sections.forEach((sec, idx) => {
+      if (sec.name && flow.sections.length > 1) html += `<div class="tt-section" ${idx === 0 ? 'style="margin-top:0"' : ''}>${sec.name}</div>`;
+      html += '<ul>';
+      sec.items.forEach(item => { html += `<li>${item}</li>`; });
+      html += '</ul>';
+    });
+    tooltip.innerHTML = html;
+    tooltip.classList.add('visible');
+    moveTooltip(e);
+  }
+  function moveTooltip(e) {
+    const padding = 14;
+    const ttRect = tooltip.getBoundingClientRect();
+    let x = e.clientX + padding, y = e.clientY + padding;
+    if (x + ttRect.width > window.innerWidth - padding) x = e.clientX - ttRect.width - padding;
+    if (y + ttRect.height > window.innerHeight - padding) y = e.clientY - ttRect.height - padding;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+  function hideTooltip() { tooltip.classList.remove('visible'); }
+
+  function render() {
+    svg.innerHTML = '';
+    labelsLayer.innerHTML = '';
+    const pr = canvas.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${pr.width} ${pr.height}`);
+    svg.setAttribute('width', pr.width);
+    svg.setAttribute('height', pr.height);
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = `
+      <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      </marker>
+    `;
+    svg.appendChild(defs);
+
+    const fb = rectOf('t-fb-1');
+    const df = rectOf('t-df-2');
+    const nr = rectOf('t-nr-3');
+    const re = rectOf('t-re-4');
+    const oc = rectOf('t-oc-5');
+
+    // Лестничный поток: каждый следующий ниже и правее
+    drawLine(fb.right + 4, fb.cy, df.cx, df.top - 2, { via: { x: df.cx, y: fb.cy } });
+    drawLabel((fb.right + df.cx)/2, fb.cy - 14, 'features');
+
+    drawLine(df.right + 4, df.cy, nr.cx, nr.top - 2, { via: { x: nr.cx, y: df.cy } });
+    drawLabel((df.right + nr.cx)/2, df.cy - 14, 'forecast');
+
+    drawLine(nr.right + 4, nr.cy, re.cx, re.top - 2, { via: { x: re.cx, y: nr.cy } });
+    drawLabel((nr.right + re.cx)/2, nr.cy - 14, 'net-need');
+
+    drawLine(re.right + 4, re.cy, oc.cx, oc.top - 2, { via: { x: oc.cx, y: re.cy } });
+    drawLabel((re.right + oc.cx)/2, re.cy - 14, 'rules-applied');
+
+    // Output indicator (вниз от oc)
+    drawLine(oc.cx, oc.bottom + 4, oc.cx, oc.bottom + 16);
+    drawLabel(oc.cx, oc.bottom + 26, 'order-doc');
+
+    // KPI → forecaster и rules: пунктир сверху-слева, идёт через свободную зону
+    drawLine(oc.right - 10, oc.bottom + 4,
+             df.left - 4, df.cy,
+             { dashed: true, via: [
+               { x: oc.right + 30, y: oc.bottom + 30 },
+               { x: oc.right + 30, y: df.cy - 60 },
+               { x: df.left - 30, y: df.cy - 60 },
+               { x: df.left - 30, y: df.cy }
+             ] });
+    drawLabel(oc.right + 30, df.cy - 60, 'kpi-feedback');
+
+    drawLine(oc.right - 10, oc.bottom + 4,
+             re.left - 4, re.cy,
+             { dashed: true, via: [
+               { x: oc.right + 30, y: oc.bottom + 30 },
+               { x: oc.right + 30, y: re.cy + 40 },
+               { x: re.left - 30, y: re.cy + 40 },
+               { x: re.left - 30, y: re.cy }
+             ] });
+  }
+
+  function rerender() { requestAnimationFrame(render); }
+  function initialRender() {
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(rerender);
+    else setTimeout(rerender, 120);
+  }
+  if (document.readyState === 'complete') initialRender();
+  else window.addEventListener('load', initialRender);
+  window.addEventListener('resize', () => setTimeout(rerender, 50));
+  if (window.ResizeObserver) new ResizeObserver(rerender).observe(canvas);
+</script>
+
+</body>
+</html>

@@ -6,6 +6,12 @@
 > **Тип документа:** техническое задание на внедрение системы автоматического пополнения товарных запасов.
 > **Визуализация:** см. [`diagram_0_overview.html`](diagram_0_overview.html) (общая swimlane-диаграмма) и тематические диаграммы по фазам (`diagram_1_data_collection.html` — `diagram_4_feedback.html`).
 > **Ревью диаграммы против ТЗ:** [`diagram_review.md`](diagram_review.md).
+>
+> **Декомпозиция общей диаграммы — 4 параллельных варианта** (для сравнения наглядности):
+> - [`variant_1_by_lane/`](variant_1_by_lane/index.html) — по ролям (5 диаграмм)
+> - [`variant_2_by_phase/`](variant_2_by_phase/index.html) — по фазам (4 диаграммы)
+> - [`variant_3_by_task/`](variant_3_by_task/index.html) — по карточкам / task-zoom (8 диаграмм)
+> - [`variant_4_by_flow/`](variant_4_by_flow/index.html) — по потокам / arrow-zoom (7 диаграмм)
 
 ---
 

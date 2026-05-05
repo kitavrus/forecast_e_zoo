@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>Карточка «ETL и валидация» (X-Flow)</title>
+<link rel="stylesheet" href="_shared.css">
+</head><body>
+<div class="breadcrumb"><a href="../diagram_0_overview.html">← Общая диаграмма</a> · <a href="index.html">Вариант 3: по карточкам</a> · <span>«ETL и валидация» (X-Flow × Ф1)</span></div>
+<h1>Карточка «ETL и валидация»</h1>
+<p class="subtitle">Зум в карточку из общей диаграммы. Лейны — подмодули X-Flow. Колонки — стадии превращения канонического события в строку витрины.</p>
+<div class="hint">Наведите курсор — увидите schema-checks, форматы CDC и шину событий</div>
+<div class="swimlane-wrap"><div class="swimlane-canvas">
+<div class="swimlane">
+  <div class="phase-header corner">Подмодуль / Стадия</div>
+  <div class="phase-header"><div class="ph-num">Стадия 1</div><div class="ph-title">Приём</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 2</div><div class="ph-title">Валидация</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 3</div><div class="ph-title">CDC</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 4</div><div class="ph-title">Запись</div></div>
+  <div class="phase-header"><div class="ph-num">Стадия 5</div><div class="ph-title">Out</div></div>
+
+  <div class="lane-name blue"><div class="ln-title">Receiver</div><div class="ln-sub">Inbox X-Flow</div></div>
+  <div class="cell" id="c-1"><div class="task blue" id="t-1"><div class="t-title">Каноническое сообщение</div><div class="t-desc">Из адаптера источников; trace_id; source_meta</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name teal"><div class="ln-title">Validator</div><div class="ln-sub">Schema-check</div></div>
+  <div class="cell empty"></div>
+  <div class="cell" id="c-2"><div class="task teal" id="t-2"><div class="t-title">JSON Schema / Avro</div><div class="t-desc">Типы, обязательные поля, бизнес-инварианты (sum=qty×price)</div><div class="t-branch">Hard fail → DLQ; soft warn → quality_flag=warn</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name indigo"><div class="ln-title">CDC engine</div><div class="ln-sub">Diff & idempotency</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-3"><div class="task indigo" id="t-3"><div class="t-title">INSERT/UPDATE/DELETE</div><div class="t-desc">Сравнение с last-known state; формирование before/after</div><div class="t-branch">Конфликт по timestamp → last-write-wins</div></div></div>
+  <div class="cell empty"></div><div class="cell empty"></div>
+
+  <div class="lane-name amber"><div class="ln-title">Vitrine writer</div><div class="ln-sub">Materialized views</div></div>
+  <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+  <div class="cell" id="c-4"><div class="task amber" id="t-4"><div class="t-title">UPSERT в витрины</div><div class="t-desc">5 витрин Replenishment; SCD Type 2 для справочников</div></div></div>
+  <div class="cell empty"></div>
+
+  <div class="lane-name purple lane-row-last"><div class="ln-title">Bus publisher</div><div class="ln-sub">События для подписчиков</div></div>
+  <div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div><div class="cell empty lane-row-last"></div>
+  <div class="cell lane-row-last" id="c-5"><div class="task purple" id="t-5"><div class="t-title">События на шину</div><div class="t-desc">rep.sku.changed, rep.stock.changed, rep.receipt.captured</div></div></div>
+</div>
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg><div id="labels-layer"></div>
+</div></div>
+
+<div class="legend-row"><div class="legend-item"><div class="legend-swatch"></div><span>Прямой поток</span></div><div class="legend-item"><div class="legend-swatch dashed"></div><span>DLQ</span></div></div>
+<div class="timing"><h3>Тайминг ETL</h3>
+<table><thead><tr><th>Шаг</th><th>SLA</th></tr></thead><tbody>
+<tr><td>Receiver → Validator</td><td class="tag">≤ 100 мс</td></tr>
+<tr><td>Schema-check (JSON)</td><td class="tag">≤ 50 мс</td></tr>
+<tr><td>CDC diff</td><td class="tag">≤ 200 мс</td></tr>
+<tr><td>UPSERT в витрину</td><td class="tag">≤ 500 мс</td></tr>
+<tr><td>Сквозное от inbox до bus</td><td class="tag">≤ 2 сек</td></tr>
+<tr><td>DLQ retry</td><td class="tag">backoff 1, 4, 16 сек</td></tr>
+</tbody></table></div>
+<div class="footer"><b>Как читать.</b> ETL X-Flow — это пять подмодулей, превращающих канонические события в материализованные витрины + событийную шину для остальной системы.
+<div class="nav"><a href="../diagram_0_overview.html">← Общая</a> <a href="index.html">К списку task</a></div></div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+window.FLOWS = {
+  'in':{title:'Каноническое → Validator',sections:[{name:'Что',items:['Каноническое сообщение из адаптера','trace_id, source_meta','Тип: sku/location/movement/receipt/order']}]},
+  'validated':{title:'Валидное событие → CDC',sections:[{name:'Проверено',items:['JSON Schema / Avro','Обязательные поля','Бизнес-инварианты','FK на справочники']},{name:'DLQ',items:['Hard-fail → xflow.invalid','Soft-warn → quality_flag','Алерт оператору']}]},
+  'cdc':{title:'CDC-событие → writer',sections:[{name:'Поля',items:['op: INSERT/UPDATE/DELETE','entity, before, after','change_ts, source_lsn']},{name:'Идемпотентность',items:['Ключ (source, entity, business_key, ts)','Last-write-wins','Парковка при сильном конфликте']}]},
+  'written':{title:'Записано в витрины',sections:[{name:'Куда',items:['vitrine.sku','vitrine.locations','vitrine.movements','vitrine.planning','vitrine.commercial']}]},
+  'bus':{title:'События на шину',sections:[{name:'Топики',items:['rep.sku.changed → forecaster','rep.stock.changed → calc trigger','rep.receipt.captured → KPI','rep.promo.activated → uplift retraining']}]}
+};
+window.WIRING = function(){return [
+  { from:'t-1', to:'t-2', key:'in' },
+  { from:'t-2', to:'t-3', key:'validated' },
+  { from:'t-3', to:'t-4', key:'cdc' },
+  { from:'t-4', to:'t-5', key:'written' },
+  { from:'t-5', kind:'output', key:'bus' }
+];};
+</script><script src="_shared.js"></script>
+</body></html>
