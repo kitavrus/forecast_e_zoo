@@ -126,25 +126,12 @@
   .lane-name.indigo { background: var(--indigo-50); color: var(--indigo-800); }
   .lane-name.rose   { background: var(--rose-50);   color: var(--rose-800);   }
 
-  /* Маркер «PRD готов»: зелёная подсветка дорожки и задачи */
+  /* Маркеры статуса PRD: зелёный = готов, янтарный = в работе/TBD */
   .lane-name.done {
     background: #DCF7E3 !important;
     color: #14532D !important;
     box-shadow: inset 4px 0 0 #16A34A;
     position: relative;
-  }
-  .lane-name.done::after {
-    content: "✓ PRD";
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    background: #16A34A;
-    color: #FFFFFF;
-    padding: 2px 6px;
-    border-radius: 4px;
   }
   .task.done {
     background: #DCF7E3 !important;
@@ -152,10 +139,29 @@
     color: #14532D !important;
     box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
   }
-  .task.done .t-title::before {
-    content: "✓ ";
-    color: #16A34A;
-    font-weight: 700;
+  .prd-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .prd-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+  .prd-badge.done {
+    background: #16A34A;
+    color: #FFFFFF;
+  }
+  .prd-badge.todo {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px dashed #D97706;
   }
 
   .cell {
@@ -448,11 +454,19 @@
   <div class="lane-name indigo done">
     <div class="ln-title">Адаптер источников</div>
     <div class="ln-sub">Коннекторы и канонизация</div>
+    <div class="prd-badges">
+      <span class="prd-badge done">✓ PRD: выгрузка</span>
+      <span class="prd-badge todo">○ PRD: приём</span>
+    </div>
   </div>
   <div class="cell" id="c-adp-1">
     <div class="task indigo done" id="t-adp-1">
       <div class="t-title">Адаптер источников</div>
       <div class="t-desc">1С, ERP, WMS, OMS — единый формат</div>
+      <div class="prd-badges">
+        <span class="prd-badge done">✓ выгрузка</span>
+        <span class="prd-badge todo">○ приём</span>
+      </div>
     </div>
   </div>
   <div class="cell empty" id="c-adp-2"></div>
