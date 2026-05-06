@@ -126,6 +126,38 @@
   .lane-name.indigo { background: var(--indigo-50); color: var(--indigo-800); }
   .lane-name.rose   { background: var(--rose-50);   color: var(--rose-800);   }
 
+  /* Маркер «PRD готов»: зелёная подсветка дорожки и задачи */
+  .lane-name.done {
+    background: #DCF7E3 !important;
+    color: #14532D !important;
+    box-shadow: inset 4px 0 0 #16A34A;
+    position: relative;
+  }
+  .lane-name.done::after {
+    content: "✓ PRD";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    background: #16A34A;
+    color: #FFFFFF;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .task.done {
+    background: #DCF7E3 !important;
+    border-color: #16A34A !important;
+    color: #14532D !important;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+  }
+  .task.done .t-title::before {
+    content: "✓ ";
+    color: #16A34A;
+    font-weight: 700;
+  }
+
   .cell {
     padding: 18px 14px;
     border-right: 1px solid var(--line);
@@ -413,12 +445,12 @@
     </div>
   </div>
 
-  <div class="lane-name indigo">
+  <div class="lane-name indigo done">
     <div class="ln-title">Адаптер источников</div>
     <div class="ln-sub">Коннекторы и канонизация</div>
   </div>
   <div class="cell" id="c-adp-1">
-    <div class="task indigo" id="t-adp-1">
+    <div class="task indigo done" id="t-adp-1">
       <div class="t-title">Адаптер источников</div>
       <div class="t-desc">1С, ERP, WMS, OMS — единый формат</div>
     </div>
