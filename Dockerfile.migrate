@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.6
+# Migrations runner. Собирает все .up.sql / .down.sql из feature
+# директорий в /migrations с правильным префиксом, чтобы migrate
+# применял их последовательно: 0001-0002 (M1), 1001-1002 (M2),
+# 2001 (M4), 3001 (M5), 4001 (M6), 5001 (M7).
+FROM alpine:3.20 AS prep
+WORKDIR /tmp
+RUN mkdir -p /migrations
+
+COPY internal/features/data_export/sqls/migrations/      /tmp/data_export/
+COPY internal/features/etl_validation/sqls/migrations/   /tmp/etl_validation/
+COPY internal/features/kpi/sqls/migrations/              /tmp/kpi/
+COPY internal/features/forecast/sqls/migrations/         /tmp/forecast/
+COPY internal/features/orders/sqls/migrations/           /tmp/orders/
+COPY internal/features/channels/sqls/migrations/         /tmp/channels/
+
+# Все файлы уже имеют уникальные числовые префиксы
+# (0001/0002 M1, 1001/1002 M2, 2001 M4, 3001 M5, 4001 M6, 5001 M7).
+# Просто копируем плоско в /migrations.
+RUN cp -v /tmp/data_export/*.sql      /migrations/  2>/dev/null || true \
+ && cp -v /tmp/etl_validation/*.sql   /migrations/  2>/dev/null || true \
+ && cp -v /tmp/kpi/*.sql              /migrations/  2>/dev/null || true \
+ && cp -v /tmp/forecast/*.sql         /migrations/  2>/dev/null || true \
+ && cp -v /tmp/orders/*.sql           /migrations/  2>/dev/null || true \
+ && cp -v /tmp/channels/*.sql         /migrations/  2>/dev/null || true \
+ && ls -la /migrations
+
+FROM migrate/migrate:v4.18.1
+COPY --from=prep /migrations /migrations
+ENTRYPOINT ["migrate", "-path", "/migrations", "-verbose"]

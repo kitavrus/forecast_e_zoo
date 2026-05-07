@@ -1,95 +1,283 @@
 version: "3.9"
 
+# e_zoo — 7 микросервисов + Postgres 18 + миграции.
+# Запуск:
+#   cp .env.example .env
+#   docker compose up -d --build
+# Healthcheck endpoints: http://localhost:80{80..87}/healthz (8085 пропущен).
+
+x-app-env: &app-env
+  DB_DSN: "${DB_DSN:-postgres://e_zoo_app:ezoo_app_dev@postgres:5432/source_adapter?sslmode=disable&pool_max_conns=20}"
+  LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+  APP_ENV: "${APP_ENV:-dev}"
+  JWT_ALG: "${JWT_ALG:-HS256}"
+  JWT_SECRET: "${JWT_SECRET:-dev-secret-change-in-prod}"
+  JWT_ADMIN_ROLE: "${JWT_ADMIN_ROLE:-admin-cli}"
+  JWT_READ_ROLES: "${JWT_READ_ROLES:-x-flow-etl,it-read}"
+
+x-restart: &restart unless-stopped
+
 services:
   postgres:
     image: postgres:18-alpine
     container_name: ezoo_pg
+    restart: *restart
     environment:
-      POSTGRES_USER: adapter
-      POSTGRES_PASSWORD: adapter
-      POSTGRES_DB: source_adapter
+      POSTGRES_USER: "${POSTGRES_USER:-adapter}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-adapter}"
+      POSTGRES_DB: "${POSTGRES_DB:-source_adapter}"
       POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
-      # postgres:18-alpine отказывается инициализировать кластер прямо в /var/lib/postgresql/data
-      # (требует подкаталог). Кладём кластер в /var/lib/postgresql/data/pgdata.
       PGDATA: /var/lib/postgresql/data/pgdata
+      EZOO_APP_PASSWORD: "${EZOO_APP_PASSWORD:-ezoo_app_dev}"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./infra/pg/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./infra/pg/init:/docker-entrypoint-initdb.d:ro
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U adapter -d source_adapter"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-adapter} -d ${POSTGRES_DB:-source_adapter}"]
       interval: 5s
       timeout: 3s
       retries: 10
+    networks: [e_zoo]
 
   migrate:
-    image: migrate/migrate:v4.18.1
-    profiles: ["migrate"]
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    image: ezoo/migrate:dev
+    container_name: ezoo_migrate
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./internal/features/data_export/sqls/migrations:/migrations:ro
     command: [
-      "-path=/migrations",
-      "-database=postgres://adapter:adapter@postgres:5432/source_adapter?sslmode=disable",
+      "-database",
+      "postgres://${POSTGRES_USER:-adapter}:${POSTGRES_PASSWORD:-adapter}@postgres:5432/${POSTGRES_DB:-source_adapter}?sslmode=disable",
       "up"
     ]
+    restart: "no"
+    networks: [e_zoo]
 
   source-adapter:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BINARY_NAME: source-adapter
+    image: ezoo/source-adapter:dev
     container_name: ezoo_source_adapter
+    restart: *restart
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
-      DB_DSN: "postgres://adapter:adapter@postgres:5432/source_adapter?sslmode=disable&pool_max_conns=20"
+      <<: *app-env
       HTTP_ADDR: ":8080"
-      LOG_LEVEL: INFO
-      JWT_ALG: HS256
-      JWT_SECRET: "dev-secret-change-in-prod"
-      JWT_ADMIN_ROLE: "admin-cli"
-      JWT_READ_ROLES: "x-flow-etl,it-read"
-      SOURCE_ADAPTER_CRON_SCHEDULE: "0 2 * * *"
-      SOURCE_ADAPTER_TZ: "Europe/Kyiv"
+      SOURCE_ADAPTER_CRON_SCHEDULE: "${SOURCE_ADAPTER_CRON_SCHEDULE:-0 2 * * *}"
+      SOURCE_ADAPTER_TZ: "${SOURCE_ADAPTER_TZ:-Europe/Kyiv}"
       EXPORTS_BASE_DIR: "/var/exports"
-      APP_ENV: "dev"
     ports:
       - "8080:8080"
     volumes:
       - exports_data:/var/exports
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [e_zoo]
 
   etl:
     build:
       context: .
-      dockerfile: Dockerfile.etl
-    image: e_zoo/etl:dev
+      dockerfile: Dockerfile
+      args:
+        BINARY_NAME: etl
+    image: ezoo/etl:dev
     container_name: ezoo_etl
+    restart: *restart
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       source-adapter:
         condition: service_started
     environment:
-      ETL_DSN: "postgres://adapter:adapter@postgres:5432/source_adapter?sslmode=disable&pool_max_conns=20"
+      ETL_DSN: "${DB_DSN:-postgres://e_zoo_app:ezoo_app_dev@postgres:5432/source_adapter?sslmode=disable&pool_max_conns=20}"
       ETL_HTTP_PORT: "8081"
       ETL_SOURCE_ADAPTER_URL: "http://source-adapter:8080"
-      ETL_JWT_SIGNING_KEY: "dev-secret-change-in-prod"
+      ETL_JWT_SIGNING_KEY: "${JWT_SECRET:-dev-secret-change-in-prod}"
       ETL_JWT_ROLE: "x-flow-etl"
-      ETL_ADMIN_JWT_SECRET: "dev-secret-change-in-prod"
-      ETL_CRON_SCHEDULE: "30 2 * * *"
-      ETL_CRON_TIMEZONE: "Europe/Kyiv"
+      ETL_ADMIN_JWT_SECRET: "${JWT_SECRET:-dev-secret-change-in-prod}"
+      ETL_CRON_SCHEDULE: "${ETL_CRON_SCHEDULE:-30 2 * * *}"
+      ETL_CRON_TIMEZONE: "${ETL_CRON_TIMEZONE:-Europe/Kyiv}"
       ETL_RETRY_BACKOFF_CAP: "30s"
       ETL_VALIDATION_RULES_PATH: "/app/configs/etl_validation_rules.yaml"
       ETL_QUALITY_THRESHOLD: "0.01"
-      ETL_LOG_LEVEL: "info"
-      ETL_ENV: "dev"
+      ETL_LOG_LEVEL: "${LOG_LEVEL:-info}"
+      ETL_ENV: "${APP_ENV:-dev}"
     ports:
       - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [e_zoo]
+
+  data-marts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BINARY_NAME: data-marts
+    image: ezoo/data-marts:dev
+    container_name: ezoo_data_marts
+    restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      MARTS_HTTP_ADDR: ":8082"
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [e_zoo]
+
+  kpi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BINARY_NAME: kpi
+    image: ezoo/kpi:dev
+    container_name: ezoo_kpi
+    restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      KPI_HTTP_ADDR: ":8083"
+      KPI_CRON_SCHEDULE: "${KPI_CRON_SCHEDULE:-0 4 * * *}"
+      KPI_CRON_TZ: "${KPI_CRON_TZ:-Europe/Kyiv}"
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8083/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [e_zoo]
+
+  forecast:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BINARY_NAME: forecast
+    image: ezoo/forecast:dev
+    container_name: ezoo_forecast
+    restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      FORECAST_HTTP_ADDR: ":8084"
+      FORECAST_CRON_SCHEDULE: "${FORECAST_CRON_SCHEDULE:-0 5 * * *}"
+      FORECAST_CRON_TZ: "${FORECAST_CRON_TZ:-Europe/Kyiv}"
+      FORECAST_HORIZON_DAYS: "${FORECAST_HORIZON_DAYS:-60}"
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [e_zoo]
+
+  order-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BINARY_NAME: order-builder
+    image: ezoo/order-builder:dev
+    container_name: ezoo_order_builder
+    restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      ORDER_BUILDER_HTTP_ADDR: ":8086"
+      ORDER_BUILDER_CRON_SCHEDULE: "${ORDER_BUILDER_CRON_SCHEDULE:-0 6 * * *}"
+      ORDER_BUILDER_CRON_TZ: "${ORDER_BUILDER_CRON_TZ:-Europe/Kyiv}"
+      ORDER_BUILDER_MAX_PLANS: "${ORDER_BUILDER_MAX_PLANS:-500}"
+    ports:
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [e_zoo]
+
+  channel-router:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BINARY_NAME: channel-router
+    image: ezoo/channel-router:dev
+    container_name: ezoo_channel_router
+    restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      CHANNEL_ROUTING_HTTP_ADDR: ":8087"
+      CHANNEL_ROUTING_CRON_SCHEDULE: "${CHANNEL_ROUTING_CRON_SCHEDULE:-30 6 * * *}"
+      CHANNEL_ROUTING_CRON_TZ: "${CHANNEL_ROUTING_CRON_TZ:-Europe/Kyiv}"
+      CHANNEL_ROUTING_MAX_POS: "${CHANNEL_ROUTING_MAX_POS:-500}"
+      CHANNEL_ROUTING_HTTP_TIMEOUT_SEC: "30"
+    ports:
+      - "8087:8087"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8087/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [e_zoo]
 
   prometheus:
     image: prom/prometheus:latest
@@ -99,7 +287,12 @@ services:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
+    networks: [e_zoo]
 
 volumes:
   pg_data:
   exports_data:
+
+networks:
+  e_zoo:
+    driver: bridge
