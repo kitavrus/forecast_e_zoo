@@ -39,6 +39,12 @@ import (
 	dataMartsRepo "github.com/Kitavrus/e_zoo/internal/features/data_marts/repository"
 	dataMartsRouter "github.com/Kitavrus/e_zoo/internal/features/data_marts/router"
 	dataMartsService "github.com/Kitavrus/e_zoo/internal/features/data_marts/service"
+	forecastEngine "github.com/Kitavrus/e_zoo/internal/features/forecast/engine"
+	forecastHandler "github.com/Kitavrus/e_zoo/internal/features/forecast/handler"
+	forecastRepo "github.com/Kitavrus/e_zoo/internal/features/forecast/repository"
+	forecastRouter "github.com/Kitavrus/e_zoo/internal/features/forecast/router"
+	forecastScheduler "github.com/Kitavrus/e_zoo/internal/features/forecast/scheduler"
+	forecastService "github.com/Kitavrus/e_zoo/internal/features/forecast/service"
 	kpiEngine "github.com/Kitavrus/e_zoo/internal/features/kpi/engine"
 	kpiHandler "github.com/Kitavrus/e_zoo/internal/features/kpi/handler"
 	kpiRepo "github.com/Kitavrus/e_zoo/internal/features/kpi/repository"
@@ -54,12 +60,13 @@ const shutdownTimeout = 30 * time.Second
 
 // App — корневая структура.
 type App struct {
-	cfg          *config.Config
-	log          *slog.Logger
-	fiber        *fiber.App
-	pool         *pgxpool.Pool
-	scheduler    *scheduler.Scheduler
-	kpiScheduler *kpiScheduler.Scheduler
+	cfg               *config.Config
+	log               *slog.Logger
+	fiber             *fiber.App
+	pool              *pgxpool.Pool
+	scheduler         *scheduler.Scheduler
+	kpiScheduler      *kpiScheduler.Scheduler
+	forecastScheduler *forecastScheduler.Scheduler
 }
 
 // New собирает граф зависимостей.
@@ -205,15 +212,41 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		Handler:   kH,
 	}
 
-	routers.Register(f, deps, martsDeps, kpiDeps)
+	// forecast: Forecast engine + admin/read API (Module 5 forecast-engine).
+	fRepo := forecastRepo.New(pool)
+	fEng := forecastEngine.New(fRepo, nil, nil, nil, log,
+		forecastEngine.NewPrometheusMetrics())
+	fSch, fSchErr := forecastScheduler.New(forecastScheduler.Config{
+		CronExpr:    cfg.ForecastCronSchedule,
+		TZ:          cfg.ForecastCronTZ,
+		HorizonDays: cfg.ForecastHorizonDays,
+	}, fEng, pool, log)
+	if fSchErr != nil {
+		log.Warn("app: forecast scheduler init failed (continue without scheduler)",
+			"error", fSchErr)
+		fSch = nil
+	}
+	var fSvcTrigger forecastService.Trigger
+	if fSch != nil {
+		fSvcTrigger = fSch
+	}
+	fSvc := forecastService.New(fRepo, fSvcTrigger)
+	fH := forecastHandler.NewHandler(fSvc)
+	forecastDeps := forecastRouter.Deps{
+		JWTConfig: jwtCfg,
+		Handler:   fH,
+	}
+
+	routers.Register(f, deps, martsDeps, kpiDeps, forecastDeps)
 
 	return &App{
-		cfg:          cfg,
-		log:          log,
-		fiber:        f,
-		pool:         pool,
-		scheduler:    sch,
-		kpiScheduler: kSch,
+		cfg:               cfg,
+		log:               log,
+		fiber:             f,
+		pool:              pool,
+		scheduler:         sch,
+		kpiScheduler:      kSch,
+		forecastScheduler: fSch,
 	}, nil
 }
 
@@ -229,6 +262,11 @@ func (a *App) Run(ctx context.Context) error {
 	if a.kpiScheduler != nil {
 		if err := a.kpiScheduler.Start(ctx); err != nil {
 			a.log.Warn("app: kpi scheduler start failed", "error", err)
+		}
+	}
+	if a.forecastScheduler != nil {
+		if err := a.forecastScheduler.Start(ctx); err != nil {
+			a.log.Warn("app: forecast scheduler start failed", "error", err)
 		}
 	}
 
@@ -268,6 +306,11 @@ func (a *App) Shutdown() error {
 	if a.kpiScheduler != nil {
 		if err := a.kpiScheduler.Stop(); err != nil {
 			a.log.Warn("kpi scheduler stop error", "error", err)
+		}
+	}
+	if a.forecastScheduler != nil {
+		if err := a.forecastScheduler.Stop(); err != nil {
+			a.log.Warn("forecast scheduler stop error", "error", err)
 		}
 	}
 	if err := a.fiber.ShutdownWithContext(ctx); err != nil {

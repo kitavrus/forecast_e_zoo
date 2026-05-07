@@ -44,6 +44,11 @@ type Config struct {
 	KPICronSchedule string `envconfig:"KPI_CRON_SCHEDULE" default:"0 4 * * *"`
 	KPICronTZ       string `envconfig:"KPI_CRON_TZ" default:"Europe/Kyiv"`
 
+	// Forecast Engine (Module 5)
+	ForecastCronSchedule string `envconfig:"FORECAST_CRON_SCHEDULE" default:"0 5 * * *"`
+	ForecastCronTZ       string `envconfig:"FORECAST_CRON_TZ" default:"Europe/Kyiv"`
+	ForecastHorizonDays  int    `envconfig:"FORECAST_HORIZON_DAYS" default:"14"`
+
 	// Quality
 	QualityThresholdPct float64 `envconfig:"QUALITY_THRESHOLD_PCT" default:"1.0"`
 
