@@ -1,14 +1,4 @@
 // Package etlapp собирает компоненты сервиса etl (Модуль 2) воедино.
-//
-// DI порядок (заполняется последовательно фазами 06/10/13/14/15/16):
-//  1. slog logger (получаем извне)
-//  2. pgxpool.New
-//  3. Repository (фаза 06)
-//  4. Validation engine (фаза 09)
-//  5. Extractor / Transformer / Loader (фазы 10/11/12)
-//  6. EtlPipeline service (фаза 13)
-//  7. Scheduler (фаза 14)
-//  8. Handlers + Router (фаза 15)
 package etlapp
 
 import (
@@ -22,19 +12,32 @@ import (
 
 	etlconfig "github.com/Kitavrus/e_zoo/internal/etlapp/config"
 	etldeps "github.com/Kitavrus/e_zoo/internal/etlapp/deps"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/extractor"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/handler"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/loader"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/repository"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/router"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/scheduler"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/service"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/transformer"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/validation"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/validators"
 )
 
 const shutdownTimeout = 30 * time.Second
 
 // App — корневая структура etl-сервиса.
 type App struct {
-	cfg   *etlconfig.Config
-	log   *slog.Logger
-	deps  *etldeps.Deps
-	fiber *fiber.App
+	cfg       *etlconfig.Config
+	log       *slog.Logger
+	deps      *etldeps.Deps
+	fiber     *fiber.App
+	scheduler *scheduler.Scheduler
 }
 
 // New собирает граф зависимостей.
+//
+//nolint:funlen,cyclop // линейный wire DI; разбиение на helper-ы лишь усложнило бы.
 func New(ctx context.Context, cfg *etlconfig.Config, log *slog.Logger) (*App, error) {
 	if cfg == nil {
 		return nil, errors.New("etlapp: config is nil")
@@ -48,28 +51,102 @@ func New(ctx context.Context, cfg *etlconfig.Config, log *slog.Logger) (*App, er
 		return nil, fmt.Errorf("etlapp: build deps: %w", err)
 	}
 
-	// HTTP layer (фаза 15 добавит реальные роутеры).
+	repo := repository.New(deps.Pool)
+
+	// Validation engine.
+	engine, err := validation.Load(cfg.ValidationRulesPath)
+	if err != nil {
+		log.Warn("etlapp: validation rules unavailable, using empty engine",
+			"path", cfg.ValidationRulesPath, "err", err)
+		engine = validation.New(validation.DefaultRegistry(), nil)
+	}
+
+	// Extractor (HS256 token source if signing key set; иначе static empty token).
+	tokenSrc, tokErr := buildTokenSource(cfg)
+	if tokErr != nil {
+		return nil, tokErr
+	}
+	httpClient := deps.HTTPClient
+	extrClient, err := extractor.NewClient(httpClient, tokenSrc, extractor.ClientConfig{
+		BaseURL:     cfg.SourceAdapterURL,
+		HTTPTimeout: cfg.HTTPTimeout,
+		RetryMax:    cfg.HTTPRetryMax,
+		BackoffCap:  cfg.RetryBackoffCap,
+	}, log)
+	if err != nil {
+		return nil, fmt.Errorf("etlapp: extractor client: %w", err)
+	}
+	extr := service.ExtractorAdapter{
+		Snapshots: extractor.NewSnapshotsClient(extrClient),
+		Entities:  extractor.NewEntitiesClient(extrClient),
+	}
+
+	// Transformer registry + Loader + Pipeline.
+	registry := transformer.NewRegistry(repo)
+	ld := loader.New(deps.Pool, repo, log)
+
+	pipelineCfg := service.EtlPipelineConfig{
+		QualityThreshold: cfg.QualityThreshold,
+	}
+	pipeline := service.NewEtlPipeline(deps.Pool, repo, extr, engine, registry, ld, service.NoopMetrics{}, log, pipelineCfg)
+
+	runSvc := service.NewEtlRunService(repo, pipeline)
+	refreshSvc := service.NewMartRefreshService(deps.Pool, repo, registry, ld, extr)
+
+	v := validators.New()
+	h := handler.NewHandler(runSvc, refreshSvc, repo, v)
+
+	// HTTP layer.
 	fiberApp := fiber.New(fiber.Config{
 		AppName:      "etl",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	})
+	apiV1 := fiberApp.Group("/api/v1")
+	router.Register(apiV1, h, router.Middlewares{
+		Admin: router.AdminSecretMiddleware(cfg.AdminJWTSecret),
+	})
+
+	// Scheduler.
+	maint := scheduler.NewPartitionMaintainer(deps.Pool)
+	sch, err := scheduler.New(pipeline, maint, scheduler.NoopSkipMetrics{}, log, scheduler.Config{
+		CronExpr: cfg.CronSchedule,
+		Timezone: cfg.CronTimezone,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("etlapp: scheduler new: %w", err)
+	}
 
 	return &App{
-		cfg:   cfg,
-		log:   log,
-		deps:  deps,
-		fiber: fiberApp,
+		cfg:       cfg,
+		log:       log,
+		deps:      deps,
+		fiber:     fiberApp,
+		scheduler: sch,
 	}, nil
 }
 
-// Run запускает HTTP-сервер и блокируется до отмены ctx или фатальной ошибки.
-//
-// На текущей фазе 01 — заглушка: поднимает HTTP-сервер на cfg.HTTPPort
-// и ждёт сигнала остановки. Реальная логика scheduler/pipeline появится в фазах 13/14/15.
+func buildTokenSource(cfg *etlconfig.Config) (extractor.TokenSource, error) {
+	if cfg.JWTSigningKey == "" {
+		return extractor.StaticTokenSource{Value: ""}, nil
+	}
+	ts, err := extractor.NewHS256TokenSource(extractor.HS256Config{
+		SigningKey: []byte(cfg.JWTSigningKey),
+		Role:       cfg.JWTRole,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("etlapp: token source: %w", err)
+	}
+	return ts, nil
+}
+
+// Run запускает HTTP-сервер + scheduler и блокируется до отмены ctx.
 func (a *App) Run(ctx context.Context) error {
 	if a == nil {
 		return errors.New("etlapp: app is nil")
+	}
+	if err := a.scheduler.Start(ctx); err != nil {
+		return fmt.Errorf("etlapp: scheduler start: %w", err)
 	}
 	addr := fmt.Sprintf(":%d", a.cfg.HTTPPort)
 	a.log.Info("etl app started, waiting", "addr", addr)
@@ -95,6 +172,11 @@ func (a *App) shutdown() error {
 	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
+	if a.scheduler != nil {
+		if err := a.scheduler.Stop(shutCtx); err != nil {
+			a.log.Error("etl app: scheduler stop failed", "err", err)
+		}
+	}
 	if err := a.fiber.ShutdownWithContext(shutCtx); err != nil {
 		a.log.Error("etl app: fiber shutdown failed", "err", err)
 	}

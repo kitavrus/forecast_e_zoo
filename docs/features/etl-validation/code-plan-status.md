@@ -18,8 +18,8 @@
 | 11 | Transformer (5 mart builders)                 | `completed` | d981789 | done 2026-05-07T04:30:00Z; coverage 93.1%; ADR-024 resolver в SQL phase 07 |
 | 12 | Loader + atomic flip                          | `completed` | a309f8e | done 2026-05-07T04:50:00Z; coverage 94.1%; добавлен UpdateEtlRunStatusTx в repo |
 | 13 | EtlPipeline service (orchestration)           | `completed` | 3a397f7 | done 2026-05-07T05:10:00Z; EtlPipeline+TryStart+runAsync+markFailed+EtlRunService+MartRefreshService; unit-тесты сервисов отложены (heavy mocking, поверх trivial логики); интеграционный тест pipeline через mock source-adapter — TODO в Validation-стадии |
-| 14 | Scheduler (gocron + advisory lock)            | `completed` | TBD | done 2026-05-07T05:25:00Z; gocron + partition maintenance + skip-metrics; integration concurrency test отложен (нужен полный pipeline mock, в Validation-стадии) |
-| 15 | Admin handlers + Router + DI                  | `pending`  |        |         |
+| 14 | Scheduler (gocron + advisory lock)            | `completed` | 88a3440 | done 2026-05-07T05:25:00Z; gocron + partition maintenance + skip-metrics; integration concurrency test отложен (нужен полный pipeline mock, в Validation-стадии) |
+| 15 | Admin handlers + Router + DI                  | `completed` | TBD | done 2026-05-07T05:50:00Z; 7 endpoints (POST/RETRY/GET/LIST etl-runs, POST refresh, GET reject-log, GET healthz); Admin secret middleware; полная DI в etlapp/app.go (engine+extractor+pipeline+scheduler); handler integration tests + Audit middleware отложены (см. README phase-status, заведено в TODO для финальной Validation-стадии) |
 | 16 | Prometheus metrics + observability            | `pending`  |        |         |
 
 ---
