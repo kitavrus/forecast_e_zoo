@@ -124,9 +124,24 @@ func extractAllEntities(ctx context.Context, extr Extractor, snap extractor.Snap
 	}, nil
 }
 
+// factsHistoryDays — глубина истории, запрашиваемая из source-adapter для facts.
+//
+// 365 дней покрывают годовое окно для KPI / forecast (см. Module 5/6) и совпадают
+// с extended-партициями source-adapter (commit 9975874).
+const factsHistoryDays = 365
+
 // streamEntityRows скачивает NDJSON по одной entity, декодируя каждую строку в Row.
+//
+// Для facts-сущностей (extractor.IsFactEntity) подставляется диапазон
+// [today-365d, today] в формате YYYY-MM-DD — source-adapter требует обязательные
+// event_date_from / event_date_to.
 func streamEntityRows(ctx context.Context, extr Extractor, entity string, snap extractor.Snapshot) ([]validation.Row, error) {
-	rd, err := extr.StreamEntity(ctx, entity, snap.CurrentLoadID, "")
+	var from, to time.Time
+	if extractor.IsFactEntity(entity) {
+		to = time.Now().UTC()
+		from = to.AddDate(0, 0, -factsHistoryDays)
+	}
+	rd, err := extr.StreamEntity(ctx, entity, snap.CurrentLoadID, "", from, to)
 	if err != nil {
 		return nil, fmt.Errorf("stream: %w", err)
 	}

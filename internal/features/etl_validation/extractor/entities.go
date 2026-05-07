@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/Kitavrus/e_zoo/pkg/errorspkg"
 )
@@ -16,9 +17,39 @@ import (
 // NDJSONScannerBufSize — максимальный размер одной NDJSON-строки.
 const NDJSONScannerBufSize = 1 << 20 // 1 MiB
 
+// dateLayout — формат для query-параметров event_date_from / event_date_to.
+const dateLayout = "2006-01-02"
+
+// FactEntities — entities, для которых source-adapter требует обязательный
+// event_date_from / event_date_to (партиционированные таблицы).
+//
+// См. internal/features/data_export/handler/receipt_line.go — handler возвращает
+// 400 Bad Request, если не передать оба параметра.
+//
+//nolint:gochecknoglobals // справочный список, single-source-of-truth.
+var FactEntities = map[string]struct{}{
+	"receipt_line":            {},
+	"location_stock_snapshot": {},
+	"stock_movement":          {},
+	"supplier_stock_snapshot": {},
+	"stock_on_hand":           {},
+	"receiving_detail":        {},
+}
+
+// IsFactEntity возвращает true, если entity — fact (партиционированная таблица),
+// и для GET /v1/{entity} обязательны event_date_from / event_date_to.
+func IsFactEntity(entity string) bool {
+	_, ok := FactEntities[entity]
+	return ok
+}
+
 // EntitiesClient — публичный интерфейс для тестов EtlPipeline.
+//
+// from / to:
+//   - для master-сущностей — передавать time.Time{} (не выставляется since/date).
+//   - для facts — обязательны (event_date_from / event_date_to, формат YYYY-MM-DD).
 type EntitiesClient interface {
-	Stream(ctx context.Context, entity, snapshotID, etag string) (NDJSONReader, error)
+	Stream(ctx context.Context, entity, snapshotID, etag string, from, to time.Time) (NDJSONReader, error)
 }
 
 // NDJSONReader — итератор по строкам NDJSON.
@@ -40,22 +71,30 @@ func NewEntitiesClient(c *Client) EntitiesClient {
 	return &entitiesClient{c: c}
 }
 
-// Stream открывает поток GET /v1/entities/{entity}?snapshot_id=...
+// Stream открывает поток GET /v1/{entity}?snapshot_id=...
 // и возвращает NDJSONReader. Если etag совпал → 304 Not Modified, NDJSONReader
 // окажется пустым (Next сразу вернёт io.EOF) и ETag() вернёт переданный etag.
-func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag string) (NDJSONReader, error) {
+//
+// Для facts-сущностей (см. IsFactEntity) source-adapter требует обязательные
+// event_date_from / event_date_to (партиционирование). from/to добавляются в
+// query как YYYY-MM-DD, если оба не нулевые. Для master-сущностей — игнорируются.
+func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag string, from, to time.Time) (NDJSONReader, error) {
 	if entity == "" {
 		return nil, errors.New("extractor: entity is empty")
 	}
 	if snapshotID == "" {
 		return nil, errors.New("extractor: snapshotID is empty")
 	}
-	u, err := url.Parse(e.c.BaseURL() + "/v1/entities/" + url.PathEscape(entity))
+	u, err := url.Parse(e.c.BaseURL() + "/v1/" + url.PathEscape(entity))
 	if err != nil {
 		return nil, fmt.Errorf("extractor: parse url: %w", err)
 	}
 	q := u.Query()
 	q.Set("snapshot_id", snapshotID)
+	if !from.IsZero() && !to.IsZero() {
+		q.Set("event_date_from", from.UTC().Format(dateLayout))
+		q.Set("event_date_to", to.UTC().Format(dateLayout))
+	}
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -79,15 +118,21 @@ func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag st
 	case http.StatusNotModified:
 		drainAndClose(resp)
 		return newNDJSONReader(io.NopCloser(emptyReader{}), etag), nil
-	case http.StatusNotFound:
+	case http.StatusNotFound, http.StatusNotImplemented:
+		// Source-adapter MVP реализует только подмножество entities (см.
+		// internal/features/data_export/handler/not_implemented.go: 501 для
+		// 14 master/facts entities вне products + receipt_line). Fiber default
+		// 404 — для не-зарегистрированных маршрутов (например, /v1/stock_on_hand,
+		// который ещё не объявлен в router).
+		//
+		// Трактуем оба статуса как «entity ещё не экспортируется» → пустой stream.
+		// populateStaging уже толерантен к пустым/неизвестным entities (см. staging.go).
 		drainAndClose(resp)
-		return nil, errorspkg.ErrSourceUnavailable.Wrap(
-			fmt.Errorf("entity %q not found", entity),
-		)
+		return newNDJSONReader(io.NopCloser(emptyReader{}), ""), nil
 	default:
 		drainAndClose(resp)
 		return nil, errorspkg.ErrSourceUnavailable.Wrap(
-			fmt.Errorf("unexpected status %d on entities/%s", resp.StatusCode, entity),
+			fmt.Errorf("unexpected status %d on /v1/%s", resp.StatusCode, entity),
 		)
 	}
 }

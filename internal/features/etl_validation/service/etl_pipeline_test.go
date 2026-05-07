@@ -95,7 +95,7 @@ func (e fakeExtractor) GetCurrentSnapshot(_ context.Context) (extractor.Snapshot
 	}
 	return extractor.Snapshot{CurrentLoadID: e.loadID, CommittedAt: time.Now()}, nil
 }
-func (e fakeExtractor) StreamEntity(_ context.Context, _, _, _ string) (extractor.NDJSONReader, error) {
+func (e fakeExtractor) StreamEntity(_ context.Context, _, _, _ string, _, _ time.Time) (extractor.NDJSONReader, error) {
 	return fakeNDJSON{}, nil
 }
 

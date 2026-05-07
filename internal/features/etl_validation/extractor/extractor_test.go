@@ -177,7 +177,7 @@ func TestEntities_Stream_NDJSON(t *testing.T) {
 	defer srv.Close()
 	c := newTestClient(t, srv.URL)
 	ec := extractor.NewEntitiesClient(c)
-	rd, err := ec.Stream(context.Background(), "products", "L1", "")
+	rd, err := ec.Stream(context.Background(), "products", "L1", "", time.Time{}, time.Time{})
 	require.NoError(t, err)
 	defer rd.Close()
 	type prod struct {
@@ -208,7 +208,7 @@ func TestEntities_Stream_NotModified(t *testing.T) {
 	defer srv.Close()
 	c := newTestClient(t, srv.URL)
 	ec := extractor.NewEntitiesClient(c)
-	rd, err := ec.Stream(context.Background(), "products", "L1", `"old"`)
+	rd, err := ec.Stream(context.Background(), "products", "L1", `"old"`, time.Time{}, time.Time{})
 	require.NoError(t, err)
 	defer rd.Close()
 	var v map[string]any
@@ -220,9 +220,9 @@ func TestEntities_Stream_BadInputs(t *testing.T) {
 	t.Parallel()
 	c := newTestClient(t, "http://x")
 	ec := extractor.NewEntitiesClient(c)
-	_, err := ec.Stream(context.Background(), "", "L1", "")
+	_, err := ec.Stream(context.Background(), "", "L1", "", time.Time{}, time.Time{})
 	require.Error(t, err)
-	_, err = ec.Stream(context.Background(), "products", "", "")
+	_, err = ec.Stream(context.Background(), "products", "", "", time.Time{}, time.Time{})
 	require.Error(t, err)
 }
 
@@ -323,19 +323,75 @@ func TestClient_Do_BackoffCap(t *testing.T) {
 func TestEntities_Stream_PathEncoded(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Contains(t, r.URL.Path, "/v1/entities/order_rule")
-		_ = r // explicit
+		assert.Contains(t, r.URL.Path, "/v1/order_rule")
+		assert.NotContains(t, r.URL.Path, "/entities/")
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		_, _ = io.WriteString(w, "")
 	}))
 	defer srv.Close()
 	c := newTestClient(t, srv.URL)
 	ec := extractor.NewEntitiesClient(c)
-	rd, err := ec.Stream(context.Background(), "order_rule", "L1", "")
+	rd, err := ec.Stream(context.Background(), "order_rule", "L1", "", time.Time{}, time.Time{})
 	require.NoError(t, err)
 	defer rd.Close()
 	var v map[string]any
 	require.ErrorIs(t, rd.Next(&v), io.EOF)
+}
+
+// Verify facts entities получают event_date_from / event_date_to в query.
+func TestEntities_Stream_FactsDateRange(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Contains(t, r.URL.Path, "/v1/receipt_line")
+		assert.NotContains(t, r.URL.Path, "/entities/")
+		q := r.URL.Query()
+		assert.Equal(t, "L1", q.Get("snapshot_id"))
+		assert.Equal(t, "2024-05-01", q.Get("event_date_from"))
+		assert.Equal(t, "2025-05-01", q.Get("event_date_to"))
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, "")
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv.URL)
+	ec := extractor.NewEntitiesClient(c)
+	from := time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
+	rd, err := ec.Stream(context.Background(), "receipt_line", "L1", "", from, to)
+	require.NoError(t, err)
+	defer rd.Close()
+	var v map[string]any
+	require.ErrorIs(t, rd.Next(&v), io.EOF)
+
+	// Sanity: IsFactEntity покрывает receipt_line + 5 других fact-сущностей.
+	assert.True(t, extractor.IsFactEntity("receipt_line"))
+	assert.True(t, extractor.IsFactEntity("location_stock_snapshot"))
+	assert.True(t, extractor.IsFactEntity("stock_movement"))
+	assert.True(t, extractor.IsFactEntity("supplier_stock_snapshot"))
+	assert.True(t, extractor.IsFactEntity("stock_on_hand"))
+	assert.True(t, extractor.IsFactEntity("receiving_detail"))
+	assert.False(t, extractor.IsFactEntity("products"))
+	assert.False(t, extractor.IsFactEntity("location"))
+}
+
+// Verify entities 404/501 (entity not exposed by source-adapter) → пустой stream.
+// Source-adapter MVP не реализует все entities — extractor не должен падать
+// на этом, чтобы populateStaging мог корректно пропустить отсутствующие.
+func TestEntities_Stream_NotFoundAndNotImplemented_Tolerated(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusNotFound, http.StatusNotImplemented} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		}))
+		c := newTestClient(t, srv.URL)
+		ec := extractor.NewEntitiesClient(c)
+		rd, err := ec.Stream(context.Background(), "stock_on_hand", "L1", "", time.Time{}, time.Time{})
+		require.NoError(t, err, "status=%d", status)
+		require.NotNil(t, rd)
+		var v map[string]any
+		require.ErrorIs(t, rd.Next(&v), io.EOF, "status=%d", status)
+		_ = rd.Close()
+		srv.Close()
+	}
 }
 
 // Verify resp for unknown status from entities returns ErrSourceUnavailable.
@@ -347,7 +403,7 @@ func TestEntities_Stream_UnexpectedStatus(t *testing.T) {
 	defer srv.Close()
 	c := newTestClient(t, srv.URL)
 	ec := extractor.NewEntitiesClient(c)
-	_, err := ec.Stream(context.Background(), "products", "L1", "")
+	_, err := ec.Stream(context.Background(), "products", "L1", "", time.Time{}, time.Time{})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, errorspkg.ErrSourceUnavailable), "got %v", err)
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/extractor"
 )
@@ -18,6 +19,6 @@ func (a ExtractorAdapter) GetCurrentSnapshot(ctx context.Context) (extractor.Sna
 }
 
 // StreamEntity делегирует EntitiesClient.
-func (a ExtractorAdapter) StreamEntity(ctx context.Context, entity, snapshotID, etag string) (extractor.NDJSONReader, error) {
-	return a.Entities.Stream(ctx, entity, snapshotID, etag) //nolint:wrapcheck // already wrapped
+func (a ExtractorAdapter) StreamEntity(ctx context.Context, entity, snapshotID, etag string, from, to time.Time) (extractor.NDJSONReader, error) {
+	return a.Entities.Stream(ctx, entity, snapshotID, etag, from, to) //nolint:wrapcheck // already wrapped
 }

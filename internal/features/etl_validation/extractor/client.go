@@ -114,7 +114,10 @@ func (c *Client) Do(ctx context.Context, req *http.Request) (*http.Response, err
 			}
 			continue
 		}
-		if resp.StatusCode >= http.StatusInternalServerError ||
+		// 5xx и 429 — retry, КРОМЕ 501 NotImplemented (детерминированный сигнал
+		// «entity ещё не экспортируется source-adapter»; повтор не поможет).
+		// Caller (entitiesClient.Stream) трактует 501 как пустой stream.
+		if (resp.StatusCode >= http.StatusInternalServerError && resp.StatusCode != http.StatusNotImplemented) ||
 			resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("status=%d", resp.StatusCode)
 			drainAndClose(resp)

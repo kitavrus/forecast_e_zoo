@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -37,9 +38,12 @@ type Pool interface {
 }
 
 // Extractor — узкий интерфейс для тестов.
+//
+// from / to — диапазон event_date_* для facts-сущностей; для master передавать
+// time.Time{} (zero values). См. extractor.IsFactEntity.
 type Extractor interface {
 	GetCurrentSnapshot(ctx context.Context) (extractor.Snapshot, error)
-	StreamEntity(ctx context.Context, entity, snapshotID, etag string) (extractor.NDJSONReader, error)
+	StreamEntity(ctx context.Context, entity, snapshotID, etag string, from, to time.Time) (extractor.NDJSONReader, error)
 }
 
 // ValidationEngine — узкий интерфейс к validation.Engine.
