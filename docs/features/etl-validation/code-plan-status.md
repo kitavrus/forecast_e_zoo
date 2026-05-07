@@ -9,7 +9,7 @@
 | 02 | Sentinel errors EV-*                          | `completed` |       | done 2026-05-07T01:15:00Z |
 | 03 | Migrations 1001 — schema marts + 5 mart-таблиц | `completed`  |    | done 2026-05-07T01:30:00Z; integration validation deferred to Phase 06 |
 | 04 | Migrations 1002 — etl_runs + reject_log + audit_access | `completed` |   | done 2026-05-07T01:40:00Z |
-| 05 | Models / DTO                                  | `pending`  |        |         |
+| 05 | Models / DTO                                  | `completed` |       | done 2026-05-07T01:55:00Z |
 | 06 | Repository (pgx + go:embed) + integration test | `pending` |        |         |
 | 07 | SQL queries (go:embed)                        | `pending`  |        |         |
 | 08 | Validators (формат запросов)                  | `pending`  |        |         |
