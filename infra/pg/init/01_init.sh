@@ -51,6 +51,18 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES    TO mart_reader;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO mart_reader;
+
+    -- Default privileges для будущих объектов, которые сервис-владелец
+    -- (роль ${POSTGRES_USER}) создаёт в произвольных схемах.
+    -- Применяется к схемам marts/kpi/forecast/orders/channels, которые
+    -- создаются миграциями golang-migrate уже после init-скрипта.
+    -- USAGE на сами схемы выдаётся в каждой миграции CREATE SCHEMA.
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} GRANT
+        SELECT, INSERT, UPDATE, DELETE ON TABLES    TO e_zoo_app;
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} GRANT
+        USAGE, SELECT, UPDATE          ON SEQUENCES TO e_zoo_app;
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} GRANT
+        EXECUTE                        ON FUNCTIONS TO e_zoo_app;
 EOSQL
 
 echo "✓ infra/pg/init/01_init.sh: e_zoo_app + mart_reader created"

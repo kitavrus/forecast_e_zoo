@@ -139,9 +139,13 @@ func buildTokenSource(cfg *etlconfig.Config) (extractor.TokenSource, error) {
 	if cfg.JWTSigningKey == "" {
 		return extractor.StaticTokenSource{Value: ""}, nil
 	}
+	// Issuer = role: source-adapter middleware/role.go проверяет именно
+	// claims.Issuer (iss) против JWT_READ_ROLES; если оставить дефолт "etl",
+	// получим 403 на /v1/snapshots/current.
 	ts, err := extractor.NewHS256TokenSource(extractor.HS256Config{
 		SigningKey: []byte(cfg.JWTSigningKey),
 		Role:       cfg.JWTRole,
+		Issuer:     cfg.JWTRole,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("etlapp: token source: %w", err)

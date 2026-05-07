@@ -3,6 +3,10 @@
 
 CREATE SCHEMA IF NOT EXISTS kpi;
 
+-- Service role e_zoo_app: USAGE на схему. DML default privileges объявлены
+-- в infra/pg/init/01_init.sh для роли-владельца.
+GRANT USAGE ON SCHEMA kpi TO e_zoo_app;
+
 -- 1) kpi_calibrations — иерархия (kpi_name, scope_type, scope_id) → JSON params.
 --    scope_id NULL для scope_type='global'.
 CREATE TABLE IF NOT EXISTS kpi.kpi_calibrations (

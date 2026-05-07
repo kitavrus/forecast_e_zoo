@@ -3,6 +3,10 @@
 
 CREATE SCHEMA IF NOT EXISTS channels;
 
+-- Service role e_zoo_app: USAGE на схему. DML default privileges объявлены
+-- в infra/pg/init/01_init.sh для роли-владельца.
+GRANT USAGE ON SCHEMA channels TO e_zoo_app;
+
 -- 1) supplier_channel_config — per-supplier channel configuration.
 CREATE TABLE IF NOT EXISTS channels.supplier_channel_config (
     supplier_id           TEXT PRIMARY KEY,

@@ -2,6 +2,7 @@ package errorspkg
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gofiber/fiber/v3"
@@ -33,6 +34,14 @@ func WriteJSON(c fiber.Ctx, err error) error {
 	var de *Error
 	if !errors.As(err, &de) {
 		de = ErrInternal.Wrap(err)
+		// Catch-all: незарегистрированная ошибка маскируется под 500 internal,
+		// но обязана попасть в slog с полным err — иначе runbook по
+		// supportMessage=SA-INT-001 не имеет точки входа в логи.
+		slog.ErrorContext(c.Context(), "errorspkg: unmapped error → 500 internal",
+			"err", err.Error(),
+			"path", c.Path(),
+			"method", c.Method(),
+		)
 	}
 
 	traceID := ""

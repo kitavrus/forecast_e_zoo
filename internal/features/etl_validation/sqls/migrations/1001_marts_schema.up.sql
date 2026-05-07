@@ -11,6 +11,10 @@ END$$;
 GRANT USAGE ON SCHEMA marts TO mart_reader;
 ALTER DEFAULT PRIVILEGES IN SCHEMA marts GRANT SELECT ON TABLES TO mart_reader;
 
+-- Service role e_zoo_app: USAGE на схему + DML на существующие/будущие таблицы.
+-- (DML default privileges объявлены в infra/pg/init/01_init.sh для роли-владельца.)
+GRANT USAGE ON SCHEMA marts TO e_zoo_app;
+
 -- 3) mart_demand_history (partitioned by as_of_date, monthly)
 CREATE TABLE IF NOT EXISTS marts.mart_demand_history (
     as_of_date              DATE        NOT NULL,

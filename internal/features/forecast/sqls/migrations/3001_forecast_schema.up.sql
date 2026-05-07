@@ -3,6 +3,10 @@
 
 CREATE SCHEMA IF NOT EXISTS forecast;
 
+-- Service role e_zoo_app: USAGE на схему. DML default privileges объявлены
+-- в infra/pg/init/01_init.sh для роли-владельца.
+GRANT USAGE ON SCHEMA forecast TO e_zoo_app;
+
 -- 1) forecast_runs — registry прогон engine.
 CREATE TABLE IF NOT EXISTS forecast.forecast_runs (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),

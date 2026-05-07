@@ -3,6 +3,10 @@
 
 CREATE SCHEMA IF NOT EXISTS orders;
 
+-- Service role e_zoo_app: USAGE на схему. DML default privileges объявлены
+-- в infra/pg/init/01_init.sh для роли-владельца.
+GRANT USAGE ON SCHEMA orders TO e_zoo_app;
+
 -- Sequence for PO numbering: PO-YYYYMMDD-NNNNNN.
 CREATE SEQUENCE IF NOT EXISTS orders.po_number_seq AS BIGINT START 1;
 
