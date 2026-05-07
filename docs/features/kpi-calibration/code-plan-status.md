@@ -2,11 +2,11 @@
 
 | Phase | Status |
 |---|---|
-| 1 — Migration 2001 | pending |
-| 2 — Errors + DTO + models | pending |
-| 3 — SQL queries + Repository | pending |
-| 4 — Calibration resolver | pending |
-| 5 — Calculators | pending |
-| 6 — Engine + Scheduler | pending |
-| 7 — Service + Handlers + Router + DI | pending |
-| 8 — Prometheus + validation | pending |
+| 1 — Migration 2001 | completed |
+| 2 — Errors + DTO + models | completed |
+| 3 — SQL queries + Repository | completed |
+| 4 — Calibration resolver | completed |
+| 5 — Calculators | completed |
+| 6 — Engine + Scheduler | completed |
+| 7 — Service + Handlers + Router + DI | completed |
+| 8 — Prometheus + validation | completed |
