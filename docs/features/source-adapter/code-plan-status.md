@@ -16,7 +16,7 @@
 | 03 | Migrations master | [code-plan-phase-03-migrations-master.md](code-plan-phase-03-migrations-master.md) | done | 2026-05-07T01:50:00Z | 17 таблиц; integration-тесты на dockertest зелёные |
 | 04 | Migrations facts (partitioned) | [code-plan-phase-04-migrations-facts-partitioned.md](code-plan-phase-04-migrations-facts-partitioned.md) | done | 2026-05-07T02:05:00Z | 4 partitioned facts по event_date с initial 4 месячных партиций; integration зелёные |
 | 05 | Models / DTO | [code-plan-phase-05-models-dto.md](code-plan-phase-05-models-dto.md) | done | 2026-05-07T02:30:00Z | build/test/lint зелёные; cursor + dto валидаторы покрыты тестами |
-| 06 | SQL queries (go:embed) | [code-plan-phase-06-sql-queries.md](code-plan-phase-06-sql-queries.md) | pending | 2026-05-07 | — |
+| 06 | SQL queries (go:embed) | [code-plan-phase-06-sql-queries.md](code-plan-phase-06-sql-queries.md) | done | 2026-05-07T02:50:00Z | 32 SQL-файла + embed.go; build/test/lint зелёные; SQL подогнаны под фактические migrations 0001/0002 |
 | 07 | Validators + Engine + YAML | [code-plan-phase-07-validators-engine-yaml.md](code-plan-phase-07-validators-engine-yaml.md) | pending | 2026-05-07 | — |
 | 08 | Repository + integration tests | [code-plan-phase-08-repository.md](code-plan-phase-08-repository.md) | pending | 2026-05-07 | — |
 | 09 | SourceReader interface + stub | [code-plan-phase-09-source-reader-stub.md](code-plan-phase-09-source-reader-stub.md) | pending | 2026-05-07 | — |
@@ -33,9 +33,9 @@
 ## Сводка
 
 - Всего фаз: **16**
-- pending: **11**
+- pending: **10**
 - in_progress: **0**
-- done: **5**
+- done: **6**
 - blocked: **0**
 - skipped: **0**
 
