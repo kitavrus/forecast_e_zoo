@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>source-adapter — swimlane (роль × фаза)</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --ink: #2C2C2A;
+    --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15);
+    --lane-bg: rgba(255,255,255,0.5);
+    --gray-50:#F1EFE8;   --gray-600:#5F5E5A;   --gray-800:#444441;
+    --blue-50:#E6F1FB;   --blue-600:#185FA5;   --blue-800:#0C447C;
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+    --teal-50:#E1F5EE;   --teal-600:#0F6E56;   --teal-800:#085041;
+    --amber-50:#FAEEDA;  --amber-600:#854F0B;  --amber-800:#633806;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 40px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 24px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 20px; max-width: 900px; }
+  .hint {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; background: var(--purple-50);
+    border: 1px solid var(--purple-600); color: var(--purple-800);
+    border-radius: 20px; font-size: 12.5px; margin-bottom: 24px; font-weight: 500;
+  }
+  .hint::before { content: "ⓘ"; font-size: 14px; }
+
+  .swimlane-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .swimlane-canvas { min-width: 1200px; position: relative; }
+  .swimlane {
+    display: grid;
+    grid-template-columns: 180px repeat(5, 1fr);
+    gap: 0;
+    border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden; background: var(--lane-bg);
+  }
+
+  .phase-header {
+    background: rgba(255,255,255,0.7); padding: 14px 18px;
+    border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .phase-header:last-of-type { border-right: none; }
+  .phase-header.corner {
+    background: rgba(0,0,0,0.025); font-size: 11px;
+    letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase;
+    display: flex; align-items: center; font-weight: 500;
+  }
+  .phase-header .ph-num {
+    font-size: 10.5px; color: var(--muted); letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 2px; font-weight: 500;
+  }
+  .phase-header .ph-title { font-size: 14px; font-weight: 500; color: var(--ink); }
+
+  .lane-name {
+    padding: 18px 16px;
+    border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    display: flex; flex-direction: column; justify-content: center; font-size: 13px;
+  }
+  .lane-row-last .lane-name { border-bottom: none; }
+  .lane-name .ln-title { font-weight: 500; margin-bottom: 3px; font-size: 14px; }
+  .lane-name .ln-sub { font-size: 12px; opacity: 0.75; }
+  .lane-name.gray   { background: var(--gray-50);   color: var(--gray-800);   }
+  .lane-name.blue   { background: var(--blue-50);   color: var(--blue-800);   }
+  .lane-name.purple { background: var(--purple-50); color: var(--purple-800); }
+  .lane-name.teal   { background: var(--teal-50);   color: var(--teal-800);   }
+  .lane-name.amber  { background: var(--amber-50);  color: var(--amber-800);  }
+
+  .cell {
+    padding: 18px 14px;
+    border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    min-height: 150px; display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .cell:last-of-type { border-right: none; }
+  .cell.empty { background: rgba(0,0,0,0.015); }
+  .lane-row-last .cell { border-bottom: none; }
+
+  .task {
+    border-radius: 7px; border: 1px solid; padding: 10px 12px;
+    font-size: 12.5px; line-height: 1.45;
+    width: 100%; max-width: 240px; text-align: left;
+    position: relative; z-index: 2;
+  }
+  .task .t-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .task .t-desc { font-size: 11.5px; opacity: 0.85; line-height: 1.45; }
+  .task.gray   { background: var(--gray-50);   border-color: var(--gray-600);   color: var(--gray-800);   }
+  .task.blue   { background: var(--blue-50);   border-color: var(--blue-600);   color: var(--blue-800);   }
+  .task.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .task.teal   { background: var(--teal-50);   border-color: var(--teal-600);   color: var(--teal-800);   }
+  .task.amber  { background: var(--amber-50);  border-color: var(--amber-600);  color: var(--amber-800);  }
+
+  .arrows-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+
+  .arrow-label {
+    position: absolute; z-index: 4; transform: translate(-50%, -50%);
+    padding: 4px 10px; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 12px; font-size: 10.5px; color: var(--muted);
+    white-space: nowrap; cursor: help; transition: all 0.15s ease;
+    pointer-events: auto; display: flex; align-items: center; gap: 5px;
+  }
+  .arrow-label::after {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--purple-600); opacity: 0.5; transition: opacity 0.15s ease;
+  }
+  .arrow-label:hover {
+    background: white; color: var(--ink); border-color: var(--purple-600);
+    box-shadow: 0 4px 12px rgba(83,74,183,0.15);
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  .arrow-label:hover::after { opacity: 1; }
+
+  .tooltip {
+    position: fixed; z-index: 100; background: white;
+    border: 1px solid var(--purple-600); border-radius: 10px;
+    padding: 14px 16px; min-width: 260px; max-width: 360px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+    opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
+    font-size: 12px; line-height: 1.5;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .tt-title { font-size: 13px; font-weight: 500; color: var(--purple-800); margin-bottom: 4px; }
+  .tooltip .tt-meta {
+    font-size: 10.5px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 8px; padding-bottom: 8px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .tooltip ul { list-style: none; padding: 0; }
+  .tooltip ul li { padding: 3px 0 3px 14px; position: relative; font-size: 12px; color: var(--ink); }
+  .tooltip ul li::before {
+    content: ""; position: absolute; left: 2px; top: 11px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--purple-600); opacity: 0.5;
+  }
+  .tooltip .tt-section {
+    font-size: 10.5px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-top: 10px; margin-bottom: 4px; font-weight: 500;
+  }
+
+  .goals {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin-bottom: 24px;
+  }
+  .goal {
+    padding: 12px 14px; border-radius: 7px;
+    background: rgba(255,255,255,0.5); border: 1px solid var(--line);
+    border-left: 3px solid var(--purple-600);
+  }
+  .goal .g-name {
+    font-size: 10.5px; letter-spacing: 0.08em; color: var(--purple-800);
+    font-weight: 500; margin-bottom: 3px; text-transform: uppercase;
+  }
+  .goal .g-desc { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+  .legend-row {
+    display: flex; gap: 24px; align-items: center;
+    margin: 20px 0 8px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch { width: 36px; height: 2px; background: var(--ink); opacity: 0.55; position: relative; }
+  .legend-swatch.dashed {
+    background: repeating-linear-gradient(to right, var(--ink) 0 4px, transparent 4px 8px);
+  }
+  .legend-swatch::after {
+    content: ""; position: absolute; right: -4px; top: 50%; transform: translateY(-50%);
+    border-left: 7px solid var(--ink); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  }
+
+  .footer {
+    margin-top: 24px; padding: 16px 20px;
+    background: var(--lane-bg); border: 1px solid var(--line); border-radius: 10px;
+    font-size: 13px; color: var(--muted); line-height: 1.7;
+  }
+  .footer b { color: var(--ink); font-weight: 500; }
+  .section-title {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; margin-bottom: 12px; padding-left: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h1>source-adapter — swimlane (роль × фаза)</h1>
+<p class="subtitle">Гибрид двух поверхностей: фоновый cron-load (Scheduler → ERP → snapshot flip) и синхронный HTTP API (Client → Handler → Service → Repository → PG). Фазы общие, роли совмещены так, чтобы оба flow читались на одной канве.</p>
+
+<div class="hint">Наведите курсор на подпись стрелки — увидите, какие именно поля передаются</div>
+
+<div class="section-title">Бизнес-цели (SLA)</div>
+<div class="goals">
+  <div class="goal"><div class="g-name">Freshness</div><div class="g-desc">loads.committed_at &lt; 06:00 Europe/Kyiv в 99% дней</div></div>
+  <div class="goal"><div class="g-name">Completeness</div><div class="g-desc">lines_failed / lines_total &lt; 0.5%; жёсткий fail load &gt; 1%</div></div>
+  <div class="goal"><div class="g-name">Mart availability</div><div class="g-desc">mart_* обновлены к 07:00 в ≥95% дней (входной SLA)</div></div>
+</div>
+
+<div class="swimlane-wrap">
+<div class="swimlane-canvas">
+
+<div class="swimlane">
+
+  <!-- ===== Шапка ===== -->
+  <div class="phase-header corner">Роль / Фаза</div>
+  <div class="phase-header"><div class="ph-num">Фаза 1</div><div class="ph-title">Trigger</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 2</div><div class="ph-title">Validation</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 3</div><div class="ph-title">Business logic</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 4</div><div class="ph-title">Persistence</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 5</div><div class="ph-title">Response</div></div>
+
+  <!-- ===== Lane 1: Client / Scheduler (gray) ===== -->
+  <div class="lane-name gray">
+    <div class="ln-title">Client / Scheduler</div>
+    <div class="ln-sub">X-Flow ETL · IT-CLI · gocron tick</div>
+  </div>
+  <div class="cell" id="c-client-1">
+    <div class="task gray">
+      <div class="t-title">Инициирует flow</div>
+      <div class="t-desc">gocron 02:00 Kyiv → daily-load; либо HTTP: GET /v1/{entity}, POST /admin/loads, POST /v1/exports.</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-client-2"></div>
+  <div class="cell empty" id="c-client-3"></div>
+  <div class="cell empty" id="c-client-4"></div>
+  <div class="cell" id="c-client-5">
+    <div class="task gray">
+      <div class="t-title">Получает ответ</div>
+      <div class="t-desc">200 NDJSON / 202 {load_id} / 401/403/409/503; X-Snapshot-Id, ETag, Retry-After.</div>
+    </div>
+  </div>
+
+  <!-- ===== Lane 2: Handler (Fiber v3) (blue) ===== -->
+  <div class="lane-name blue">
+    <div class="ln-title">Handler</div>
+    <div class="ln-sub">Fiber v3 · middleware</div>
+  </div>
+  <div class="cell empty" id="c-handler-1"></div>
+  <div class="cell" id="c-handler-2">
+    <div class="task blue">
+      <div class="t-title">JWT + Role + Audit</div>
+      <div class="t-desc">middleware/jwt.go, role.go, audit.go: HS256/RS256, claims в Locals, INSERT audit_access (admin only).</div>
+    </div>
+  </div>
+  <div class="cell" id="c-handler-3">
+    <div class="task blue">
+      <div class="t-title">Парсит запрос</div>
+      <div class="t-desc">handler/products.go, admin_loads.go, exports.go — DTO, query (since, cursor, limit), вызов service.</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-handler-4"></div>
+  <div class="cell" id="c-handler-5">
+    <div class="task blue">
+      <div class="t-title">Формирует ответ</div>
+      <div class="t-desc">SetBodyStreamWriter (NDJSON), MapServiceError → ErrorResponseJSON, заголовки X-Snapshot-Id / ETag.</div>
+    </div>
+  </div>
+
+  <!-- ===== Lane 3: Service / Loader (purple) ===== -->
+  <div class="lane-name purple">
+    <div class="ln-title">Service / Loader</div>
+    <div class="ln-sub">бизнес-логика · snapshot flip</div>
+  </div>
+  <div class="cell" id="c-service-1">
+    <div class="task purple">
+      <div class="t-title">Loader.Run / StartLoad</div>
+      <div class="t-desc">pg_try_advisory_lock('source-adapter:daily-load'); skip silently или INSERT loads(status='running').</div>
+    </div>
+  </div>
+  <div class="cell" id="c-service-2">
+    <div class="task purple">
+      <div class="t-title">Validator.Validate</div>
+      <div class="t-desc">severity engine из validation_rules.yaml: critical → reject_log, soft → metric, ok → upsert.</div>
+    </div>
+  </div>
+  <div class="cell" id="c-service-3">
+    <div class="task purple">
+      <div class="t-title">Read+Map+Diff</div>
+      <div class="t-desc">SourceReader.Read{Entity} cursor → mappers/erp_to_domain → diff-detector → master_change_log.</div>
+    </div>
+  </div>
+  <div class="cell" id="c-service-4">
+    <div class="task purple">
+      <div class="t-title">SnapshotService.Flip</div>
+      <div class="t-desc">Quality-gate (lines_failed/total &gt; 1% ⇒ fail); BEGIN; UPDATE snapshot_pointer; COMMIT; loads='committed'.</div>
+    </div>
+  </div>
+  <div class="cell" id="c-service-5">
+    <div class="task purple">
+      <div class="t-title">Mapping ошибок</div>
+      <div class="t-desc">ErrLoadAlreadyRunning → 409, snapshot_not_ready → 503 + Retry-After: 60, прочие — sentinel → code.</div>
+    </div>
+  </div>
+
+  <!-- ===== Lane 4: Repository (teal) ===== -->
+  <div class="lane-name teal">
+    <div class="ln-title">Repository</div>
+    <div class="ln-sub">pgx · go:embed SQL</div>
+  </div>
+  <div class="cell" id="c-repo-1">
+    <div class="task teal">
+      <div class="t-title">TryAdvisoryLock + InsertLoad</div>
+      <div class="t-desc">pg_try_advisory_lock(hashtext($1)); INSERT loads(id, status, source) — embed advisory_lock.sql, insert_load.sql.</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-repo-2"></div>
+  <div class="cell" id="c-repo-3">
+    <div class="task teal">
+      <div class="t-title">SelectSnapshot + UPSERT batch</div>
+      <div class="t-desc">SelectSnapshotPointer (read-path); UpsertProductsBatch / InsertReceiptLinesBatch / InsertRejectLog (write-path).</div>
+    </div>
+  </div>
+  <div class="cell" id="c-repo-4">
+    <div class="task teal">
+      <div class="t-title">FlipSnapshotPointer + Update</div>
+      <div class="t-desc">snapshot_flip.sql (WITH old + UPDATE); UpdateLoadStatus(committed/failed, finished_at, summary).</div>
+    </div>
+  </div>
+  <div class="cell" id="c-repo-5">
+    <div class="task teal">
+      <div class="t-title">SelectProducts streaming</div>
+      <div class="t-desc">WHERE load_id=$1 AND updated_at &gt;= $2 AND product_id &gt; $3 ORDER BY product_id LIMIT 1000.</div>
+    </div>
+  </div>
+
+  <!-- ===== Lane 5: PostgreSQL 18 / ERP / FS (amber) — last row ===== -->
+  <div class="lane-name amber lane-row-last">
+    <div class="ln-title">PG 18 · ERP · FS</div>
+    <div class="ln-sub">снапшоты · staging · /var/exports</div>
+  </div>
+  <div class="cell lane-row-last" id="c-pg-1">
+    <div class="task amber">
+      <div class="t-title">ERP HTTPS pull</div>
+      <div class="t-desc">SourceReader.Read{Entity} → ERP REST/SOAP с курсорной пагинацией; retry/backoff.</div>
+    </div>
+  </div>
+  <div class="cell empty lane-row-last" id="c-pg-2"></div>
+  <div class="cell empty lane-row-last" id="c-pg-3"></div>
+  <div class="cell lane-row-last" id="c-pg-4">
+    <div class="task amber">
+      <div class="t-title">PG: staging + meta</div>
+      <div class="t-desc">products/receipt_line (partitioned by event_date) · loads · snapshot_pointer · reject_log · master_change_log.</div>
+    </div>
+  </div>
+  <div class="cell lane-row-last" id="c-pg-5">
+    <div class="task amber">
+      <div class="t-title">Local FS exports</div>
+      <div class="t-desc">/var/exports/{id}.parquet — Fiber static stream для GET /v1/exports/{id}/download.</div>
+    </div>
+  </div>
+
+</div>
+
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels-layer"></div>
+
+</div>
+</div>
+
+<div class="legend-row">
+  <div class="legend-item">
+    <div class="legend-swatch"></div>
+    <span>Прямой поток — данные, команды, документы</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-swatch dashed"></div>
+    <span>Обратный поток — ошибки, статусы, подтверждения</span>
+  </div>
+</div>
+
+<div class="footer">
+  <b>Как читать диаграмму.</b> Каждая строка — роль, каждая колонка — фаза процесса. Адаптер совмещает два сценария: <b>cron-load</b> (Scheduler → Loader → Repository → PG, фоновый) и <b>HTTP API</b> (Client → Handler → Service → Repository → PG, синхронный). Стрелки показывают передачу ответственности: сплошные — прямой поток, пунктирные — обратный (ошибки, 503/409). <b>Наведите курсор на любую подпись стрелки</b>, чтобы увидеть передаваемые поля и SQL-параметры. Полные DTO/SQL — в design-go-layers.md, design-sql.md, design-sequence-diagrams.md.
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+  const FLOWS = {
+    'cron-tick': {
+      title: 'Cron tick → daily-load',
+      meta: 'gocron Scheduler → Loader · 02:00 Europe/Kyiv',
+      sections: [
+        { name: 'Триггер', items: [
+          'Расписание: 0 2 * * * (Europe/Kyiv)',
+          'Внутрипроцессный gocron (ADR-010)',
+          'source = "erp_e_zoo" | "manual" | "retry"',
+          'См. design-sequence-diagrams.md §0'
+        ]}
+      ]
+    },
+    'http-request': {
+      title: 'HTTP request + Bearer JWT',
+      meta: 'Client → Handler · Fiber v3 middleware',
+      sections: [
+        { name: 'Endpoints', items: [
+          'GET /v1/{entity}?since=&cursor=&limit=',
+          'POST /v1/exports {entity, snapshot_id?, format}',
+          'POST /admin/loads (admin-cli only)',
+          'POST /admin/loads/{id}/retry',
+          'Authorization: Bearer <JWT HS256/RS256>'
+        ]}
+      ]
+    },
+    'auth-ok': {
+      title: 'JWT valid → handler',
+      meta: 'middleware/jwt.go · role.go · audit.go',
+      sections: [
+        { name: 'Claims в c.Locals', items: [
+          'sub (subject)',
+          'role: x-flow-etl | admin-cli | it-read',
+          'exp, iat',
+          'INSERT audit_access (только /admin/*)'
+        ]}
+      ]
+    },
+    'lock-acquire': {
+      title: 'pg_try_advisory_lock',
+      meta: 'Service → Repository → PG · неблокирующий',
+      sections: [
+        { name: 'SQL', items: [
+          "pg_try_advisory_lock(hashtext('source-adapter:daily-load'))",
+          'true → INSERT loads(status=running)',
+          'false → load_skipped_total++ / 409 load_already_running',
+          'См. design-sql.md §1 advisory_lock.sql'
+        ]}
+      ]
+    },
+    'erp-pull': {
+      title: 'SourceReader.Read{Entity}',
+      meta: 'Service → ERP · HTTPS pull, cursor-пагинация',
+      sections: [
+        { name: 'Methods', items: [
+          'ReadProducts(ctx, since)',
+          'ReadProductBarcodes / ReadCategories / ReadLocations',
+          'ReadStockMovements / ReadSupplierStockSnapshot',
+          'Iterator: Next() / Value() / Err() / Close()',
+          'См. полный список в design-go-layers.md §2.1'
+        ]}
+      ]
+    },
+    'validate': {
+      title: 'Validator.Validate',
+      meta: 'Loader → ValidatorEngine · severity per row',
+      sections: [
+        { name: 'severity', items: [
+          'critical → INSERT reject_log(load_id, entity, pk, raw, reason)',
+          'soft → metric validation_soft_total',
+          'ok → UPSERT staging WHERE load_id = current',
+          'Threshold: lines_failed/total > 1% ⇒ fail load',
+          'configs/validation_rules.yaml'
+        ]}
+      ]
+    },
+    'upsert-staging': {
+      title: 'UPSERT staging + reject',
+      meta: 'Service → Repository → PG · staging-rows под load_id',
+      sections: [
+        { name: 'Repository batch', items: [
+          'UpsertProductsBatch(ctx, loadID, batch)',
+          'UpsertStoreAssortmentBatch / InsertReceiptLinesBatch',
+          'INSERT master_change_log (diff tracked fields)',
+          'INSERT reject_log (severity=critical)',
+          'См. полный список в design-go-layers.md §2.4'
+        ]}
+      ]
+    },
+    'snapshot-flip': {
+      title: 'Atomic snapshot flip',
+      meta: 'Service → Repository → PG · BEGIN/COMMIT TX',
+      sections: [
+        { name: 'snapshot_flip.sql', items: [
+          'WITH old AS (SELECT current_load_id ... FOR UPDATE)',
+          'UPDATE snapshot_pointer SET previous = current, current = $1, committed_at = now()',
+          'UPDATE loads SET status=committed, finished_at=now()',
+          'Atomic: потребители видят либо старый, либо новый snapshot'
+        ]}
+      ]
+    },
+    'load-committed': {
+      title: 'load committed → metrics',
+      meta: 'Loader → Prometheus · конец cron-flow',
+      sections: [
+        { name: 'Метрики', items: [
+          'load_success_total / load_failed_total{reason}',
+          'load_duration_seconds, lines_failed, lines_total',
+          'snapshot_age_seconds = now() - committed_at',
+          'Alert: snapshot_age > 6h (Freshness SLA)'
+        ]}
+      ]
+    },
+    'snapshot-read': {
+      title: 'Service.List → Repository',
+      meta: 'Service → Repository · read-path WHERE load_id = current',
+      sections: [
+        { name: 'Шаги', items: [
+          'SnapshotService.Current() → SELECT current_load_id FROM snapshot_pointer',
+          'service.ListProducts(since, cursor, snapshotLoadID)',
+          'current = NULL → ErrSnapshotNotReady',
+          'См. design-sequence-diagrams.md §3'
+        ]}
+      ]
+    },
+    'select-rows': {
+      title: 'SELECT rows (cursor)',
+      meta: 'Repository → PG · pgx batch + streaming',
+      sections: [
+        { name: 'Параметры', items: [
+          '$1 load_id (snapshot)',
+          '$2 since (updated_at >=)',
+          '$3 cursor (product_id > $3)',
+          'ORDER BY product_id LIMIT 1000'
+        ]}
+      ]
+    },
+    'rows-stream': {
+      title: 'Rows → NDJSON stream',
+      meta: 'Repository → Service → Handler · построчный JSON',
+      sections: [
+        { name: 'Streaming', items: [
+          'Fiber c.Response.SetBodyStreamWriter',
+          'Content-Type: application/x-ndjson',
+          'X-Snapshot-Id, X-Load-Id, ETag (hash snapshotID+cursor)',
+          'Cache-Control: private, max-age=86400',
+          'Клиент держит last seen PK для следующего cursor'
+        ]}
+      ]
+    },
+    'response-200': {
+      title: 'Response к клиенту',
+      meta: 'Handler → Client · 200 / 202 / 4xx / 5xx',
+      sections: [
+        { name: 'Коды', items: [
+          '200 OK + NDJSON (GET /v1/{entity})',
+          '202 Accepted + {load_id} (POST /admin/loads, /v1/exports)',
+          '409 load_already_running + currentLoadId',
+          '503 snapshot_not_ready + Retry-After: 60',
+          'errorspkg.ErrorResponseJSON {code, message, supportMessage, traceId}'
+        ]}
+      ]
+    },
+    'err-401-403': {
+      title: 'Auth fail (401/403)',
+      meta: 'Handler middleware → Client · быстрый отказ',
+      sections: [
+        { name: 'Коды', items: [
+          '401 auth_invalid_token (нет/невалид JWT)',
+          '403 auth_forbidden (роль не подходит)',
+          'Не логируется в audit_access для 401',
+          'Audit пишется для admin endpoints (403)'
+        ]}
+      ]
+    },
+    'err-mapping': {
+      title: 'Service error → HTTP code',
+      meta: 'Service → Handler · MapServiceError',
+      sections: [
+        { name: 'Sentinel → code', items: [
+          'ErrSnapshotNotReady → 503 snapshot_not_ready',
+          'ErrLoadAlreadyRunning → 409 + currentLoadId',
+          'ErrCannotRetry → 409 cannot_retry',
+          'ErrNotFound → 404, ErrBadRequest → 400',
+          'default → 500 internal + traceId'
+        ]}
+      ]
+    },
+    'export-write': {
+      title: 'Export → Local FS',
+      meta: 'Service worker → Repository → FS · async parquet',
+      sections: [
+        { name: 'Поток', items: [
+          'INSERT exports(id, status=queued, entity, snapshot_id, format)',
+          'Worker: UPDATE exports SET status=running WHERE id=$1',
+          'SELECT batches WHERE load_id = snapshot_id',
+          'Write /var/exports/{id}.parquet',
+          'UPDATE exports SET status=ready, size_bytes, path'
+        ]}
+      ]
+    }
+  };
+
+  const canvas = document.querySelector('.swimlane-canvas');
+  const svg = document.getElementById('arrows');
+  const labelsLayer = document.getElementById('labels-layer');
+  const tooltip = document.getElementById('tooltip');
+
+  function rectOf(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const p = canvas.getBoundingClientRect();
+    return {
+      left: r.left - p.left, right: r.right - p.left,
+      top: r.top - p.top,   bottom: r.bottom - p.top,
+      cx: r.left - p.left + r.width/2,
+      cy: r.top - p.top + r.height/2,
+      width: r.width, height: r.height
+    };
+  }
+
+  function drawLine(x1, y1, x2, y2, opts = {}) {
+    const { dashed = false, via = null } = opts;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    let d = `M ${x1} ${y1}`;
+    if (Array.isArray(via)) {
+      for (const pt of via) d += ` L ${pt.x} ${pt.y}`;
+    } else if (via) {
+      d += ` L ${via.x} ${via.y}`;
+    }
+    d += ` L ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#2C2C2A');
+    path.setAttribute('stroke-width', '1.4');
+    path.setAttribute('opacity', '0.55');
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+    svg.appendChild(path);
+  }
+
+  function drawLabel(x, y, flowKey) {
+    const flow = FLOWS[flowKey];
+    if (!flow) return;
+    const label = document.createElement('div');
+    label.className = 'arrow-label';
+    label.style.left = x + 'px';
+    label.style.top = y + 'px';
+    label.textContent = flow.title;
+    label.dataset.flowKey = flowKey;
+    label.addEventListener('mouseenter', showTooltip);
+    label.addEventListener('mousemove', moveTooltip);
+    label.addEventListener('mouseleave', hideTooltip);
+    labelsLayer.appendChild(label);
+  }
+
+  function showTooltip(e) {
+    const key = e.currentTarget.dataset.flowKey;
+    const flow = FLOWS[key];
+    if (!flow) return;
+    let html = `<div class="tt-title">${flow.title}</div>`;
+    if (flow.meta) html += `<div class="tt-meta">${flow.meta}</div>`;
+    flow.sections.forEach((sec, idx) => {
+      if (sec.name && flow.sections.length > 1) {
+        html += `<div class="tt-section" ${idx === 0 ? 'style="margin-top:0"' : ''}>${sec.name}</div>`;
+      }
+      html += '<ul>';
+      sec.items.forEach(item => { html += `<li>${item}</li>`; });
+      html += '</ul>';
+    });
+    tooltip.innerHTML = html;
+    tooltip.classList.add('visible');
+    moveTooltip(e);
+  }
+
+  function moveTooltip(e) {
+    const padding = 14;
+    const ttRect = tooltip.getBoundingClientRect();
+    let x = e.clientX + padding;
+    let y = e.clientY + padding;
+    if (x + ttRect.width > window.innerWidth - padding) x = e.clientX - ttRect.width - padding;
+    if (y + ttRect.height > window.innerHeight - padding) y = e.clientY - ttRect.height - padding;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+
+  function hideTooltip() { tooltip.classList.remove('visible'); }
+
+  function render() {
+    svg.innerHTML = '';
+    labelsLayer.innerHTML = '';
+    const pr = canvas.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${pr.width} ${pr.height}`);
+    svg.setAttribute('width',  pr.width);
+    svg.setAttribute('height', pr.height);
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = `
+      <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      </marker>
+    `;
+    svg.appendChild(defs);
+
+    // ===== Phase 1: Trigger =====
+    // Client(cron) → Service.Loader (вертикаль через Handler)
+    const cli1 = rectOf('c-client-1');
+    const svc1 = rectOf('c-service-1');
+    drawLine(cli1.cx - 30, cli1.bottom - 18, svc1.cx - 30, svc1.top + 18);
+    drawLabel(cli1.cx - 30, (cli1.bottom + svc1.top) / 2, 'cron-tick');
+
+    // Client(HTTP) → Handler.Phase2 (диагональ: trigger → validation)
+    const hnd2 = rectOf('c-handler-2');
+    drawLine(cli1.right - 16, cli1.cy + 18, hnd2.left + 16, hnd2.cy - 18);
+    drawLabel((cli1.right + hnd2.left) / 2 + 10, (cli1.cy + hnd2.cy) / 2 - 16, 'http-request');
+
+    // Service.Loader → Repo (вертикаль в фазе 1)
+    const repo1 = rectOf('c-repo-1');
+    drawLine(svc1.cx, svc1.bottom - 18, repo1.cx, repo1.top + 18);
+    drawLabel(svc1.cx, (svc1.bottom + repo1.top) / 2, 'lock-acquire');
+
+    // Repo.1 → PG.1 (ERP pull) — вертикаль
+    const pg1 = rectOf('c-pg-1');
+    drawLine(repo1.cx + 30, repo1.bottom - 18, pg1.cx + 30, pg1.top + 18);
+    drawLabel(repo1.cx + 30, (repo1.bottom + pg1.top) / 2, 'erp-pull');
+
+    // ===== Phase 2: Validation =====
+    // Handler.2 → Service.2 (auth ok)
+    const svc2 = rectOf('c-service-2');
+    drawLine(hnd2.cx, hnd2.bottom - 18, svc2.cx, svc2.top + 18);
+    drawLabel(hnd2.cx, (hnd2.bottom + svc2.top) / 2, 'auth-ok');
+
+    // Service.2 ← Service.3 (validate per row) — горизонталь Phase3 → Phase2 — на самом деле validation внутри Service по фазе
+    // Лучше: показать переход Service.2 → Service.3 как «valid → business»
+    const svc3 = rectOf('c-service-3');
+    drawLine(svc2.right - 16, svc2.cy, svc3.left + 16, svc3.cy);
+    drawLabel((svc2.right + svc3.left) / 2, svc2.cy - 14, 'validate');
+
+    // Handler.5 → Client.5 (err 401/403) — обратный поток (пунктир)
+    const hnd5 = rectOf('c-handler-5');
+    const cli5 = rectOf('c-client-5');
+    drawLine(hnd5.cx - 30, hnd5.top + 18, cli5.cx - 30, cli5.bottom - 18, { dashed: true });
+    drawLabel(hnd5.cx - 30, (hnd5.top + cli5.bottom) / 2, 'err-401-403');
+
+    // ===== Phase 3: Business logic =====
+    // Handler.3 → Service.3 (DTO parsed)
+    const hnd3 = rectOf('c-handler-3');
+    drawLine(hnd3.cx + 30, hnd3.bottom - 18, svc3.cx + 30, svc3.top + 18);
+    drawLabel(hnd3.cx + 30, (hnd3.bottom + svc3.top) / 2, 'snapshot-read');
+
+    // Service.3 → Repo.3 (UPSERT batch)
+    const repo3 = rectOf('c-repo-3');
+    drawLine(svc3.cx, svc3.bottom - 18, repo3.cx, repo3.top + 18);
+    drawLabel(svc3.cx, (svc3.bottom + repo3.top) / 2, 'upsert-staging');
+
+    // ===== Phase 4: Persistence =====
+    // Service.4 (flip) → Repo.4 → PG.4
+    const svc4 = rectOf('c-service-4');
+    const repo4 = rectOf('c-repo-4');
+    const pg4 = rectOf('c-pg-4');
+    drawLine(svc4.cx - 25, svc4.bottom - 18, repo4.cx - 25, repo4.top + 18);
+    drawLabel(svc4.cx - 25, (svc4.bottom + repo4.top) / 2, 'snapshot-flip');
+
+    drawLine(repo4.cx, repo4.bottom - 18, pg4.cx, pg4.top + 18);
+    drawLabel(repo4.cx, (repo4.bottom + pg4.top) / 2, 'select-rows');
+
+    // Repo.3 → Repo.4 (горизонталь — persistence stage)
+    drawLine(repo3.right - 18, repo3.cy, repo4.left + 18, repo4.cy);
+
+    // ===== Phase 5: Response =====
+    // Repo.5 → Handler.5 (rows stream up через Service)
+    const repo5 = rectOf('c-repo-5');
+    const svc5 = rectOf('c-service-5');
+    drawLine(repo5.cx, repo5.top + 18, svc5.cx, svc5.bottom - 18);
+    drawLabel(repo5.cx, (repo5.top + svc5.bottom) / 2, 'rows-stream');
+
+    // Service.5 → Handler.5 (err mapping)
+    drawLine(svc5.cx, svc5.top + 18, hnd5.cx, hnd5.bottom - 18);
+    drawLabel(svc5.cx, (svc5.top + hnd5.bottom) / 2, 'err-mapping');
+
+    // Handler.5 → Client.5 (response 200/202)
+    drawLine(hnd5.cx + 30, hnd5.top + 18, cli5.cx + 30, cli5.bottom - 18);
+    drawLabel(hnd5.cx + 30, (hnd5.top + cli5.bottom) / 2, 'response-200');
+
+    // PG.5 ← Repo.5 (export FS write) — обратная стрелка вниз: persistence → fs
+    const pg5 = rectOf('c-pg-5');
+    drawLine(repo5.cx - 30, repo5.bottom - 18, pg5.cx - 30, pg5.top + 18, { dashed: true });
+    drawLabel(repo5.cx - 30, (repo5.bottom + pg5.top) / 2, 'export-write');
+
+    // PG.4 → Service.4 (load committed metric — обратный поток наверх через Repo)
+    drawLine(pg4.cx + 35, pg4.top + 18, svc4.cx + 35, svc4.bottom - 18, { dashed: true, via: { x: pg4.cx + 35, y: repo4.cy } });
+    drawLabel(pg4.cx + 35, (pg4.top + svc4.bottom) / 2, 'load-committed');
+  }
+
+  window.addEventListener('load',   () => setTimeout(render, 60));
+  window.addEventListener('resize', () => setTimeout(render, 100));
+  render();
+</script>
+
+</body>
+</html>
