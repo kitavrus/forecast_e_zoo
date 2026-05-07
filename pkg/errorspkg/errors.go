@@ -307,4 +307,21 @@ var (
 		SupportMessage: SupportERPUnavailable,
 		HTTP:           http.StatusInternalServerError,
 	}
+
+	// ErrExportNotFound — 404, GET /v1/exports/{id} → не найден.
+	ErrExportNotFound = &Error{
+		Code:           "export_not_found",
+		Message:        "export not found",
+		SupportMessage: "SA-EXP-002",
+		HTTP:           http.StatusNotFound,
+	}
+
+	// ErrExportPending — 202, GET /v1/exports/{id} в статусе pending.
+	// Используется в handler-е как «не ошибка» — просто returns 202 без ошибочного тела.
+	ErrExportPending = &Error{
+		Code:           "export_pending",
+		Message:        "export still in progress",
+		SupportMessage: "SA-EXP-003",
+		HTTP:           http.StatusAccepted,
+	}
 )
