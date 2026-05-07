@@ -3,7 +3,9 @@
         docker-build docker-up docker-down \
         build-etl run-etl docker-build-etl \
         migrate-up-etl migrate-down-etl migrate-version-etl migrate-create-etl \
-        test-integration-etl
+        test-integration-etl \
+        migrate-up-kpi migrate-down-kpi migrate-version-kpi migrate-create-kpi \
+        test-integration-kpi
 
 # --- Сборка ---
 
@@ -95,6 +97,41 @@ endif
 
 test-integration-etl:
 	go test ./internal/features/etl_validation/... -tags=integration -race
+
+# --- KPI миграции (Module 4) ---
+
+KPI_MIGRATE_PATH := /Users/igorpotema/mycode/e_zoo/internal/features/kpi/sqls/migrations
+KPI_DSN ?= postgres://adapter:adapter@localhost:5432/source_adapter?sslmode=disable
+
+migrate-up-kpi:
+	docker run --rm --network host \
+	  -v $(KPI_MIGRATE_PATH):/migrations \
+	  migrate/migrate:v4.18.1 \
+	  -path=/migrations -database "$(KPI_DSN)" up
+
+migrate-down-kpi:
+	docker run --rm --network host \
+	  -v $(KPI_MIGRATE_PATH):/migrations \
+	  migrate/migrate:v4.18.1 \
+	  -path=/migrations -database "$(KPI_DSN)" down 1
+
+migrate-version-kpi:
+	docker run --rm --network host \
+	  -v $(KPI_MIGRATE_PATH):/migrations \
+	  migrate/migrate:v4.18.1 \
+	  -path=/migrations -database "$(KPI_DSN)" version
+
+migrate-create-kpi:
+ifndef NAME
+	$(error Usage: make migrate-create-kpi NAME=имя_миграции)
+endif
+	docker run --rm \
+	  -v $(KPI_MIGRATE_PATH):/migrations \
+	  migrate/migrate:v4.18.1 \
+	  create -ext sql -dir /migrations -seq $(NAME)
+
+test-integration-kpi:
+	go test ./internal/features/kpi/... -tags=integration -race
 
 # --- Docker ---
 
