@@ -58,6 +58,32 @@ services:
     restart: "no"
     networks: [e_zoo]
 
+  mock-erp:
+    build:
+      context: ./mock-erp
+      dockerfile: Dockerfile
+    image: e_zoo/mock-erp:latest
+    container_name: ezoo_mock_erp
+    restart: *restart
+    environment:
+      MOCK_ERP_API_KEY: "${MOCK_ERP_API_KEY:-test-api-key}"
+      SEED_PRODUCTS: "${SEED_PRODUCTS:-1000}"
+      SEED_LOCATIONS: "${SEED_LOCATIONS:-30}"
+      SEED_DAYS: "${SEED_DAYS:-365}"
+      SEED_SUPPLIERS: "${SEED_SUPPLIERS:-50}"
+      DB_PATH: "/data/mock_erp.db"
+    ports:
+      - "8090:8090"
+    volumes:
+      - mock_erp_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8090/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
+    networks: [e_zoo]
+
   source-adapter:
     build:
       context: .
@@ -72,12 +98,17 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      mock-erp:
+        condition: service_healthy
     environment:
       <<: *app-env
       HTTP_ADDR: ":8080"
       SOURCE_ADAPTER_CRON_SCHEDULE: "${SOURCE_ADAPTER_CRON_SCHEDULE:-0 2 * * *}"
       SOURCE_ADAPTER_TZ: "${SOURCE_ADAPTER_TZ:-Europe/Kyiv}"
       EXPORTS_BASE_DIR: "/var/exports"
+      ERP_BASE_URL: "${ERP_BASE_URL:-http://mock-erp:8090}"
+      ERP_AUTH_MODE: "${ERP_AUTH_MODE:-api_key}"
+      ERP_API_KEY: "${ERP_API_KEY:-${MOCK_ERP_API_KEY:-test-api-key}}"
     ports:
       - "8080:8080"
     volumes:
@@ -290,6 +321,7 @@ services:
 volumes:
   pg_data:
   exports_data:
+  mock_erp_data:
 
 networks:
   e_zoo:

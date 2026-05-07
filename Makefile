@@ -12,7 +12,8 @@
         migrate-up-orders    migrate-down-orders \
         migrate-up-channels  migrate-down-channels \
         migrate-create \
-        test-integration-etl test-integration-kpi
+        test-integration-etl test-integration-kpi \
+        e2e-up e2e-down seed-channel-configs
 
 # --- Сборка ---
 
@@ -168,3 +169,27 @@ endif
 	  -v $(CURDIR)/internal/features/$(FEATURE)/sqls/migrations:/migrations \
 	  migrate/migrate:v4.18.1 \
 	  create -ext sql -dir /migrations -seq $(NAME)
+
+# --- E2E (mock-erp + seeded channel configs) ---
+
+# Поднимает весь docker-compose стек (включая mock-erp), ждёт пока все сервисы
+# не станут healthy, затем сидит supplier_channel_config (50 строк).
+e2e-up:
+	docker compose up -d --build
+	@echo "Waiting for services to be healthy..."
+	@i=0; \
+	while [ $$i -lt 60 ]; do \
+	  unhealthy=$$(docker compose ps --format '{{.Status}}' | grep -E 'starting|unhealthy' | wc -l | tr -d ' '); \
+	  if [ "$$unhealthy" = "0" ]; then break; fi; \
+	  sleep 5; i=$$((i+1)); \
+	done
+	@$(MAKE) seed-channel-configs
+
+e2e-down:
+	docker compose down -v
+
+# Применяет seed_channel_configs.sql внутрь контейнера postgres.
+seed-channel-configs:
+	@docker exec -i ezoo_pg psql -U $${POSTGRES_USER:-adapter} -d $${POSTGRES_DB:-source_adapter} \
+	  < tests/e2e/seed_channel_configs.sql
+	@echo "OK supplier_channel_config seeded (50 rows)"
