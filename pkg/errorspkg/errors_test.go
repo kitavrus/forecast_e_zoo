@@ -32,6 +32,27 @@ func TestErrNotFound_WrappedIs(t *testing.T) {
 	assert.False(t, errors.Is(wrapped, ErrBadRequest), "разные sentinel-ы не должны совпадать")
 }
 
+// TestAuthSentinels_HTTP — проверяем коды и HTTP-статусы JWT-sentinel'ов.
+func TestAuthSentinels_HTTP(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, http.StatusUnauthorized, ErrAuthMissingToken.HTTP)
+	assert.Equal(t, http.StatusUnauthorized, ErrAuthInvalidToken.HTTP)
+	assert.Equal(t, http.StatusForbidden, ErrAuthForbidden.HTTP)
+
+	// missing и invalid должны иметь одинаковый Code, чтобы клиент не различал кейсы.
+	assert.Equal(t, ErrAuthMissingToken.Code, ErrAuthInvalidToken.Code)
+	assert.Equal(t, "auth_invalid_token", ErrAuthMissingToken.Code)
+	assert.Equal(t, "auth_forbidden", ErrAuthForbidden.Code)
+
+	// errors.Is должен правильно различать sentinel'ы.
+	wrappedMissing := ErrAuthMissingToken.Wrap(fmt.Errorf("no header"))
+	assert.True(t, errors.Is(wrappedMissing, ErrAuthMissingToken))
+	// А вот разные sentinel'ы с одинаковым Code считаем равными по Is — это ОК,
+	// потому что доменно это одна категория ошибки. Проверяем, что не путается с Forbidden.
+	assert.False(t, errors.Is(wrappedMissing, ErrAuthForbidden))
+}
+
 // TestError_WithDetails_Idempotent — проверяем, что WithDetails не мутирует оригинал.
 func TestError_WithDetails_Idempotent(t *testing.T) {
 	t.Parallel()

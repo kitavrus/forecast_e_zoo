@@ -192,4 +192,30 @@ var (
 		SupportMessage: SupportInternal,
 		HTTP:           http.StatusInternalServerError,
 	}
+
+	// ErrAuthMissingToken — 401, отсутствует Authorization header.
+	// Code совпадает с ErrAuthInvalidToken, чтобы не раскрывать клиенту,
+	// что именно не так (защита от user-enumeration attacks).
+	ErrAuthMissingToken = &Error{
+		Code:           "auth_invalid_token",
+		Message:        "auth required",
+		SupportMessage: SupportUnauthorized,
+		HTTP:           http.StatusUnauthorized,
+	}
+
+	// ErrAuthInvalidToken — 401, токен есть, но невалидный/просрочен/чужой alg.
+	ErrAuthInvalidToken = &Error{
+		Code:           "auth_invalid_token",
+		Message:        "invalid token",
+		SupportMessage: SupportUnauthorized,
+		HTTP:           http.StatusUnauthorized,
+	}
+
+	// ErrAuthForbidden — 403, токен валиден, но роль не подходит.
+	ErrAuthForbidden = &Error{
+		Code:           "auth_forbidden",
+		Message:        "forbidden",
+		SupportMessage: SupportForbidden,
+		HTTP:           http.StatusForbidden,
+	}
 )
