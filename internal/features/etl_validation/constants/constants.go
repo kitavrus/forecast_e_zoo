@@ -76,3 +76,45 @@ var MartNames = []string{
 var MartRefreshable = []string{
 	MartSupplierScorecard,
 }
+
+// Допустимые значения query-параметра entity для GET /admin/reject-log.
+// Совпадают с именами staging-сущностей источника.
+const (
+	EntityReceiptLine     = "receipt_line"
+	EntityStockOnHand     = "stock_on_hand"
+	EntityProduct         = "product"
+	EntityLocation        = "location"
+	EntitySupplier        = "supplier"
+	EntityOrderRule       = "order_rule"
+	EntitySupplySpec      = "supply_spec"
+	EntityReceivingDetail = "receiving_detail"
+	EntityPromo           = "promo"
+	EntityStoreAssortment = "store_assortment"
+)
+
+// AllowedEntities — допустимые значения query-параметра entity для reject_log.
+//
+//nolint:gochecknoglobals // публичный enum-список.
+var AllowedEntities = []string{
+	EntityReceiptLine,
+	EntityStockOnHand,
+	EntityProduct,
+	EntityLocation,
+	EntitySupplier,
+	EntityOrderRule,
+	EntitySupplySpec,
+	EntityReceivingDetail,
+	EntityPromo,
+	EntityStoreAssortment,
+}
+
+// Лимиты пагинации для admin endpoints.
+const (
+	EtlRunsListLimitMin     = 1
+	EtlRunsListLimitMax     = 100
+	EtlRunsListLimitDefault = 50
+
+	RejectLogListLimitMin     = 1
+	RejectLogListLimitMax     = 500
+	RejectLogListLimitDefault = 100
+)
