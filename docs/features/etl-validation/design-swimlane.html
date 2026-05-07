@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Swimlane — ETL & Validation (Модуль 2)</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --ink: #2C2C2A;
+    --muted: #5F5E5A;
+    --line: rgba(44,44,42,0.15);
+    --lane-bg: rgba(255,255,255,0.5);
+    --gray-50:#F1EFE8;   --gray-600:#5F5E5A;   --gray-800:#444441;
+    --blue-50:#E6F1FB;   --blue-600:#185FA5;   --blue-800:#0C447C;
+    --purple-50:#EEEDFE; --purple-600:#534AB7; --purple-800:#3C3489;
+    --teal-50:#E1F5EE;   --teal-600:#0F6E56;   --teal-800:#085041;
+    --amber-50:#FAEEDA;  --amber-600:#854F0B;  --amber-800:#633806;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 40px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 24px; font-weight: 500; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 20px; max-width: 900px; }
+  .hint {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; background: var(--purple-50);
+    border: 1px solid var(--purple-600); color: var(--purple-800);
+    border-radius: 20px; font-size: 12.5px; margin-bottom: 24px; font-weight: 500;
+  }
+  .hint::before { content: "ⓘ"; font-size: 14px; }
+
+  .swimlane-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .swimlane-canvas { min-width: 1200px; position: relative; }
+  .swimlane {
+    display: grid;
+    grid-template-columns: 160px repeat(5, 1fr);
+    gap: 0;
+    border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden; background: var(--lane-bg);
+  }
+
+  .phase-header {
+    background: rgba(255,255,255,0.7); padding: 14px 18px;
+    border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .phase-header:last-of-type { border-right: none; }
+  .phase-header.corner {
+    background: rgba(0,0,0,0.025); font-size: 11px;
+    letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase;
+    display: flex; align-items: center; font-weight: 500;
+  }
+  .phase-header .ph-num {
+    font-size: 10.5px; color: var(--muted); letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 2px; font-weight: 500;
+  }
+  .phase-header .ph-title { font-size: 14px; font-weight: 500; color: var(--ink); }
+
+  .lane-name {
+    padding: 18px 16px;
+    border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    display: flex; flex-direction: column; justify-content: center; font-size: 13px;
+  }
+  .lane-row-last .lane-name { border-bottom: none; }
+  .lane-name .ln-title { font-weight: 500; margin-bottom: 3px; font-size: 14px; }
+  .lane-name .ln-sub { font-size: 12px; opacity: 0.75; }
+  .lane-name.gray   { background: var(--gray-50);   color: var(--gray-800);   }
+  .lane-name.blue   { background: var(--blue-50);   color: var(--blue-800);   }
+  .lane-name.purple { background: var(--purple-50); color: var(--purple-800); }
+  .lane-name.teal   { background: var(--teal-50);   color: var(--teal-800);   }
+  .lane-name.amber  { background: var(--amber-50);  color: var(--amber-800);  }
+
+  .cell {
+    padding: 18px 14px;
+    border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    min-height: 130px; display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .cell:last-of-type { border-right: none; }
+  .cell.empty { background: rgba(0,0,0,0.015); }
+  .lane-row-last .cell { border-bottom: none; }
+
+  .task {
+    border-radius: 7px; border: 1px solid; padding: 10px 12px;
+    font-size: 12.5px; line-height: 1.45;
+    width: 100%; max-width: 230px; text-align: left;
+    position: relative; z-index: 2;
+  }
+  .task .t-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .task .t-desc { font-size: 11.5px; opacity: 0.85; line-height: 1.45; }
+  .task.gray   { background: var(--gray-50);   border-color: var(--gray-600);   color: var(--gray-800);   }
+  .task.blue   { background: var(--blue-50);   border-color: var(--blue-600);   color: var(--blue-800);   }
+  .task.purple { background: var(--purple-50); border-color: var(--purple-600); color: var(--purple-800); }
+  .task.teal   { background: var(--teal-50);   border-color: var(--teal-600);   color: var(--teal-800);   }
+  .task.amber  { background: var(--amber-50);  border-color: var(--amber-600);  color: var(--amber-800);  }
+
+  .arrows-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+
+  .arrow-label {
+    position: absolute; z-index: 4; transform: translate(-50%, -50%);
+    padding: 4px 10px; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 12px; font-size: 10.5px; color: var(--muted);
+    white-space: nowrap; cursor: help; transition: all 0.15s ease;
+    pointer-events: auto; display: flex; align-items: center; gap: 5px;
+  }
+  .arrow-label::after {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--purple-600); opacity: 0.5; transition: opacity 0.15s ease;
+  }
+  .arrow-label:hover {
+    background: white; color: var(--ink); border-color: var(--purple-600);
+    box-shadow: 0 4px 12px rgba(83,74,183,0.15);
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  .arrow-label:hover::after { opacity: 1; }
+
+  .tooltip {
+    position: fixed; z-index: 100; background: white;
+    border: 1px solid var(--purple-600); border-radius: 10px;
+    padding: 14px 16px; min-width: 260px; max-width: 340px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+    opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
+    font-size: 12px; line-height: 1.5;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .tt-title { font-size: 13px; font-weight: 500; color: var(--purple-800); margin-bottom: 4px; }
+  .tooltip .tt-meta {
+    font-size: 10.5px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 8px; padding-bottom: 8px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .tooltip ul { list-style: none; padding: 0; }
+  .tooltip ul li { padding: 3px 0 3px 14px; position: relative; font-size: 12px; color: var(--ink); }
+  .tooltip ul li::before {
+    content: ""; position: absolute; left: 2px; top: 11px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--purple-600); opacity: 0.5;
+  }
+  .tooltip .tt-section {
+    font-size: 10.5px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-top: 10px; margin-bottom: 4px; font-weight: 500;
+  }
+
+  .goals {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin-bottom: 24px;
+  }
+  .goal {
+    padding: 12px 14px; border-radius: 7px;
+    background: rgba(255,255,255,0.5); border: 1px solid var(--line);
+    border-left: 3px solid var(--purple-600);
+  }
+  .goal .g-name {
+    font-size: 10.5px; letter-spacing: 0.08em; color: var(--purple-800);
+    font-weight: 500; margin-bottom: 3px; text-transform: uppercase;
+  }
+  .goal .g-desc { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+  .legend-row {
+    display: flex; gap: 24px; align-items: center;
+    margin: 20px 0 8px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch { width: 36px; height: 2px; background: var(--ink); opacity: 0.55; position: relative; }
+  .legend-swatch.dashed {
+    background: repeating-linear-gradient(to right, var(--ink) 0 4px, transparent 4px 8px);
+  }
+  .legend-swatch::after {
+    content: ""; position: absolute; right: -4px; top: 50%; transform: translateY(-50%);
+    border-left: 7px solid var(--ink); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  }
+
+  .footer {
+    margin-top: 24px; padding: 16px 20px;
+    background: var(--lane-bg); border: 1px solid var(--line); border-radius: 10px;
+    font-size: 13px; color: var(--muted); line-height: 1.7;
+  }
+  .footer b { color: var(--ink); font-weight: 500; }
+  .section-title {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; margin-bottom: 12px; padding-left: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Swimlane — ETL &amp; Validation (Модуль 2)</h1>
+<p class="subtitle">Карта процесса суточного ETL-рана: cron 02:30 Kyiv (или admin POST) → fetch snapshot из source-adapter → cross-validation → построение 5 mart-таблиц → atomic flip в схеме <code>marts</code>. Подписи стрелок раскрывают поля DTO, SQL и Prometheus-метрики.</p>
+
+<div class="hint">Наведите курсор на подпись стрелки — увидите, какие именно поля передаются</div>
+
+<div class="section-title">Бизнес-цели (SLA)</div>
+<div class="goals">
+  <div class="goal"><div class="g-name">ETL Freshness</div><div class="g-desc"><code>etl_runs.committed_at</code> &lt; 03:30 Europe/Kyiv в 99% дней (run ≤ 30 мин)</div></div>
+  <div class="goal"><div class="g-name">Marts Completeness</div><div class="g-desc">5 mart-таблиц обновлены к 04:00 Europe/Kyiv в ≥98% дней</div></div>
+  <div class="goal"><div class="g-name">Cross-entity Quality</div><div class="g-desc"><code>lines_failed/lines_total</code> &lt; 0.5% (hard fail при &gt; 1%)</div></div>
+</div>
+
+<div class="swimlane-wrap">
+<div class="swimlane-canvas">
+
+<div class="swimlane">
+  <!-- Ряд 0: шапка -->
+  <div class="phase-header corner">Роль / Фаза</div>
+  <div class="phase-header"><div class="ph-num">Фаза 1</div><div class="ph-title">Trigger</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 2</div><div class="ph-title">Validation</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 3</div><div class="ph-title">Business logic</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 4</div><div class="ph-title">Persistence</div></div>
+  <div class="phase-header"><div class="ph-num">Фаза 5</div><div class="ph-title">Response</div></div>
+
+  <!-- Ряд 1: Trigger (gray) -->
+  <div class="lane-name gray">
+    <div class="ln-title">Trigger</div>
+    <div class="ln-sub">cron 02:30 Kyiv / admin-cli</div>
+  </div>
+  <div class="cell" id="c-trigger-1">
+    <div class="task gray">
+      <div class="t-title">Cron tick / admin POST</div>
+      <div class="t-desc">gocron → <code>EtlPipeline.TryStart()</code> либо <code>POST /admin/etl-runs</code> с JWT admin-cli</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-trigger-2"></div>
+  <div class="cell empty" id="c-trigger-3"></div>
+  <div class="cell empty" id="c-trigger-4"></div>
+  <div class="cell" id="c-trigger-5">
+    <div class="task gray">
+      <div class="t-title">Outcome</div>
+      <div class="t-desc">202 Accepted (admin), 409/503 при конфликте, либо silent skip (cron); метрики в Prometheus</div>
+    </div>
+  </div>
+
+  <!-- Ряд 2: Extractor (blue) -->
+  <div class="lane-name blue">
+    <div class="ln-title">Extractor</div>
+    <div class="ln-sub">HTTP клиент → source-adapter</div>
+  </div>
+  <div class="cell empty" id="c-extractor-1"></div>
+  <div class="cell" id="c-extractor-2">
+    <div class="task blue">
+      <div class="t-title">Snapshot fetch</div>
+      <div class="t-desc"><code>GET /v1/snapshots/current</code> с JWT <code>x-flow-etl</code>, ETag/If-None-Match</div>
+    </div>
+  </div>
+  <div class="cell" id="c-extractor-3">
+    <div class="task blue">
+      <div class="t-title">Stream entities</div>
+      <div class="t-desc"><code>GET /v1/{entity}?snapshot=Y</code> NDJSON, retry с backoff cap 30s, master → facts</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-extractor-4"></div>
+  <div class="cell empty" id="c-extractor-5"></div>
+
+  <!-- Ряд 3: Transformer (purple) -->
+  <div class="lane-name purple">
+    <div class="ln-title">Transformer</div>
+    <div class="ln-sub">cross-validation + 5 mart builders</div>
+  </div>
+  <div class="cell empty" id="c-transformer-1"></div>
+  <div class="cell" id="c-transformer-2">
+    <div class="task purple">
+      <div class="t-title">Cross-validation</div>
+      <div class="t-desc"><code>fk_exists</code>, <code>unique_business_key</code>, <code>aggregate_sum_matches</code>, <code>referential_integrity</code></div>
+    </div>
+  </div>
+  <div class="cell" id="c-transformer-3">
+    <div class="task purple">
+      <div class="t-title">Build 5 marts</div>
+      <div class="t-desc">demand_history / calculation_input / kpi_daily / master_current / supplier_scorecard</div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-transformer-4"></div>
+  <div class="cell empty" id="c-transformer-5"></div>
+
+  <!-- Ряд 4: Loader (teal) -->
+  <div class="lane-name teal">
+    <div class="ln-title">Loader</div>
+    <div class="ln-sub">UPSERT marts.* + atomic flip</div>
+  </div>
+  <div class="cell empty" id="c-loader-1"></div>
+  <div class="cell empty" id="c-loader-2"></div>
+  <div class="cell" id="c-loader-3">
+    <div class="task teal">
+      <div class="t-title">Quality gate</div>
+      <div class="t-desc">Проверка <code>lines_failed/lines_total</code>; при &gt; 1% — fail run без flip</div>
+    </div>
+  </div>
+  <div class="cell" id="c-loader-4">
+    <div class="task teal">
+      <div class="t-title">Atomic flip</div>
+      <div class="t-desc">Один tx: UPSERT 5 marts + <code>UPDATE etl_runs status='committed'</code></div>
+    </div>
+  </div>
+  <div class="cell empty" id="c-loader-5"></div>
+
+  <!-- Ряд 5: Storage (amber) — последний -->
+  <div class="lane-name amber lane-row-last">
+    <div class="ln-title">Storage</div>
+    <div class="ln-sub">PG: marts.*, etl_runs, reject_log</div>
+  </div>
+  <div class="cell lane-row-last" id="c-storage-1">
+    <div class="task amber">
+      <div class="t-title">Lock + run record</div>
+      <div class="t-desc"><code>pg_try_advisory_lock(hash('etl-run'))</code>; <code>INSERT etl_runs(status='running')</code></div>
+    </div>
+  </div>
+  <div class="cell lane-row-last" id="c-storage-2">
+    <div class="task amber">
+      <div class="t-title">Staging tables</div>
+      <div class="t-desc"><code>INSERT INTO stg_{entity}</code> (TEMP per run); фиксация <code>source_load_id</code></div>
+    </div>
+  </div>
+  <div class="cell lane-row-last" id="c-storage-3">
+    <div class="task amber">
+      <div class="t-title">reject_log</div>
+      <div class="t-desc"><code>INSERT INTO marts.reject_log</code> per violation (severity, row_pk, rule)</div>
+    </div>
+  </div>
+  <div class="cell lane-row-last" id="c-storage-4">
+    <div class="task amber">
+      <div class="t-title">marts.* commit</div>
+      <div class="t-desc">5 mart-таблиц + <code>etl_runs.committed_at = now()</code> в одной tx</div>
+    </div>
+  </div>
+  <div class="cell lane-row-last" id="c-storage-5">
+    <div class="task amber">
+      <div class="t-title">Metrics emit</div>
+      <div class="t-desc"><code>etl_run_success_total</code>, <code>etl_lines_processed_total{entity}</code>, <code>mart_rows_total{mart}</code></div>
+    </div>
+  </div>
+</div>
+
+<svg class="arrows-layer" id="arrows" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels-layer"></div>
+
+</div>
+</div>
+
+<div class="legend-row">
+  <div class="legend-item">
+    <div class="legend-swatch"></div>
+    <span>Прямой поток — данные, snapshot, mart-строки</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-swatch dashed"></div>
+    <span>Обратный поток — статус, метрики, ошибки 401/409/503/failed</span>
+  </div>
+</div>
+
+<div class="footer">
+  <b>Как читать диаграмму.</b> Каждая строка — роль (Trigger / Extractor / Transformer / Loader / Storage), каждая колонка — фаза (Trigger → Validation → Business logic → Persistence → Response). Задача живёт на пересечении «роль × фаза». Стрелки показывают передачу ответственности: сплошные — прямой поток, пунктирные — обратная связь (статусы, ошибки). <b>Наведите курсор на любую подпись стрелки</b>, чтобы увидеть детальный список полей DTO, SQL-параметров и Prometheus-метрик.
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+  // ============================================
+  // СЛОВАРЬ: подпись стрелки → детали потока
+  // ============================================
+  const FLOWS = {
+    'cron-lock': {
+      title: 'cron-tick → advisory lock',
+      meta: 'gocron 02:30 Kyiv → PG advisory lock → etl_runs.create',
+      sections: [
+        { name: 'Lock acquisition', items: [
+          'gocron tick (ETL_CRON_SCHEDULE)',
+          'pg_try_advisory_lock(hash(\'etl-run\'))',
+          'если занят: etl_skipped_lock_taken_total++ → silent skip',
+          'INSERT etl_runs(id=uuidv4, status=\'running\', source_load_id=NULL, started_at=now())'
+        ]},
+        { name: 'Admin альтернатива', items: [
+          'POST /admin/etl-runs (JWT admin-cli)',
+          'lock busy → 409 ErrEtlRunAlreadyRunning + currentRunID',
+          'См. полный список в design-go-layers.md'
+        ]}
+      ]
+    },
+    'snapshot-fetch': {
+      title: 'snapshot-fetch (GET /v1/snapshots/current)',
+      meta: 'Extractor → source-adapter API · JWT x-flow-etl',
+      sections: [
+        { name: 'Request', items: [
+          'GET /v1/snapshots/current',
+          'Authorization: Bearer <JWT role=x-flow-etl>',
+          'If-None-Match: <prev_etag>',
+          'ETL_JWT_SIGNING_KEY (HS256) либо ETL_JWT_PUBLIC_KEY_PATH (RS256)'
+        ]},
+        { name: 'Response paths', items: [
+          '200 {current_load_id: Y} → UPDATE etl_runs SET source_load_id=Y',
+          '503 snapshot_not_ready → ErrSnapshotNotReady → run aborted',
+          '401 unauthorized → ErrUnauthorized'
+        ]}
+      ]
+    },
+    'entities-stream': {
+      title: 'entities-read (NDJSON streaming)',
+      meta: 'Extractor → source-adapter · master → facts → доп.',
+      sections: [
+        { name: 'Stream loop', items: [
+          'GET /v1/{entity}?snapshot=Y (NDJSON, ETag)',
+          'entities: products, locations, suppliers, supply_spec, order_rule, receipt_line',
+          'INSERT INTO stg_{entity} per row (TEMP table)',
+          'retry с экспоненциальным backoff cap 30s',
+          'См. полный список в design-go-layers.md'
+        ]}
+      ]
+    },
+    'cross-validate': {
+      title: 'cross-validate (severity engine)',
+      meta: 'staging → ValidationEngine → reject_log',
+      sections: [
+        { name: 'Builtin rules (cross_validation_rules.yaml)', items: [
+          'fk_exists (FK consistency между сущностями)',
+          'unique_business_key (например (product_id, location_id, as_of_date))',
+          'aggregate_sum_matches (sum receipts ≈ kpi revenue)',
+          'referential_integrity',
+          'null_required_field'
+        ]},
+        { name: 'Output', items: [
+          'INSERT INTO marts.reject_log per violation',
+          'fields: etl_run_id, entity, row_pk, rule, severity, payload'
+        ]}
+      ]
+    },
+    'transform-marts': {
+      title: 'transform → 5 marts',
+      meta: 'Transformer · INSERT…SELECT с агрегациями + provenance',
+      sections: [
+        { name: 'Mart builders', items: [
+          'BuildDemandHistory (агрегация receipt_line по дням)',
+          'BuildCalculationInput (resolve order_rule → supply_spec)',
+          'BuildKpiDaily (SUM revenue, OOS, transactions)',
+          'BuildMasterCurrent (products + locations + suppliers)',
+          'BuildSupplierScorecard (fill_rate, lead_time, OTIF)'
+        ]},
+        { name: 'Provenance', items: [
+          'каждая строка несёт etl_run_id + source_load_id'
+        ]}
+      ]
+    },
+    'quality-gate': {
+      title: 'quality-threshold-check',
+      meta: 'Loader · fail/continue решение',
+      sections: [
+        { name: 'Расчёт', items: [
+          'ratio = lines_failed / lines_total',
+          'soft target < 0.5%',
+          'hard fail > 1.0% → ErrQualityThresholdExceeded',
+          'если fail: UPDATE etl_runs SET status=\'failed\', reason=...',
+          'старые витрины остаются актуальными (no flip)'
+        ]}
+      ]
+    },
+    'atomic-flip': {
+      title: 'atomic-flip (UPSERT + commit)',
+      meta: 'Loader → marts.* + etl_runs · один pgxpool tx',
+      sections: [
+        { name: 'Transaction (BEGIN…COMMIT)', items: [
+          'INSERT INTO mart_demand_history (partition по as_of_date)',
+          'TRUNCATE+INSERT mart_calculation_input',
+          'INSERT mart_kpi_daily (partitioned)',
+          'TRUNCATE+INSERT mart_master_current; INSERT mart_supplier_scorecard',
+          'См. полный список в design-go-layers.md'
+        ]},
+        { name: 'Commit', items: [
+          'UPDATE etl_runs SET status=\'committed\', committed_at=now()',
+          'COMMIT; pg_advisory_unlock(...)'
+        ]}
+      ]
+    },
+    'error-paths': {
+      title: 'error-paths (401/409/503/failed)',
+      meta: 'Loader / Storage → Trigger · обратный поток статусов',
+      sections: [
+        { name: 'HTTP-уровень (admin)', items: [
+          '401 unauthorized (ErrUnauthorized)',
+          '409 etl_run_already_running (EV-001) + currentRunID',
+          '503 snapshot_not_ready'
+        ]},
+        { name: 'Pipeline-уровень', items: [
+          'status=\'aborted\' reason=\'snapshot_not_ready\'',
+          'status=\'failed\' reason=\'quality_threshold_exceeded\'',
+          'См. полный список в design-go-layers.md'
+        ]}
+      ]
+    },
+    'metrics-emit': {
+      title: 'metrics inkrement',
+      meta: 'Storage → Prometheus · scrape /metrics',
+      sections: [
+        { name: 'Counters', items: [
+          'etl_run_success_total',
+          'etl_run_failed_total{reason}',
+          'etl_lines_processed_total{entity}',
+          'etl_lines_failed_total{entity,severity}',
+          'mart_rows_total{mart}'
+        ]},
+        { name: 'Histograms / gauges', items: [
+          'etl_run_duration_seconds',
+          'etl_lag_seconds (source committed → ETL committed)',
+          'См. полный список в design-go-layers.md'
+        ]}
+      ]
+    }
+  };
+
+  // ============================================
+  // РЕНДЕР СТРЕЛОК И ПОДПИСЕЙ
+  // ============================================
+  const canvas = document.querySelector('.swimlane-canvas');
+  const svg = document.getElementById('arrows');
+  const labelsLayer = document.getElementById('labels-layer');
+  const tooltip = document.getElementById('tooltip');
+
+  function rectOf(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const p = canvas.getBoundingClientRect();
+    return {
+      left: r.left - p.left, right: r.right - p.left,
+      top: r.top - p.top,   bottom: r.bottom - p.top,
+      cx: r.left - p.left + r.width/2,
+      cy: r.top - p.top + r.height/2,
+      width: r.width, height: r.height
+    };
+  }
+
+  function drawLine(x1, y1, x2, y2, opts = {}) {
+    const { dashed = false, via = null } = opts;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    let d = `M ${x1} ${y1}`;
+    if (Array.isArray(via)) {
+      for (const pt of via) d += ` L ${pt.x} ${pt.y}`;
+    } else if (via) {
+      d += ` L ${via.x} ${via.y}`;
+    }
+    d += ` L ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#2C2C2A');
+    path.setAttribute('stroke-width', '1.4');
+    path.setAttribute('opacity', '0.55');
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+    svg.appendChild(path);
+  }
+
+  function drawLabel(x, y, flowKey) {
+    const flow = FLOWS[flowKey];
+    if (!flow) return;
+    const label = document.createElement('div');
+    label.className = 'arrow-label';
+    label.style.left = x + 'px';
+    label.style.top = y + 'px';
+    label.textContent = flow.title;
+    label.dataset.flowKey = flowKey;
+    label.addEventListener('mouseenter', showTooltip);
+    label.addEventListener('mousemove', moveTooltip);
+    label.addEventListener('mouseleave', hideTooltip);
+    labelsLayer.appendChild(label);
+  }
+
+  function showTooltip(e) {
+    const key = e.currentTarget.dataset.flowKey;
+    const flow = FLOWS[key];
+    if (!flow) return;
+    let html = `<div class="tt-title">${flow.title}</div>`;
+    if (flow.meta) html += `<div class="tt-meta">${flow.meta}</div>`;
+    flow.sections.forEach((sec, idx) => {
+      if (sec.name && flow.sections.length > 1) {
+        html += `<div class="tt-section" ${idx === 0 ? 'style="margin-top:0"' : ''}>${sec.name}</div>`;
+      }
+      html += '<ul>';
+      sec.items.forEach(item => { html += `<li>${item}</li>`; });
+      html += '</ul>';
+    });
+    tooltip.innerHTML = html;
+    tooltip.classList.add('visible');
+    moveTooltip(e);
+  }
+
+  function moveTooltip(e) {
+    const padding = 14;
+    const ttRect = tooltip.getBoundingClientRect();
+    let x = e.clientX + padding;
+    let y = e.clientY + padding;
+    if (x + ttRect.width > window.innerWidth - padding) x = e.clientX - ttRect.width - padding;
+    if (y + ttRect.height > window.innerHeight - padding) y = e.clientY - ttRect.height - padding;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+
+  function hideTooltip() { tooltip.classList.remove('visible'); }
+
+  function render() {
+    svg.innerHTML = '';
+    labelsLayer.innerHTML = '';
+    const pr = canvas.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${pr.width} ${pr.height}`);
+    svg.setAttribute('width',  pr.width);
+    svg.setAttribute('height', pr.height);
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = `
+      <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M2 1 L8 5 L2 9" fill="none" stroke="#2C2C2A"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      </marker>
+    `;
+    svg.appendChild(defs);
+
+    // === Стрелки между ячейками ===
+
+    // 1. Trigger Phase 1 → Storage Phase 1 (cron-lock): advisory lock + insert etl_runs
+    {
+      const a = rectOf('c-trigger-1');
+      const b = rectOf('c-storage-1');
+      if (a && b) {
+        drawLine(a.cx, a.bottom - 18, b.cx, b.top + 18);
+        drawLabel(a.cx, (a.bottom + b.top) / 2, 'cron-lock');
+      }
+    }
+
+    // 2. Storage Phase 1 → Extractor Phase 2 (snapshot-fetch)
+    {
+      const a = rectOf('c-storage-1');
+      const b = rectOf('c-extractor-2');
+      if (a && b) {
+        const midX = (a.right + b.left) / 2;
+        drawLine(a.right - 20, a.cy, b.cx, b.bottom - 18, {
+          via: [{ x: midX, y: a.cy }, { x: b.cx, y: a.cy }]
+        });
+        drawLabel(midX + 30, a.cy - 14, 'snapshot-fetch');
+      }
+    }
+
+    // 3. Extractor Phase 2 → Storage Phase 2 (entities-stream → stg_*)
+    {
+      const a = rectOf('c-extractor-2');
+      const b = rectOf('c-storage-2');
+      if (a && b) {
+        drawLine(a.cx + 30, a.bottom - 18, b.cx + 30, b.top + 18);
+        drawLabel(a.cx + 30, (a.bottom + b.top) / 2, 'entities-stream');
+      }
+    }
+
+    // 4. Extractor Phase 2 → Transformer Phase 2 (cross-validate)
+    {
+      const a = rectOf('c-extractor-2');
+      const b = rectOf('c-transformer-2');
+      if (a && b) {
+        drawLine(a.cx, a.bottom - 18, b.cx, b.top + 18);
+        drawLabel(a.cx, (a.bottom + b.top) / 2, 'cross-validate');
+      }
+    }
+
+    // 5. Transformer Phase 2 → Transformer Phase 3 → Storage Phase 3 (transform-marts с provenance + reject_log writes)
+    {
+      const a = rectOf('c-transformer-2');
+      const b = rectOf('c-transformer-3');
+      if (a && b) {
+        drawLine(a.right - 18, a.cy, b.left + 18, b.cy);
+      }
+      const t3 = rectOf('c-transformer-3');
+      const s3 = rectOf('c-storage-3');
+      if (t3 && s3) {
+        drawLine(t3.cx, t3.bottom - 18, s3.cx, s3.top + 18);
+        drawLabel(t3.cx, (t3.bottom + s3.top) / 2, 'transform-marts');
+      }
+    }
+
+    // 6. Transformer Phase 3 → Loader Phase 3 (quality-gate)
+    {
+      const a = rectOf('c-transformer-3');
+      const b = rectOf('c-loader-3');
+      if (a && b) {
+        const midX = (a.right + b.left) / 2;
+        drawLine(a.right - 20, a.cy, b.left + 20, b.cy, {
+          via: { x: midX, y: (a.cy + b.cy) / 2 }
+        });
+        drawLabel(midX, (a.cy + b.cy) / 2 - 14, 'quality-gate');
+      }
+    }
+
+    // 7. Loader Phase 3 → Loader Phase 4 → Storage Phase 4 (atomic-flip)
+    {
+      const l3 = rectOf('c-loader-3');
+      const l4 = rectOf('c-loader-4');
+      if (l3 && l4) {
+        drawLine(l3.right - 18, l3.cy, l4.left + 18, l4.cy);
+      }
+      const ll4 = rectOf('c-loader-4');
+      const s4 = rectOf('c-storage-4');
+      if (ll4 && s4) {
+        drawLine(ll4.cx, ll4.bottom - 18, s4.cx, s4.top + 18);
+        drawLabel(ll4.cx, (ll4.bottom + s4.top) / 2, 'atomic-flip');
+      }
+    }
+
+    // 8. Storage Phase 4 → Storage Phase 5 (metrics-emit)
+    {
+      const a = rectOf('c-storage-4');
+      const b = rectOf('c-storage-5');
+      if (a && b) {
+        drawLine(a.right - 18, a.cy, b.left + 18, b.cy);
+        drawLabel((a.right + b.left) / 2, a.cy - 14, 'metrics-emit');
+      }
+    }
+
+    // 9. Storage Phase 5 → Trigger Phase 5 (Outcome) — обратный поток
+    {
+      const a = rectOf('c-storage-5');
+      const b = rectOf('c-trigger-5');
+      if (a && b) {
+        drawLine(a.cx, a.top + 18, b.cx, b.bottom - 18, { dashed: true });
+      }
+    }
+
+    // 10. Error path: Loader Phase 3 (quality fail) → Trigger Phase 5 (Outcome) — dashed external loop
+    {
+      const a = rectOf('c-loader-3');
+      const b = rectOf('c-trigger-5');
+      if (a && b) {
+        const midX = b.right - 30;
+        drawLine(a.right - 18, a.cy, b.cx, b.bottom - 18, {
+          dashed: true,
+          via: [{ x: midX, y: a.cy }, { x: midX, y: b.bottom - 18 }]
+        });
+        drawLabel(midX, (a.cy + b.bottom) / 2 - 14, 'error-paths');
+      }
+    }
+  }
+
+  window.addEventListener('load',   () => setTimeout(render, 60));
+  window.addEventListener('resize', () => setTimeout(render, 100));
+  render();
+</script>
+
+</body>
+</html>

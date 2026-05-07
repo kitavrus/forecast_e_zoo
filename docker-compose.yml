@@ -63,6 +63,34 @@ services:
     volumes:
       - exports_data:/var/exports
 
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile.etl
+    image: e_zoo/etl:dev
+    container_name: ezoo_etl
+    depends_on:
+      postgres:
+        condition: service_healthy
+      source-adapter:
+        condition: service_started
+    environment:
+      ETL_DSN: "postgres://adapter:adapter@postgres:5432/source_adapter?sslmode=disable&pool_max_conns=20"
+      ETL_HTTP_PORT: "8081"
+      ETL_SOURCE_ADAPTER_URL: "http://source-adapter:8080"
+      ETL_JWT_SIGNING_KEY: "dev-secret-change-in-prod"
+      ETL_JWT_ROLE: "x-flow-etl"
+      ETL_ADMIN_JWT_SECRET: "dev-secret-change-in-prod"
+      ETL_CRON_SCHEDULE: "30 2 * * *"
+      ETL_CRON_TIMEZONE: "Europe/Kyiv"
+      ETL_RETRY_BACKOFF_CAP: "30s"
+      ETL_VALIDATION_RULES_PATH: "/app/configs/etl_validation_rules.yaml"
+      ETL_QUALITY_THRESHOLD: "0.01"
+      ETL_LOG_LEVEL: "info"
+      ETL_ENV: "dev"
+    ports:
+      - "8081:8081"
+
   prometheus:
     image: prom/prometheus:latest
     container_name: ezoo_prometheus
