@@ -85,6 +85,39 @@ var (
 		Name: "kpi_engine_errors_total",
 		Help: "KPI engine errors by kpi_name and reason.",
 	}, []string{"kpi_name", "reason"})
+
+	// --- Forecast Engine (Module 5 forecast-engine) ---
+
+	ForecastEngineRunTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "forecast_engine_run_total",
+		Help: "Forecast engine run outcomes.",
+	}, []string{"result"}) // result = ok|error|skipped
+
+	ForecastEngineRunDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "forecast_engine_run_duration_seconds",
+		Help:    "Forecast engine run end-to-end duration.",
+		Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1800},
+	})
+
+	ForecastForecastsCountTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "forecast_forecasts_count_total",
+		Help: "Forecast rows written by forecast engine.",
+	})
+
+	ForecastLinesCountTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "forecast_lines_count_total",
+		Help: "Calculation lines written by forecast engine.",
+	})
+
+	ForecastPlansCountTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "forecast_plans_count_total",
+		Help: "Replenishment plans written by forecast engine.",
+	})
+
+	ForecastEngineErrorsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "forecast_engine_errors_total",
+		Help: "Forecast engine errors by reason.",
+	}, []string{"reason"})
 )
 
 // allMetrics — единый список для регистрации/тестов.
@@ -94,6 +127,9 @@ func allMetrics() []prometheus.Collector {
 		HTTPRequestsTotal, HTTPRequestDuration, LoadDuration,
 		LinesProcessedTotal, LinesFailedTotal, AdvisoryLockBusyTotal, SchedulerTickTotal,
 		KpiEngineRunTotal, KpiEngineRunDuration, KpiSnapshotCountTotal, KpiEngineErrorsTotal,
+		ForecastEngineRunTotal, ForecastEngineRunDuration,
+		ForecastForecastsCountTotal, ForecastLinesCountTotal, ForecastPlansCountTotal,
+		ForecastEngineErrorsTotal,
 	}
 }
 
