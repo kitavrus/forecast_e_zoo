@@ -1,0 +1,4 @@
+[
+  {"location_id":"STORE-KYIV-01","product_id":"P-002","event_type":"start","event_date":"2026-04-01T00:00:00Z","payload":{}},
+  {"location_id":"STORE-LVIV-01","product_id":"P-005","event_type":"stop","event_date":"2026-04-25T00:00:00Z","payload":{"reason":"discontinued"}}
+]

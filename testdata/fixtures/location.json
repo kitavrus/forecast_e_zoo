@@ -1,0 +1,5 @@
+[
+  {"id":"DC-KYIV-01","type":"DC","name":"DC Kyiv","region":"Kyiv","updated_at":"2026-01-01T00:00:00Z"},
+  {"id":"STORE-KYIV-01","type":"STORE","name":"Store Kyiv Pechersk","region":"Kyiv","updated_at":"2026-01-01T00:00:00Z"},
+  {"id":"STORE-LVIV-01","type":"STORE","name":"Store Lviv Center","region":"Lviv","updated_at":"2026-01-01T00:00:00Z"}
+]

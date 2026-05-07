@@ -1,0 +1,5 @@
+[
+  {"location_id":"STORE-KYIV-01","product_id":"P-001","start_date":"2026-01-01T00:00:00Z","is_active":true,"updated_at":"2026-01-01T00:00:00Z"},
+  {"location_id":"STORE-KYIV-01","product_id":"P-002","start_date":"2026-01-01T00:00:00Z","is_active":true,"updated_at":"2026-01-01T00:00:00Z"},
+  {"location_id":"STORE-LVIV-01","product_id":"P-001","start_date":"2026-01-01T00:00:00Z","is_active":true,"updated_at":"2026-01-01T00:00:00Z"}
+]

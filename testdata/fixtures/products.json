@@ -1,0 +1,7 @@
+[
+  {"id":"P-001","sku":"RC-ADULT-3KG","name":"Royal Canin Adult 3kg","category_id":"CAT-DOG-FOOD","unit":"kg","pack_size":3.0,"is_active":true,"attributes":{"brand":"Royal Canin"},"updated_at":"2026-04-01T10:00:00Z"},
+  {"id":"P-002","sku":"WS-FELIX-400G","name":"Felix Sensations 400g","category_id":"CAT-CAT-FOOD","unit":"g","pack_size":400.0,"is_active":true,"attributes":{"brand":"Felix"},"updated_at":"2026-05-01T08:30:00Z"},
+  {"id":"P-003","sku":"VIT-OMG3-30","name":"Omega-3 Cat Drops 30ml","category_id":"CAT-VITAMIN","unit":"ml","pack_size":30.0,"is_active":true,"attributes":{},"updated_at":"2026-05-05T14:20:00Z"},
+  {"id":"P-004","sku":"TOY-BALL-S","name":"Rubber Ball S","category_id":"CAT-TOY","unit":"pcs","pack_size":1.0,"is_active":true,"attributes":{},"updated_at":"2026-03-15T11:00:00Z"},
+  {"id":"P-005","sku":"LITTER-CRYS-5L","name":"Crystal Litter 5L","category_id":"CAT-LITTER","unit":"l","pack_size":5.0,"is_active":false,"attributes":{},"updated_at":"2026-04-20T09:00:00Z"}
+]

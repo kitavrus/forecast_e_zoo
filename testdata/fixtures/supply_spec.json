@@ -1,0 +1,4 @@
+[
+  {"product_id":"P-001","supplier_id":"SUP-RC-UA","pack_qty":12,"lead_time_days":7,"min_order_qty":24,"multiple":12,"valid_from":"2026-01-01T00:00:00Z"},
+  {"product_id":"P-002","supplier_id":"SUP-MARS","pack_qty":24,"lead_time_days":5,"min_order_qty":48,"multiple":24,"valid_from":"2026-01-01T00:00:00Z"}
+]

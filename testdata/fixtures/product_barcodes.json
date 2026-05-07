@@ -1,0 +1,5 @@
+[
+  {"product_id":"P-001","barcode":"3182550707053","is_primary":true},
+  {"product_id":"P-002","barcode":"7613031234567","is_primary":true},
+  {"product_id":"P-003","barcode":"4607123456789","is_primary":true}
+]

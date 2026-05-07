@@ -1,0 +1,5 @@
+[
+  {"event_date":"2026-05-07T00:00:00Z","location_id":"STORE-KYIV-01","product_id":"P-001","qty_on_hand":24,"qty_reserved":4,"as_of":"2026-05-07T03:00:00Z"},
+  {"event_date":"2026-05-07T00:00:00Z","location_id":"STORE-KYIV-01","product_id":"P-002","qty_on_hand":120,"qty_reserved":0,"as_of":"2026-05-07T03:00:00Z"},
+  {"event_date":"2026-05-07T00:00:00Z","location_id":"STORE-LVIV-01","product_id":"P-001","qty_on_hand":18,"qty_reserved":2,"as_of":"2026-05-07T03:00:00Z"}
+]

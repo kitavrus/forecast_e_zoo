@@ -1,0 +1,7 @@
+[
+  {"id":"CAT-DOG-FOOD","name":"Корм для собак","path":"food.dog","updated_at":"2026-01-01T00:00:00Z"},
+  {"id":"CAT-CAT-FOOD","name":"Корм для кошек","path":"food.cat","updated_at":"2026-01-01T00:00:00Z"},
+  {"id":"CAT-VITAMIN","name":"Витамины","path":"health.vitamin","updated_at":"2026-01-01T00:00:00Z"},
+  {"id":"CAT-TOY","name":"Игрушки","path":"toys","updated_at":"2026-01-01T00:00:00Z"},
+  {"id":"CAT-LITTER","name":"Наполнители","path":"hygiene.litter","updated_at":"2026-01-01T00:00:00Z"}
+]
