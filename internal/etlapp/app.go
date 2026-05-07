@@ -15,6 +15,7 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/extractor"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/handler"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/loader"
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/metrics"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/repository"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/router"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/scheduler"
@@ -88,7 +89,8 @@ func New(ctx context.Context, cfg *etlconfig.Config, log *slog.Logger) (*App, er
 	pipelineCfg := service.EtlPipelineConfig{
 		QualityThreshold: cfg.QualityThreshold,
 	}
-	pipeline := service.NewEtlPipeline(deps.Pool, repo, extr, engine, registry, ld, service.NoopMetrics{}, log, pipelineCfg)
+	metricsRecorder := metrics.New()
+	pipeline := service.NewEtlPipeline(deps.Pool, repo, extr, engine, registry, ld, metricsRecorder, log, pipelineCfg)
 
 	runSvc := service.NewEtlRunService(repo, pipeline)
 	refreshSvc := service.NewMartRefreshService(deps.Pool, repo, registry, ld, extr)
@@ -106,10 +108,12 @@ func New(ctx context.Context, cfg *etlconfig.Config, log *slog.Logger) (*App, er
 	router.Register(apiV1, h, router.Middlewares{
 		Admin: router.AdminSecretMiddleware(cfg.AdminJWTSecret),
 	})
+	// Public /metrics для Prometheus scrape (вне /api/v1).
+	fiberApp.Get("/metrics", metricsRecorder.Handler())
 
 	// Scheduler.
 	maint := scheduler.NewPartitionMaintainer(deps.Pool)
-	sch, err := scheduler.New(pipeline, maint, scheduler.NoopSkipMetrics{}, log, scheduler.Config{
+	sch, err := scheduler.New(pipeline, maint, metricsRecorder, log, scheduler.Config{
 		CronExpr: cfg.CronSchedule,
 		Timezone: cfg.CronTimezone,
 	})
