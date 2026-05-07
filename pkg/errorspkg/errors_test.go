@@ -81,6 +81,34 @@ func TestPhase07_Sentinels_Defaults(t *testing.T) {
 	}
 }
 
+// TestPhase08_Sentinels_Defaults — проверяем дефолты sentinel'ов фазы 8.
+func TestPhase08_Sentinels_Defaults(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		err  *Error
+		code string
+		http int
+	}{
+		{"LoadNotFound", ErrLoadNotFound, "load_not_found", http.StatusNotFound},
+		{"SnapshotNotFound", ErrSnapshotNotFound, "snapshot_not_found", http.StatusNotFound},
+		{"SnapshotNotReady", ErrSnapshotNotReady, "snapshot_not_ready", http.StatusServiceUnavailable},
+		{"LoadAlreadyRunning", ErrLoadAlreadyRunning, "load_already_running", http.StatusConflict},
+		{"CannotRetry", ErrCannotRetry, "cannot_retry", http.StatusConflict},
+		{"AlreadyExists", ErrAlreadyExists, "already_exists", http.StatusConflict},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.NotNil(t, tc.err)
+			assert.Equal(t, tc.code, tc.err.Code)
+			assert.Equal(t, tc.http, tc.err.HTTP)
+			wrapped := tc.err.Wrap(fmt.Errorf("cause"))
+			assert.True(t, errors.Is(wrapped, tc.err))
+		})
+	}
+}
+
 // TestError_WithDetails_Idempotent — проверяем, что WithDetails не мутирует оригинал.
 func TestError_WithDetails_Idempotent(t *testing.T) {
 	t.Parallel()

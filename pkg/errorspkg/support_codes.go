@@ -18,4 +18,12 @@ const (
 	SupportInvalidCursor       = "SA-REQ-002"
 	SupportInvalidQuery        = "SA-REQ-003"
 	SupportInvalidExportFormat = "SA-EXP-001"
+
+	// Repository / loads / snapshot (phase 08)
+	SupportLoadNotFound       = "SA-LOAD-001"
+	SupportLoadAlreadyRunning = "SA-LOAD-002"
+	SupportCannotRetry        = "SA-LOAD-003"
+	SupportSnapshotNotFound   = "SA-SNAP-001"
+	SupportSnapshotNotReady   = "SA-SNAP-002"
+	SupportAlreadyExists      = "SA-CONF-002"
 )

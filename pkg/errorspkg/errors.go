@@ -242,4 +242,52 @@ var (
 		SupportMessage: SupportInvalidExportFormat,
 		HTTP:           http.StatusBadRequest,
 	}
+
+	// ErrLoadNotFound — 404, GET /admin/loads/{id} → load не найден.
+	ErrLoadNotFound = &Error{
+		Code:           "load_not_found",
+		Message:        "load not found",
+		SupportMessage: SupportLoadNotFound,
+		HTTP:           http.StatusNotFound,
+	}
+
+	// ErrSnapshotNotFound — 404, GET /v1/snapshots/{id} → snapshot не найден.
+	ErrSnapshotNotFound = &Error{
+		Code:           "snapshot_not_found",
+		Message:        "snapshot not found",
+		SupportMessage: SupportSnapshotNotFound,
+		HTTP:           http.StatusNotFound,
+	}
+
+	// ErrSnapshotNotReady — 503 + Retry-After:60. Первый запуск, ещё нет committed snapshot.
+	ErrSnapshotNotReady = &Error{
+		Code:           "snapshot_not_ready",
+		Message:        "snapshot not ready",
+		SupportMessage: SupportSnapshotNotReady,
+		HTTP:           http.StatusServiceUnavailable,
+	}
+
+	// ErrLoadAlreadyRunning — 409, POST /admin/loads пока другой load выполняется.
+	ErrLoadAlreadyRunning = &Error{
+		Code:           "load_already_running",
+		Message:        "another load is already running",
+		SupportMessage: SupportLoadAlreadyRunning,
+		HTTP:           http.StatusConflict,
+	}
+
+	// ErrCannotRetry — 409, POST /admin/loads/{id}/retry над load со status != failed.
+	ErrCannotRetry = &Error{
+		Code:           "cannot_retry",
+		Message:        "load cannot be retried",
+		SupportMessage: SupportCannotRetry,
+		HTTP:           http.StatusConflict,
+	}
+
+	// ErrAlreadyExists — 409, INSERT нарушил unique-constraint (pgconn 23505).
+	ErrAlreadyExists = &Error{
+		Code:           "already_exists",
+		Message:        "resource already exists",
+		SupportMessage: SupportAlreadyExists,
+		HTTP:           http.StatusConflict,
+	}
 )

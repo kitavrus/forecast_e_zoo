@@ -18,7 +18,7 @@
 | 05 | Models / DTO | [code-plan-phase-05-models-dto.md](code-plan-phase-05-models-dto.md) | done | 2026-05-07T02:30:00Z | build/test/lint зелёные; cursor + dto валидаторы покрыты тестами |
 | 06 | SQL queries (go:embed) | [code-plan-phase-06-sql-queries.md](code-plan-phase-06-sql-queries.md) | done | 2026-05-07T02:50:00Z | 32 SQL-файла + embed.go; build/test/lint зелёные; SQL подогнаны под фактические migrations 0001/0002 |
 | 07 | Validators + Engine + YAML | [code-plan-phase-07-validators-engine-yaml.md](code-plan-phase-07-validators-engine-yaml.md) | done | 2026-05-07T03:10:00Z | 7 правил YAML; engine + 7 builtin checks; формальные validators; 3 новых sentinel; build/test/lint зелёные |
-| 08 | Repository + integration tests | [code-plan-phase-08-repository.md](code-plan-phase-08-repository.md) | pending | 2026-05-07 | — |
+| 08 | Repository + integration tests | [code-plan-phase-08-repository.md](code-plan-phase-08-repository.md) | done | 2026-05-07T03:35:00Z | pgx Repository + 15 integration-тестов на dockertest postgres:18-alpine; 6 новых sentinel; build/lint зелёные |
 | 09 | SourceReader interface + stub | [code-plan-phase-09-source-reader-stub.md](code-plan-phase-09-source-reader-stub.md) | pending | 2026-05-07 | — |
 | 10 | Loader service | [code-plan-phase-10-loader-service.md](code-plan-phase-10-loader-service.md) | pending | 2026-05-07 | — |
 | 11 | Snapshot + Audit | [code-plan-phase-11-snapshot-audit.md](code-plan-phase-11-snapshot-audit.md) | pending | 2026-05-07 | — |
@@ -33,9 +33,9 @@
 ## Сводка
 
 - Всего фаз: **16**
-- pending: **9**
+- pending: **8**
 - in_progress: **0**
-- done: **7**
+- done: **8**
 - blocked: **0**
 - skipped: **0**
 
