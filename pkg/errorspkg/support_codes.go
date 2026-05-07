@@ -38,6 +38,11 @@ const (
 	SupportCannotRetryEtl          = "EV-003"
 	SupportSourceUnavailable       = "EV-004"
 	SupportMartRefreshNotSupported = "EV-005"
+
+	// KPI module (Module 4 kpi-calibration, KPI-*)
+	SupportKpiSnapshotNotFound    = "KPI-001"
+	SupportKpiCalibrationNotFound = "KPI-002"
+	SupportInvalidKpiName         = "KPI-003"
 )
 
 // SupportMessageCodes — общий список всех допустимых support-кодов.
@@ -67,4 +72,7 @@ var SupportMessageCodes = []string{
 	SupportCannotRetryEtl,
 	SupportSourceUnavailable,
 	SupportMartRefreshNotSupported,
+	SupportKpiSnapshotNotFound,
+	SupportKpiCalibrationNotFound,
+	SupportInvalidKpiName,
 }
