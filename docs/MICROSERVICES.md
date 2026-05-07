@@ -141,6 +141,19 @@ make test-integration       # integration (requires Docker)
 make lint                   # golangci-lint
 ```
 
+## E2E тест с mock ERP
+
+Полный pipeline (mock-ERP → 7 микросервисов → mock-ERP) проверяется одним bash-скриптом:
+
+```bash
+make e2e-up                                  # up + seed_channel_configs
+bash tests/e2e/run.sh --skip-up              # 8 stages × admin endpoints
+```
+
+Скрипт прогоняет 8 стадий (source-adapter ingest → etl marts → kpi → forecast → approve plans → order-builder → channel-router → mock-erp verify), на каждой делает HTTP-вызов админ-эндпоинта и проверяет соответствующую таблицу в Postgres.
+
+Подробности (per-stage breakdown, флаги, troubleshooting) — [docs/E2E-TEST.md](E2E-TEST.md).
+
 ## Известные проблемы
 
 - **Миграция `4001_orders_schema.up.sql` (M6, orders)** — pre-existing bug:
