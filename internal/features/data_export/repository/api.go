@@ -24,6 +24,9 @@ type LoaderAPI interface {
 
 	InsertReject(ctx context.Context, in RejectInput) error
 
+	UpsertCategory(ctx context.Context, tx pgx.Tx, c CategoryRow, loadID uuid.UUID) error
+	UpsertSupplier(ctx context.Context, tx pgx.Tx, s SupplierRow, loadID uuid.UUID) error
+	UpsertLocation(ctx context.Context, tx pgx.Tx, l LocationRow, loadID uuid.UUID) error
 	UpsertProduct(ctx context.Context, tx pgx.Tx, p ProductRow, loadID uuid.UUID) error
 	InsertReceiptLineBatch(ctx context.Context, tx pgx.Tx, batch []ReceiptLineRow, loadID uuid.UUID) error
 

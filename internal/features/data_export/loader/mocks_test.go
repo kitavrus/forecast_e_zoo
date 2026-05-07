@@ -146,13 +146,16 @@ func (m *mockTx) Conn() *pgx.Conn                                               
 type mockRepo struct {
 	mu sync.Mutex
 
-	insertRunningCalled int
-	upsertProductCalled int
-	insertBatchCalled   int
-	insertRejectCalled  int
-	flipCalled          int
-	markCommittedCalled int
-	markFailedCalled    int
+	insertRunningCalled  int
+	upsertCategoryCalled int
+	upsertSupplierCalled int
+	upsertLocationCalled int
+	upsertProductCalled  int
+	insertBatchCalled    int
+	insertRejectCalled   int
+	flipCalled           int
+	markCommittedCalled  int
+	markFailedCalled     int
 
 	insertReturns models.Load
 	flipErr       error
@@ -199,6 +202,24 @@ func (m *mockRepo) InsertReject(_ context.Context, _ repository.RejectInput) err
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.insertRejectCalled++
+	return nil
+}
+func (m *mockRepo) UpsertCategory(_ context.Context, _ pgx.Tx, _ repository.CategoryRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.upsertCategoryCalled++
+	return nil
+}
+func (m *mockRepo) UpsertSupplier(_ context.Context, _ pgx.Tx, _ repository.SupplierRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.upsertSupplierCalled++
+	return nil
+}
+func (m *mockRepo) UpsertLocation(_ context.Context, _ pgx.Tx, _ repository.LocationRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.upsertLocationCalled++
 	return nil
 }
 func (m *mockRepo) UpsertProduct(_ context.Context, _ pgx.Tx, _ repository.ProductRow, _ uuid.UUID) error {

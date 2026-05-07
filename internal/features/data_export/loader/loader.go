@@ -382,53 +382,214 @@ func (l *Loader) loadSupplierStockSnapshot(ctx context.Context, _ uuid.UUID, p *
 	return nil
 }
 
-// loadGeneric — pass-through: считаем строки, прогоняем через engine, UPSERT нет.
+// loadGeneric — реальный UPSERT master-сущностей без сложной логики (category,
+// supplier, location). Считает строки, прогоняет через engine, batched UPSERT.
+//
+// ВАЖНО (Issue #5 validation 2026-05-07; повторно 2026-05-08): раньше эта функция
+// была pass-through (только считала Next()), из-за чего category/supplier/location
+// никогда не попадали в БД, и products падал на products_category_id_fkey.
+// Теперь каждый case делает реальный UPSERT в commit-tx так же, как loadProducts.
 func (l *Loader) loadGeneric(ctx context.Context, entity string, loadID uuid.UUID, progress map[string]*EntityProgress, state *validation.State) error {
 	p := progress[entity]
 	switch entity {
 	case "category":
-		it, err := l.reader.ReadCategory(ctx, l.since)
-		if err != nil {
-			return errorspkg.ErrERPUnavailable.Wrap(err)
-		}
-		defer func() { _ = it.Close() }()
-		for it.Next(ctx) {
-			p.LinesTotal++
-		}
-		return it.Err()
+		return l.loadCategory(ctx, loadID, p, state)
 	case "location":
-		it, err := l.reader.ReadLocation(ctx, l.since)
-		if err != nil {
-			return errorspkg.ErrERPUnavailable.Wrap(err)
-		}
-		defer func() { _ = it.Close() }()
-		for it.Next(ctx) {
-			it2 := it.Item()
-			p.LinesTotal++
-			payload := map[string]any{"id": it2.ID, "name": it2.Name, "type": it2.Type}
-			violations := l.engine.Check("location", payload, state)
-			if hasCritical(violations) {
-				p.LinesFailed++
-				pl, _ := json.Marshal(it2)
-				ev, _ := json.Marshal(violations)
-				_ = l.repo.InsertReject(ctx, repository.RejectInput{
-					LoadID: loadID, Entity: "location", Severity: "error", Payload: pl, Errors: ev,
-				})
-			}
-		}
-		return it.Err()
+		return l.loadLocation(ctx, loadID, p, state)
 	case "supplier":
-		it, err := l.reader.ReadSupplier(ctx, l.since)
-		if err != nil {
-			return errorspkg.ErrERPUnavailable.Wrap(err)
-		}
-		defer func() { _ = it.Close() }()
-		for it.Next(ctx) {
-			p.LinesTotal++
-		}
-		return it.Err()
+		return l.loadSupplier(ctx, loadID, p, state)
 	}
 	return nil
+}
+
+// loadCategory — UPSERT category в БД. Обязательно ДО products (FK products.category_id).
+func (l *Loader) loadCategory(ctx context.Context, loadID uuid.UUID, p *EntityProgress, state *validation.State) error {
+	it, err := l.reader.ReadCategory(ctx, l.since)
+	if err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	defer func() { _ = it.Close() }()
+
+	const batchSize = 500
+	batch := make([]repository.CategoryRow, 0, batchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		tx, err := l.repo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range batch {
+			if err := l.repo.UpsertCategory(ctx, tx, row, loadID); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
+	for it.Next(ctx) {
+		c := it.Item()
+		p.LinesTotal++
+		payload := map[string]any{"id": c.ID, "name": c.Name}
+		violations := l.engine.Check("category", payload, state)
+		if hasCritical(violations) {
+			p.LinesFailed++
+			pl, _ := json.Marshal(c)
+			ev, _ := json.Marshal(violations)
+			_ = l.repo.InsertReject(ctx, repository.RejectInput{
+				LoadID: loadID, Entity: "category", Severity: "error", Payload: pl, Errors: ev,
+			})
+			continue
+		}
+		var pathPtr *string
+		if c.Path != "" {
+			pp := c.Path
+			pathPtr = &pp
+		}
+		batch = append(batch, repository.CategoryRow{
+			ID: c.ID, ParentID: c.ParentID, Name: c.Name, Path: pathPtr,
+		})
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := it.Err(); err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	return flush()
+}
+
+// loadSupplier — UPSERT supplier в БД. Обязательно ДО supplier_stock_snapshot/supply_spec.
+func (l *Loader) loadSupplier(ctx context.Context, loadID uuid.UUID, p *EntityProgress, state *validation.State) error {
+	it, err := l.reader.ReadSupplier(ctx, l.since)
+	if err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	defer func() { _ = it.Close() }()
+
+	const batchSize = 500
+	batch := make([]repository.SupplierRow, 0, batchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		tx, err := l.repo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range batch {
+			if err := l.repo.UpsertSupplier(ctx, tx, row, loadID); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
+	for it.Next(ctx) {
+		s := it.Item()
+		p.LinesTotal++
+		payload := map[string]any{"id": s.ID, "name": s.Name}
+		violations := l.engine.Check("supplier", payload, state)
+		if hasCritical(violations) {
+			p.LinesFailed++
+			pl, _ := json.Marshal(s)
+			ev, _ := json.Marshal(violations)
+			_ = l.repo.InsertReject(ctx, repository.RejectInput{
+				LoadID: loadID, Entity: "supplier", Severity: "error", Payload: pl, Errors: ev,
+			})
+			continue
+		}
+		batch = append(batch, repository.SupplierRow{
+			ID: s.ID, Name: s.Name, INN: s.INN, KPP: s.KPP,
+		})
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := it.Err(); err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	return flush()
+}
+
+// loadLocation — UPSERT location в БД. Обязательно ДО receipt_line/stock_movement/
+// location_stock_snapshot/store_assortment (NOT NULL FK).
+func (l *Loader) loadLocation(ctx context.Context, loadID uuid.UUID, p *EntityProgress, state *validation.State) error {
+	it, err := l.reader.ReadLocation(ctx, l.since)
+	if err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	defer func() { _ = it.Close() }()
+
+	const batchSize = 500
+	batch := make([]repository.LocationRow, 0, batchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		tx, err := l.repo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range batch {
+			if err := l.repo.UpsertLocation(ctx, tx, row, loadID); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
+	for it.Next(ctx) {
+		loc := it.Item()
+		p.LinesTotal++
+		payload := map[string]any{"id": loc.ID, "name": loc.Name, "type": loc.Type}
+		violations := l.engine.Check("location", payload, state)
+		if hasCritical(violations) {
+			p.LinesFailed++
+			pl, _ := json.Marshal(loc)
+			ev, _ := json.Marshal(violations)
+			_ = l.repo.InsertReject(ctx, repository.RejectInput{
+				LoadID: loadID, Entity: "location", Severity: "error", Payload: pl, Errors: ev,
+			})
+			continue
+		}
+		batch = append(batch, repository.LocationRow{
+			ID: loc.ID, Type: loc.Type, Name: loc.Name,
+			Region: loc.Region, Address: loc.Address, Lat: loc.Lat, Lon: loc.Lon,
+		})
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := it.Err(); err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	return flush()
 }
 
 // hasCritical возвращает true, если в violations есть severity=critical.
