@@ -39,6 +39,12 @@ import (
 	dataMartsRepo "github.com/Kitavrus/e_zoo/internal/features/data_marts/repository"
 	dataMartsRouter "github.com/Kitavrus/e_zoo/internal/features/data_marts/router"
 	dataMartsService "github.com/Kitavrus/e_zoo/internal/features/data_marts/service"
+	kpiEngine "github.com/Kitavrus/e_zoo/internal/features/kpi/engine"
+	kpiHandler "github.com/Kitavrus/e_zoo/internal/features/kpi/handler"
+	kpiRepo "github.com/Kitavrus/e_zoo/internal/features/kpi/repository"
+	kpiRouter "github.com/Kitavrus/e_zoo/internal/features/kpi/router"
+	kpiScheduler "github.com/Kitavrus/e_zoo/internal/features/kpi/scheduler"
+	kpiService "github.com/Kitavrus/e_zoo/internal/features/kpi/service"
 	"github.com/Kitavrus/e_zoo/internal/middleware"
 	"github.com/Kitavrus/e_zoo/internal/observability"
 	"github.com/Kitavrus/e_zoo/internal/routers"
@@ -48,11 +54,12 @@ const shutdownTimeout = 30 * time.Second
 
 // App — корневая структура.
 type App struct {
-	cfg       *config.Config
-	log       *slog.Logger
-	fiber     *fiber.App
-	pool      *pgxpool.Pool
-	scheduler *scheduler.Scheduler
+	cfg          *config.Config
+	log          *slog.Logger
+	fiber        *fiber.App
+	pool         *pgxpool.Pool
+	scheduler    *scheduler.Scheduler
+	kpiScheduler *kpiScheduler.Scheduler
 }
 
 // New собирает граф зависимостей.
@@ -176,14 +183,37 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		Handler:   martsH,
 	}
 
-	routers.Register(f, deps, martsDeps)
+	// kpi: KPI engine + admin API (Module 4 kpi-calibration).
+	kRepo := kpiRepo.New(pool)
+	kEng := kpiEngine.New(kRepo, log, nil)
+	kSch, kSchErr := kpiScheduler.New(kpiScheduler.Config{
+		CronExpr: cfg.KPICronSchedule,
+		TZ:       cfg.KPICronTZ,
+	}, kEng, pool, log)
+	if kSchErr != nil {
+		log.Warn("app: kpi scheduler init failed (continue without scheduler)", "error", kSchErr)
+		kSch = nil
+	}
+	var kSvcTrigger kpiService.Trigger
+	if kSch != nil {
+		kSvcTrigger = kSch
+	}
+	kSvc := kpiService.New(kRepo, kSvcTrigger)
+	kH := kpiHandler.NewHandler(kSvc)
+	kpiDeps := kpiRouter.Deps{
+		JWTConfig: jwtCfg,
+		Handler:   kH,
+	}
+
+	routers.Register(f, deps, martsDeps, kpiDeps)
 
 	return &App{
-		cfg:       cfg,
-		log:       log,
-		fiber:     f,
-		pool:      pool,
-		scheduler: sch,
+		cfg:          cfg,
+		log:          log,
+		fiber:        f,
+		pool:         pool,
+		scheduler:    sch,
+		kpiScheduler: kSch,
 	}, nil
 }
 
@@ -194,6 +224,11 @@ func (a *App) Run(ctx context.Context) error {
 	if a.scheduler != nil {
 		if err := a.scheduler.Start(ctx); err != nil {
 			a.log.Warn("app: scheduler start failed", "error", err)
+		}
+	}
+	if a.kpiScheduler != nil {
+		if err := a.kpiScheduler.Start(ctx); err != nil {
+			a.log.Warn("app: kpi scheduler start failed", "error", err)
 		}
 	}
 
@@ -228,6 +263,11 @@ func (a *App) Shutdown() error {
 	if a.scheduler != nil {
 		if err := a.scheduler.Stop(ctx); err != nil {
 			a.log.Warn("scheduler stop error", "error", err)
+		}
+	}
+	if a.kpiScheduler != nil {
+		if err := a.kpiScheduler.Stop(); err != nil {
+			a.log.Warn("kpi scheduler stop error", "error", err)
 		}
 	}
 	if err := a.fiber.ShutdownWithContext(ctx); err != nil {

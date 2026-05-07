@@ -6,17 +6,21 @@ import (
 
 	dataExportRouter "github.com/Kitavrus/e_zoo/internal/features/data_export/router"
 	dataMartsRouter "github.com/Kitavrus/e_zoo/internal/features/data_marts/router"
+	kpiRouter "github.com/Kitavrus/e_zoo/internal/features/kpi/router"
 )
 
 // Register регистрирует все features в одной точке.
 //
-// data_marts встраивается в source-adapter binary как slim feature
-// (read-only API над marts.*) — не отдельный binary.
+// data_marts и kpi встраиваются в source-adapter binary как slim features
+// (читают/пишут общую БД). Если *Deps.Handler == nil — регистрация
+// соответствующего фича-роутера пропускается.
 func Register(
 	app *fiber.App,
 	dataExportDeps dataExportRouter.Deps,
 	dataMartsDeps dataMartsRouter.Deps,
+	kpiDeps kpiRouter.Deps,
 ) {
 	dataExportRouter.Register(app, dataExportDeps)
 	dataMartsRouter.Register(app, dataMartsDeps)
+	kpiRouter.Register(app, kpiDeps)
 }

@@ -40,6 +40,10 @@ type Config struct {
 	SourceAdapterCron string `envconfig:"SOURCE_ADAPTER_CRON_SCHEDULE" default:"0 2 * * *"`
 	SourceAdapterTZ   string `envconfig:"SOURCE_ADAPTER_TZ" default:"Europe/Kyiv"`
 
+	// KPI Engine (Module 4)
+	KPICronSchedule string `envconfig:"KPI_CRON_SCHEDULE" default:"0 4 * * *"`
+	KPICronTZ       string `envconfig:"KPI_CRON_TZ" default:"Europe/Kyiv"`
+
 	// Quality
 	QualityThresholdPct float64 `envconfig:"QUALITY_THRESHOLD_PCT" default:"1.0"`
 
