@@ -62,6 +62,16 @@ const (
 	SupportInvalidPOStatus         = "OB-006"
 	SupportOrderBuilderUnavailable = "OB-007"
 	SupportOrderBuilderInProgress  = "OB-008"
+
+	// Channel Routing module (Module 7 channel-routing, CR-*).
+	SupportSendAttemptNotFound       = "CR-001"
+	SupportChannelNotConfigured      = "CR-002"
+	SupportPONotReadyToSend          = "CR-003"
+	SupportChannelUnavailable        = "CR-004"
+	SupportChannelRoutingInProgress  = "CR-005"
+	SupportChannelRoutingUnavailable = "CR-006"
+	SupportInvalidChannelType        = "CR-007"
+	SupportInvalidAuthMode           = "CR-008"
 )
 
 // SupportMessageCodes — общий список всех допустимых support-кодов.
@@ -109,4 +119,12 @@ var SupportMessageCodes = []string{
 	SupportInvalidPOStatus,
 	SupportOrderBuilderUnavailable,
 	SupportOrderBuilderInProgress,
+	SupportSendAttemptNotFound,
+	SupportChannelNotConfigured,
+	SupportPONotReadyToSend,
+	SupportChannelUnavailable,
+	SupportChannelRoutingInProgress,
+	SupportChannelRoutingUnavailable,
+	SupportInvalidChannelType,
+	SupportInvalidAuthMode,
 }
