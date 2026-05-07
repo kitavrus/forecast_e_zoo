@@ -114,9 +114,21 @@ func (r *Repository) ListEtlRuns(ctx context.Context, f EtlRunListFilter) ([]mod
 	return out, nil
 }
 
-// UpdateEtlRunStatus — частичный UPDATE marts.etl_runs.
+// UpdateEtlRunStatus — частичный UPDATE marts.etl_runs (вне транзакции).
 func (r *Repository) UpdateEtlRunStatus(ctx context.Context, id uuid.UUID, p EtlRunStatusPatch) error {
-	exec := r.chooseExec(nil)
+	return r.updateEtlRunStatus(ctx, r.chooseExec(nil), id, p)
+}
+
+// UpdateEtlRunStatusTx — то же, что UpdateEtlRunStatus, но в рамках tx.
+// Используется loader-ом для атомарного flip-а.
+func (r *Repository) UpdateEtlRunStatusTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, p EtlRunStatusPatch) error {
+	if tx == nil {
+		return fmt.Errorf("repository: UpdateEtlRunStatusTx: tx is required")
+	}
+	return r.updateEtlRunStatus(ctx, tx, id, p)
+}
+
+func (r *Repository) updateEtlRunStatus(ctx context.Context, exec queryExecutor, id uuid.UUID, p EtlRunStatusPatch) error {
 	_, err := exec.Exec(ctx, queries.MustGet("etl_runs_update_status"),
 		id,
 		p.Status,
