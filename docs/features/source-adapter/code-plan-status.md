@@ -23,7 +23,7 @@
 | 10 | Loader service | [code-plan-phase-10-loader-service.md](code-plan-phase-10-loader-service.md) | done | 2026-05-07T04:10:00Z | Loader pipeline (master → facts → flip + quality threshold); LoaderAPI interface для mock; 7 unit-тестов; 2 internal sentinel; build/lint зелёные |
 | 11 | Snapshot + Audit | [code-plan-phase-11-snapshot-audit.md](code-plan-phase-11-snapshot-audit.md) | done | 2026-05-07T04:25:00Z | snapshot.Service + audit.Writer middleware (только /admin/*); 4+4 unit-теста; build/lint зелёные |
 | 12 | Scheduler + admin handlers | [code-plan-phase-12-scheduler-admin-handlers.md](code-plan-phase-12-scheduler-admin-handlers.md) | done | 2026-05-07T04:50:00Z | gocron + advisory lock + partitions pre-step + admin handlers (POST loads/retry, GET loads/{id}, GET reject-log); 3 unit-теста; integration тесты scheduler-а отложены — параллелизм advisory lock уже покрыт фазой 08 |
-| 13 | Read handlers | [code-plan-phase-13-read-handlers.md](code-plan-phase-13-read-handlers.md) | pending | 2026-05-07 | — |
+| 13 | Read handlers | [code-plan-phase-13-read-handlers.md](code-plan-phase-13-read-handlers.md) | done | 2026-05-07T05:05:00Z | helpers (etag/streaming) + healthz + snapshots + products + receipt_line + not-implemented placeholders для прочих 14 entity (501); 12 unit-тестов; build/lint зелёные |
 | 14 | Exports storage | [code-plan-phase-14-exports-storage.md](code-plan-phase-14-exports-storage.md) | pending | 2026-05-07 | — |
 | 15 | Router + DI | [code-plan-phase-15-router-di.md](code-plan-phase-15-router-di.md) | pending | 2026-05-07 | — |
 | 16 | Metrics + observability | [code-plan-phase-16-metrics-observability.md](code-plan-phase-16-metrics-observability.md) | pending | 2026-05-07 | — |
@@ -33,9 +33,9 @@
 ## Сводка
 
 - Всего фаз: **16**
-- pending: **4**
+- pending: **3**
 - in_progress: **0**
-- done: **12**
+- done: **13**
 - blocked: **0**
 - skipped: **0**
 
