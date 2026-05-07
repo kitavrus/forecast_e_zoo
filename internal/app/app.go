@@ -185,7 +185,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 
 	// kpi: KPI engine + admin API (Module 4 kpi-calibration).
 	kRepo := kpiRepo.New(pool)
-	kEng := kpiEngine.New(kRepo, log, nil)
+	kEng := kpiEngine.New(kRepo, log, kpiEngine.NewPrometheusMetrics())
 	kSch, kSchErr := kpiScheduler.New(kpiScheduler.Config{
 		CronExpr: cfg.KPICronSchedule,
 		TZ:       cfg.KPICronTZ,

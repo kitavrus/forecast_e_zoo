@@ -62,6 +62,29 @@ var (
 		Name: "source_adapter_scheduler_tick_total",
 		Help: "Scheduler tick outcomes.",
 	}, []string{"result"}) // result = ok|skipped|error
+
+	// --- KPI Engine (Module 4 kpi-calibration) ---
+
+	KpiEngineRunTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kpi_engine_run_total",
+		Help: "KPI engine run outcomes.",
+	}, []string{"result"}) // result = ok|partial|error|skipped
+
+	KpiEngineRunDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "kpi_engine_run_duration_seconds",
+		Help:    "KPI engine run end-to-end duration.",
+		Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1800},
+	})
+
+	KpiSnapshotCountTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kpi_snapshot_count_total",
+		Help: "Snapshots written by KPI engine, by kpi_name.",
+	}, []string{"kpi_name"})
+
+	KpiEngineErrorsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kpi_engine_errors_total",
+		Help: "KPI engine errors by kpi_name and reason.",
+	}, []string{"kpi_name", "reason"})
 )
 
 // allMetrics — единый список для регистрации/тестов.
@@ -70,6 +93,7 @@ func allMetrics() []prometheus.Collector {
 		LoadSuccessTotal, LoadFailedTotal, SnapshotNotReadyTotal,
 		HTTPRequestsTotal, HTTPRequestDuration, LoadDuration,
 		LinesProcessedTotal, LinesFailedTotal, AdvisoryLockBusyTotal, SchedulerTickTotal,
+		KpiEngineRunTotal, KpiEngineRunDuration, KpiSnapshotCountTotal, KpiEngineErrorsTotal,
 	}
 }
 
