@@ -31,12 +31,18 @@ type EtlRunsUpdater interface {
 }
 
 // ApplyParams — параметры одного запуска Apply.
+//
+// PopulateStaging (опциональный) — вызывается после CreateStagingTables, до
+// Builders[].Build. Используется pipeline-ом для COPY-загрузки в pg_temp.stg_*
+// в той же tx, чтобы mart-builder-ы видели данные. nil → staging остаётся пустым
+// (legacy-поведение для тестов и mart_refresh).
 type ApplyParams struct {
-	RunID        uuid.UUID
-	SourceLoadID uuid.UUID
-	Builders     []transformer.Builder
-	LinesTotal   int64
-	LinesFailed  int64
+	RunID           uuid.UUID
+	SourceLoadID    uuid.UUID
+	Builders        []transformer.Builder
+	LinesTotal      int64
+	LinesFailed     int64
+	PopulateStaging func(ctx context.Context, tx pgx.Tx) error
 }
 
 // Loader — публичный интерфейс.
@@ -107,6 +113,14 @@ func (l *Impl) Apply(ctx context.Context, p ApplyParams) (BuildSummary, error) {
 	// потом наполняет через BulkInsertStaging в той же tx (фаза 13).
 	if err := l.repo.CreateStagingTables(ctx, tx); err != nil {
 		return nil, fmt.Errorf("loader: staging: %w", err)
+	}
+
+	// Опциональная стадия наполнения staging — pipeline (full-run) передаёт сюда
+	// CopyFrom-загрузку из in-memory Dataset; mart_refresh — нет.
+	if p.PopulateStaging != nil {
+		if err := p.PopulateStaging(ctx, tx); err != nil {
+			return nil, fmt.Errorf("loader: populate staging: %w", err)
+		}
 	}
 
 	summary := NewBuildSummary()

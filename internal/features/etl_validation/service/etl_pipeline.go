@@ -14,7 +14,6 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/loader"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/models"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/repository"
-	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/validation"
 	"github.com/Kitavrus/e_zoo/pkg/errorspkg"
 )
 
@@ -126,7 +125,17 @@ func (p *EtlPipeline) TryStart(ctx context.Context, trigger string, requester *s
 
 // runAsync — основная цепочка обработки. На любой ошибке вызывает markFailed.
 //
-//nolint:cyclop,funlen // линейный путь через стадии Extract→Validate→Load.
+// Стадии (Q-005, Q-008, Q-017, ADR-005):
+//  1. Snapshot: GET /v1/snapshots/current → source_load_id зафиксирован.
+//  2. Source load id → UPDATE etl_runs (вне основной tx, для трассировки).
+//  3. Extract+stage: full read NDJSON для всех 16 entity, накопление в Dataset.
+//  4. Validate: engine.Run(dataset) → reject_log + counters lines_total/failed.
+//  5. Quality gate: lines_failed/lines_total > 1% → markFailed(quality_threshold).
+//  6. Load (atomic flip): loader.Apply открывает tx, populateStaging COPY-загружает
+//     stg_* в той же tx, mart-builder-ы строят marts, UpdateEtlRunStatusTx
+//     помечает run committed; всё в одной tx.
+//
+//nolint:cyclop,funlen // линейный путь через стадии; разбивка ухудшит читаемость.
 func (p *EtlPipeline) runAsync(runID uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.cfg.RunTimeout)
 	defer cancel()
@@ -140,7 +149,7 @@ func (p *EtlPipeline) runAsync(runID uuid.UUID) {
 		}
 	}()
 
-	// 1. Extract: snapshot.
+	// 1. Snapshot.
 	snap, err := p.extr.GetCurrentSnapshot(ctx)
 	if err != nil {
 		p.markFailed(ctx, runID, fmt.Sprintf("snapshot: %v", err))
@@ -154,31 +163,68 @@ func (p *EtlPipeline) runAsync(runID uuid.UUID) {
 		return
 	}
 
-	// 2/3/4: реальный extract+stage+validate был бы тут (Phase 13/14 интеграция).
-	// Для MVP: пустой Dataset → quality gate проходит автоматически.
-	dataset := validation.NewDataset()
-	report := p.engine.Run(dataset)
+	// 2. Зафиксировать source_load_id в etl_runs (best-effort: ошибка лишь
+	//    логируется, не валит run — атомарная фиксация всё равно произойдёт
+	//    в loader.Apply через UpdateEtlRunStatusTx).
+	if err := p.repo.UpdateEtlRunStatus(ctx, runID, repository.EtlRunStatusPatch{
+		Status:       constants.StatusRunning,
+		SourceLoadID: &sourceLoadID,
+	}); err != nil {
+		p.logger.WarnContext(ctx, "pipeline: persist source_load_id failed",
+			"run_id", runID.String(), "err", err)
+	}
+
+	// 3. Extract + stage (in-memory).
+	staged, err := extractAllEntities(ctx, p.extr, snap)
+	if err != nil {
+		p.markFailed(ctx, runID, fmt.Sprintf("extract: %v", err))
+		p.metrics.RecordRunFailure(time.Since(startedAt).Seconds(), "extract")
+		return
+	}
+
+	// 4. Validate.
+	report := p.engine.Run(staged.dataset)
+
+	// LinesTotal в report равен сумме строк по entities (CountAll), либо может
+	// быть скорректирован engine — берём максимум, чтобы quality gate имел
+	// корректный знаменатель даже если engine не считал.
+	linesTotal := int64(report.LinesTotal)
+	if linesTotal < staged.linesTotal {
+		linesTotal = staged.linesTotal
+	}
+	linesFailed := int64(report.LinesFailed)
+
+	// 4a. Persist violations → reject_log (best-effort: ошибка лишь логируется,
+	//     но не блокирует pipeline — quality threshold уже учитывает linesFailed).
+	if len(report.Violations) > 0 {
+		entries := violationsToRejectEntries(runID, report.Violations)
+		if _, perr := p.repo.InsertRejectEntries(ctx, entries); perr != nil {
+			p.logger.WarnContext(ctx, "pipeline: insert reject_log failed",
+				"run_id", runID.String(), "violations", len(entries), "err", perr)
+		}
+	}
 
 	// 5. Quality threshold.
-	if report.LinesTotal > 0 {
-		failureRate := float64(report.LinesFailed) / float64(report.LinesTotal)
+	if linesTotal > 0 {
+		failureRate := float64(linesFailed) / float64(linesTotal)
 		if failureRate > p.cfg.QualityThreshold {
 			p.markFailed(ctx, runID,
 				fmt.Sprintf("quality threshold %.4f exceeded (failed=%d/total=%d)",
-					p.cfg.QualityThreshold, report.LinesFailed, report.LinesTotal))
+					p.cfg.QualityThreshold, linesFailed, linesTotal))
 			p.metrics.RecordRunFailure(time.Since(startedAt).Seconds(), "quality_threshold")
 			return
 		}
 	}
 
-	// 6. Load: вызываем loader.Apply со всеми full-run builder-ами.
+	// 6. Load (atomic flip): staging populate + mart-builders + etl_runs commit.
 	builders := p.registry.BuildersForFullRun()
 	summary, err := p.loader.Apply(ctx, loader.ApplyParams{
-		RunID:        runID,
-		SourceLoadID: sourceLoadID,
-		Builders:     builders,
-		LinesTotal:   int64(report.LinesTotal),
-		LinesFailed:  int64(report.LinesFailed),
+		RunID:           runID,
+		SourceLoadID:    sourceLoadID,
+		Builders:        builders,
+		LinesTotal:      linesTotal,
+		LinesFailed:     linesFailed,
+		PopulateStaging: populateStaging(staged.rowsByEnt),
 	})
 	if err != nil {
 		p.markFailed(ctx, runID, fmt.Sprintf("loader: %v", err))
@@ -190,7 +236,10 @@ func (p *EtlPipeline) runAsync(runID uuid.UUID) {
 	}
 	p.metrics.RecordRunSuccess(time.Since(startedAt).Seconds())
 	p.logger.InfoContext(ctx, "pipeline: run committed",
-		"run_id", runID.String(), "rows", summary.Total())
+		"run_id", runID.String(),
+		"rows", summary.Total(),
+		"lines_total", linesTotal,
+		"lines_failed", linesFailed)
 }
 
 // markFailed — UPDATE etl_runs.status='failed', failure_reason.
@@ -222,4 +271,5 @@ func isValidTrigger(t string) bool {
 	}
 	return false
 }
+
 
