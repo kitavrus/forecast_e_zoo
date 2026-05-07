@@ -26,6 +26,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Kitavrus/e_zoo/internal/config"
+	channelsAuth "github.com/Kitavrus/e_zoo/internal/features/channels/auth"
+	channelsFormatter "github.com/Kitavrus/e_zoo/internal/features/channels/formatter"
+	channelsHandler "github.com/Kitavrus/e_zoo/internal/features/channels/handler"
+	channelsRepo "github.com/Kitavrus/e_zoo/internal/features/channels/repository"
+	channelsRouter "github.com/Kitavrus/e_zoo/internal/features/channels/router"
+	channelsRouterSvc "github.com/Kitavrus/e_zoo/internal/features/channels/router_svc"
+	channelsScheduler "github.com/Kitavrus/e_zoo/internal/features/channels/scheduler"
+	channelsSender "github.com/Kitavrus/e_zoo/internal/features/channels/sender"
+	channelsService "github.com/Kitavrus/e_zoo/internal/features/channels/service"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/audit"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/exports"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/exports_storage"
@@ -66,14 +75,15 @@ const shutdownTimeout = 30 * time.Second
 
 // App — корневая структура.
 type App struct {
-	cfg               *config.Config
-	log               *slog.Logger
-	fiber             *fiber.App
-	pool              *pgxpool.Pool
-	scheduler         *scheduler.Scheduler
-	kpiScheduler      *kpiScheduler.Scheduler
-	forecastScheduler *forecastScheduler.Scheduler
-	ordersScheduler   *ordersScheduler.Scheduler
+	cfg                *config.Config
+	log                *slog.Logger
+	fiber              *fiber.App
+	pool               *pgxpool.Pool
+	scheduler          *scheduler.Scheduler
+	kpiScheduler       *kpiScheduler.Scheduler
+	forecastScheduler  *forecastScheduler.Scheduler
+	ordersScheduler    *ordersScheduler.Scheduler
+	channelsScheduler  *channelsScheduler.Scheduler
 }
 
 // New собирает граф зависимостей.
@@ -273,18 +283,90 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		Handler:   oH,
 	}
 
-	routers.Register(f, deps, martsDeps, kpiDeps, forecastDeps, ordersDeps)
+	// channels: Channel Routing + admin/read API (Module 7 channel-routing).
+	chRepo := channelsRepo.New(pool)
+	chSenderRegistry := buildChannelSenderRegistry(log)
+	chRouter := channelsRouterSvc.New(chRepo, pool, chSenderRegistry, log,
+		buildChannelMetrics(metricsReg))
+	var chSch *channelsScheduler.Scheduler
+	chSchInst, chSchErr := channelsScheduler.New(channelsScheduler.Config{
+		CronExpr: cfg.ChannelRoutingCronSchedule,
+		TZ:       cfg.ChannelRoutingCronTZ,
+		MaxPOs:   cfg.ChannelRoutingMaxPos,
+	}, chRouter, pool, log)
+	if chSchErr != nil {
+		log.Warn("app: channels scheduler init failed (continue without scheduler)",
+			"error", chSchErr)
+	} else {
+		chSch = chSchInst
+	}
+	var chTrigger channelsService.Trigger
+	if chSch != nil {
+		chTrigger = chSch
+	}
+	chSvc := channelsService.New(chRepo, chRouter, chTrigger)
+	chH := channelsHandler.NewHandler(chSvc)
+	channelsDeps := channelsRouter.Deps{
+		JWTConfig: jwtCfg,
+		Handler:   chH,
+	}
+	_ = metricsReg // already passed to chMetrics
+
+	routers.Register(f, deps, martsDeps, kpiDeps, forecastDeps, ordersDeps, channelsDeps)
 
 	return &App{
-		cfg:               cfg,
-		log:               log,
-		fiber:             f,
-		pool:              pool,
-		scheduler:         sch,
-		kpiScheduler:      kSch,
-		forecastScheduler: fSch,
-		ordersScheduler:   oSch,
+		cfg:                cfg,
+		log:                log,
+		fiber:              f,
+		pool:               pool,
+		scheduler:          sch,
+		kpiScheduler:       kSch,
+		forecastScheduler:  fSch,
+		ordersScheduler:    oSch,
+		channelsScheduler:  chSch,
 	}, nil
+}
+
+// buildChannelSenderRegistry собирает sender.Registry с ErpAPISender (MVP)
+// + NotImplementedSender для остальных channel_type, чтобы router возвращал
+// «skipped» вместо паники для не-реализованных каналов.
+func buildChannelSenderRegistry(log *slog.Logger) *channelsSender.Registry {
+	authProvider := channelsAuth.NewAPIKeyProvider()
+	jsonFmt := channelsFormatter.NewJSONFormatter()
+	erp, err := channelsSender.NewErpAPISender(channelsSender.Config{
+		AuthProvider: authProvider,
+		Formatter:    jsonFmt,
+		Logger:       log,
+	})
+	if err != nil {
+		log.Warn("app: erp_api sender init failed", "error", err)
+		return channelsSender.NewRegistry()
+	}
+	return channelsSender.NewRegistry(
+		erp,
+		&channelsSender.NotImplementedSender{Channel: "edi_x12"},
+		&channelsSender.NotImplementedSender{Channel: "edi_edifact"},
+		&channelsSender.NotImplementedSender{Channel: "1c_xml"},
+		&channelsSender.NotImplementedSender{Channel: "crm"},
+	)
+}
+
+// buildChannelMetrics возвращает Metrics callbacks (использует observability.ChannelSendTotal etc).
+func buildChannelMetrics(_ any) channelsRouterSvc.Metrics {
+	return channelsRouterSvc.Metrics{
+		SendTotal: func(channel, status string) {
+			observability.ChannelSendTotal.WithLabelValues(channel, status).Inc()
+		},
+		SendDuration: func(channel string, seconds float64) {
+			observability.ChannelSendDuration.WithLabelValues(channel).Observe(seconds)
+		},
+		RetryCount: func(channel string, retries int) {
+			observability.ChannelRetryCountTotal.WithLabelValues(channel).Add(float64(retries))
+		},
+		IdempotentHit: func(channel string) {
+			observability.ChannelIdempotentHitTotal.WithLabelValues(channel).Inc()
+		},
+	}
 }
 
 // Run — стартует scheduler (если есть) и Fiber listener; блокируется до ctx.Done.
@@ -309,6 +391,11 @@ func (a *App) Run(ctx context.Context) error {
 	if a.ordersScheduler != nil {
 		if err := a.ordersScheduler.Start(ctx); err != nil {
 			a.log.Warn("app: orders scheduler start failed", "error", err)
+		}
+	}
+	if a.channelsScheduler != nil {
+		if err := a.channelsScheduler.Start(ctx); err != nil {
+			a.log.Warn("app: channels scheduler start failed", "error", err)
 		}
 	}
 
@@ -358,6 +445,11 @@ func (a *App) Shutdown() error {
 	if a.ordersScheduler != nil {
 		if err := a.ordersScheduler.Stop(); err != nil {
 			a.log.Warn("orders scheduler stop error", "error", err)
+		}
+	}
+	if a.channelsScheduler != nil {
+		if err := a.channelsScheduler.Stop(); err != nil {
+			a.log.Warn("channels scheduler stop error", "error", err)
 		}
 	}
 	if err := a.fiber.ShutdownWithContext(ctx); err != nil {

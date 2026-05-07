@@ -146,6 +146,29 @@ var (
 		Name: "order_builder_errors_total",
 		Help: "Order builder errors by reason.",
 	}, []string{"reason"})
+
+	// --- Channel Routing (Module 7 channel-routing) ---
+
+	ChannelSendTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "channel_send_total",
+		Help: "Channel send-attempt outcomes by channel and status.",
+	}, []string{"channel", "status"}) // status = pending|success|failed|skipped
+
+	ChannelSendDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "channel_send_duration_seconds",
+		Help:    "Channel send-attempt end-to-end duration.",
+		Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60, 120, 300},
+	}, []string{"channel"})
+
+	ChannelRetryCountTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "channel_retry_count_total",
+		Help: "Total retries inside Send (per channel).",
+	}, []string{"channel"})
+
+	ChannelIdempotentHitTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "channel_idempotent_hit_total",
+		Help: "Times retry resolved to existing successful attempt without new send.",
+	}, []string{"channel"})
 )
 
 // allMetrics — единый список для регистрации/тестов.
@@ -161,6 +184,8 @@ func allMetrics() []prometheus.Collector {
 		OrderBuilderRunTotal, OrderBuilderRunDuration,
 		OrderBuilderPOsCreatedTotal, OrderBuilderPlansProcessedTotal,
 		OrderBuilderErrorsTotal,
+		ChannelSendTotal, ChannelSendDuration,
+		ChannelRetryCountTotal, ChannelIdempotentHitTotal,
 	}
 }
 

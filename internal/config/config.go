@@ -54,6 +54,12 @@ type Config struct {
 	OrderBuilderCronTZ       string `envconfig:"ORDER_BUILDER_CRON_TZ" default:"Europe/Kyiv"`
 	OrderBuilderMaxPlans     int    `envconfig:"ORDER_BUILDER_MAX_PLANS" default:"500"`
 
+	// Channel Routing (Module 7)
+	ChannelRoutingCronSchedule string `envconfig:"CHANNEL_ROUTING_CRON_SCHEDULE" default:"30 6 * * *"`
+	ChannelRoutingCronTZ       string `envconfig:"CHANNEL_ROUTING_CRON_TZ" default:"Europe/Kyiv"`
+	ChannelRoutingMaxPos       int    `envconfig:"CHANNEL_ROUTING_MAX_POS" default:"500"`
+	ChannelRoutingHTTPTimeout  int    `envconfig:"CHANNEL_ROUTING_HTTP_TIMEOUT_SEC" default:"30"`
+
 	// Quality
 	QualityThresholdPct float64 `envconfig:"QUALITY_THRESHOLD_PCT" default:"1.0"`
 
