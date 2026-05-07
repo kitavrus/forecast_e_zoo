@@ -1,25 +1,26 @@
+// Package router содержит helper-конструкторы middleware-цепочек для admin-эндпоинтов.
 package router
 
 import (
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/Kitavrus/e_zoo/pkg/errorspkg"
+	"github.com/Kitavrus/e_zoo/internal/middleware"
 )
 
-// AdminSecretMiddleware — простой guard через заголовок X-Admin-Secret
-// (соответствует общему паттерну проекта).
+// AdminMiddlewares собирает цепочку middleware для /admin/*-эндпоинтов
+// согласно ADR-022:
+//   - JWT (HS256/RS256) — обязателен;
+//   - RequireRole("admin-cli") — для write-эндпоинтов (POST/retry/refresh, reject-log).
 //
-// Если secret не сконфигурирован (пустая строка) — middleware no-op
-// (используется в dev/test mode).
-func AdminSecretMiddleware(secret string) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		if secret == "" {
-			return c.Next()
-		}
-		got := c.Get("X-Admin-Secret")
-		if got != secret {
-			return errorspkg.WriteJSON(c, errorspkg.ErrForbidden)
-		}
-		return c.Next()
+// Список ролей читается из интерфейса вызывающего: для read-only (list/get etl-runs)
+// caller передаёт несколько ролей через RequireAnyOf. Роуты, требующие только admin-cli,
+// получают единственное значение.
+func AdminMiddlewares(jwtCfg middleware.JWTConfig, roles ...string) []fiber.Handler {
+	if len(roles) == 0 {
+		roles = []string{middleware.RoleAdminCLI}
+	}
+	return []fiber.Handler{
+		middleware.JWT(jwtCfg),
+		middleware.RequireRole(roles...),
 	}
 }

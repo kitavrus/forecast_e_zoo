@@ -23,6 +23,7 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/transformer"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/validation"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/validators"
+	appmw "github.com/Kitavrus/e_zoo/internal/middleware"
 )
 
 const shutdownTimeout = 30 * time.Second
@@ -106,7 +107,11 @@ func New(ctx context.Context, cfg *etlconfig.Config, log *slog.Logger) (*App, er
 	})
 	apiV1 := fiberApp.Group("/api/v1")
 	router.Register(apiV1, h, router.Middlewares{
-		Admin: router.AdminSecretMiddleware(cfg.AdminJWTSecret),
+		JWTConfig: appmw.JWTConfig{
+			Alg:           cfg.AdminJWTAlg,
+			Secret:        cfg.AdminJWTSecret,
+			PublicKeyPath: cfg.AdminJWTPublicKeyPath,
+		},
 	})
 	// Public /metrics для Prometheus scrape (вне /api/v1).
 	fiberApp.Get("/metrics", metricsRecorder.Handler())

@@ -29,10 +29,15 @@ type Config struct {
 	HTTPRetryMax     int           `envconfig:"ETL_HTTP_RETRY_MAX" default:"3"`
 	RetryBackoffCap  time.Duration `envconfig:"ETL_RETRY_BACKOFF_CAP" default:"30s"`
 
-	// JWT
-	JWTSigningKey  string `envconfig:"ETL_JWT_SIGNING_KEY" default:""`
-	JWTRole        string `envconfig:"ETL_JWT_ROLE" default:"x-flow-etl"`
-	AdminJWTSecret string `envconfig:"ETL_ADMIN_JWT_SECRET" default:""`
+	// JWT исходящий (для запросов в source-adapter; роль x-flow-etl).
+	JWTSigningKey string `envconfig:"ETL_JWT_SIGNING_KEY" default:""`
+	JWTRole       string `envconfig:"ETL_JWT_ROLE" default:"x-flow-etl"`
+
+	// JWT входящий (admin /admin/* — admin-cli/it-read; ADR-022).
+	// Alg: HS256 (Secret) | RS256 (PublicKeyPath).
+	AdminJWTAlg           string `envconfig:"ETL_ADMIN_JWT_ALG" default:"HS256"`
+	AdminJWTSecret        string `envconfig:"ETL_ADMIN_JWT_SECRET" default:""`
+	AdminJWTPublicKeyPath string `envconfig:"ETL_ADMIN_JWT_PUBLIC_KEY_PATH" default:""`
 
 	// Scheduler
 	CronSchedule string `envconfig:"ETL_CRON_SCHEDULE" default:"30 2 * * *"`

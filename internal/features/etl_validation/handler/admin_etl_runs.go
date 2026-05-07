@@ -12,6 +12,7 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/models/dto"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/service"
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/validators"
+	"github.com/Kitavrus/e_zoo/internal/middleware"
 	"github.com/Kitavrus/e_zoo/pkg/errorspkg"
 )
 
@@ -150,19 +151,16 @@ func (h *Handler) Healthz(c fiber.Ctx) error {
 	})
 }
 
-// requesterFromCtx — извлекает sub из JWT (если есть в Locals), иначе пусто.
+// requesterFromCtx — извлекает sub из JWT-claims (см. internal/middleware/jwt.go).
+//
+// Если claims отсутствуют (что не должно случаться после JWT middleware) или
+// Subject пуст — возвращает пустую строку.
 func requesterFromCtx(c fiber.Ctx) string {
-	if v := c.Locals("user_id"); v != nil {
-		if s, ok := v.(string); ok {
-			return s
-		}
+	claims, ok := middleware.ClaimsFromCtx(c)
+	if !ok || claims == nil {
+		return ""
 	}
-	if v := c.Locals("sub"); v != nil {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
+	return claims.Subject
 }
 
 func parseInt(s string) int {
