@@ -21,7 +21,7 @@
 | 08 | Repository + integration tests | [code-plan-phase-08-repository.md](code-plan-phase-08-repository.md) | done | 2026-05-07T03:35:00Z | pgx Repository + 15 integration-тестов на dockertest postgres:18-alpine; 6 новых sentinel; build/lint зелёные |
 | 09 | SourceReader interface + stub | [code-plan-phase-09-source-reader-stub.md](code-plan-phase-09-source-reader-stub.md) | done | 2026-05-07T03:55:00Z | SourceReader generic interface (16 entities) + ErpEZooReader stub + 16 fixtures + 7 unit-тестов; build/lint зелёные |
 | 10 | Loader service | [code-plan-phase-10-loader-service.md](code-plan-phase-10-loader-service.md) | done | 2026-05-07T04:10:00Z | Loader pipeline (master → facts → flip + quality threshold); LoaderAPI interface для mock; 7 unit-тестов; 2 internal sentinel; build/lint зелёные |
-| 11 | Snapshot + Audit | [code-plan-phase-11-snapshot-audit.md](code-plan-phase-11-snapshot-audit.md) | pending | 2026-05-07 | — |
+| 11 | Snapshot + Audit | [code-plan-phase-11-snapshot-audit.md](code-plan-phase-11-snapshot-audit.md) | done | 2026-05-07T04:25:00Z | snapshot.Service + audit.Writer middleware (только /admin/*); 4+4 unit-теста; build/lint зелёные |
 | 12 | Scheduler + admin handlers | [code-plan-phase-12-scheduler-admin-handlers.md](code-plan-phase-12-scheduler-admin-handlers.md) | pending | 2026-05-07 | — |
 | 13 | Read handlers | [code-plan-phase-13-read-handlers.md](code-plan-phase-13-read-handlers.md) | pending | 2026-05-07 | — |
 | 14 | Exports storage | [code-plan-phase-14-exports-storage.md](code-plan-phase-14-exports-storage.md) | pending | 2026-05-07 | — |
@@ -33,9 +33,9 @@
 ## Сводка
 
 - Всего фаз: **16**
-- pending: **6**
+- pending: **5**
 - in_progress: **0**
-- done: **10**
+- done: **11**
 - blocked: **0**
 - skipped: **0**
 
