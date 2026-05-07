@@ -5,12 +5,12 @@
 
 | #  | Фаза                                          | Status     | Commit | Заметки |
 |----|-----------------------------------------------|------------|--------|---------|
-| 01 | Bootstrap etl binary                          | `completed` |       | done 2026-05-07T01:00:00Z |
-| 02 | Sentinel errors EV-*                          | `completed` |       | done 2026-05-07T01:15:00Z |
-| 03 | Migrations 1001 — schema marts + 5 mart-таблиц | `completed`  |    | done 2026-05-07T01:30:00Z; integration validation deferred to Phase 06 |
-| 04 | Migrations 1002 — etl_runs + reject_log + audit_access | `completed` |   | done 2026-05-07T01:40:00Z |
-| 05 | Models / DTO                                  | `completed` |       | done 2026-05-07T01:55:00Z |
-| 06 | Repository (pgx + go:embed) + integration test | `completed` |   | done 2026-05-07T02:30:00Z; 6 integration tests pass |
+| 01 | Bootstrap etl binary                          | `completed` | 59c0718 | done 2026-05-07T01:00:00Z |
+| 02 | Sentinel errors EV-*                          | `completed` | c48f7ed | done 2026-05-07T01:15:00Z |
+| 03 | Migrations 1001 — schema marts + 5 mart-таблиц | `completed` | a6fc9f7 | done 2026-05-07T01:30:00Z |
+| 04 | Migrations 1002 — etl_runs + reject_log + audit_access | `completed` | 34f71c7 | done 2026-05-07T01:40:00Z |
+| 05 | Models / DTO                                  | `completed` | abbf5af | done 2026-05-07T01:55:00Z |
+| 06 | Repository (pgx + go:embed) + integration test | `completed` | d692680 | done 2026-05-07T02:30:00Z; 6 integration tests pass against postgres:18-alpine |
 | 07 | SQL queries (go:embed)                        | `pending`  |        |         |
 | 08 | Validators (формат запросов)                  | `pending`  |        |         |
 | 09 | Validation engine reuse + etl_validation_rules.yaml | `pending` |   |         |
