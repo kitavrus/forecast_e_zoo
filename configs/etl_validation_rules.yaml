@@ -1,2 +1,101 @@
 version: 1
-rules: []
+# Cross-entity validation rules для ETL pipeline (Module 2 etl-validation).
+# Имена entity совпадают с именами staging-таблиц без префикса stg_.
+# Поддерживаемые kind: fk_exists, unique_business_key, aggregate_sum_matches,
+# referential_integrity, null_required_field.
+rules:
+  - name: products_unique_id
+    kind: unique_business_key
+    entity: products
+    severity: critical
+    keys: [id]
+
+  - name: locations_unique_id
+    kind: unique_business_key
+    entity: locations
+    severity: critical
+    keys: [id]
+
+  - name: suppliers_unique_id
+    kind: unique_business_key
+    entity: suppliers
+    severity: critical
+    keys: [id]
+
+  - name: stock_fk_product
+    kind: fk_exists
+    entity: stock_on_hand
+    severity: critical
+    column: product_id
+    ref_entity: products
+    ref_column: id
+
+  - name: stock_fk_location
+    kind: fk_exists
+    entity: stock_on_hand
+    severity: critical
+    column: location_id
+    ref_entity: locations
+    ref_column: id
+
+  - name: order_rule_fk_supplier
+    kind: fk_exists
+    entity: order_rule
+    severity: soft
+    column: supplier_id
+    ref_entity: suppliers
+    ref_column: id
+
+  - name: order_rule_fk_product
+    kind: fk_exists
+    entity: order_rule
+    severity: critical
+    column: product_id
+    ref_entity: products
+    ref_column: id
+
+  - name: supply_spec_fk_product
+    kind: fk_exists
+    entity: supply_spec
+    severity: critical
+    column: product_id
+    ref_entity: products
+    ref_column: id
+
+  - name: supply_spec_fk_supplier
+    kind: fk_exists
+    entity: supply_spec
+    severity: critical
+    column: supplier_id
+    ref_entity: suppliers
+    ref_column: id
+
+  - name: products_name_required
+    kind: null_required_field
+    entity: products
+    severity: critical
+    column: name
+
+  - name: locations_name_required
+    kind: null_required_field
+    entity: locations
+    severity: critical
+    column: name
+
+  - name: receipt_line_product_required
+    kind: null_required_field
+    entity: receipt_line
+    severity: critical
+    column: product_id
+
+  - name: receipt_line_location_required
+    kind: null_required_field
+    entity: receipt_line
+    severity: critical
+    column: location_id
+
+  - name: receipt_line_qty_required
+    kind: null_required_field
+    entity: receipt_line
+    severity: critical
+    column: qty

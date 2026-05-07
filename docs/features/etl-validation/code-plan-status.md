@@ -12,8 +12,8 @@
 | 05 | Models / DTO                                  | `completed` | abbf5af | done 2026-05-07T01:55:00Z |
 | 06 | Repository (pgx + go:embed) + integration test | `completed` | d692680 | done 2026-05-07T02:30:00Z; 6 integration tests pass against postgres:18-alpine |
 | 07 | SQL queries (go:embed)                        | `completed` | 1fb900a | done 2026-05-07T03:10:00Z |
-| 08 | Validators (формат запросов)                  | `completed` | TBD    | done 2026-05-07T03:25:00Z; coverage 100% |
-| 09 | Validation engine reuse + etl_validation_rules.yaml | `pending` |   |         |
+| 08 | Validators (формат запросов)                  | `completed` | 2c0605a | done 2026-05-07T03:25:00Z; coverage 100% |
+| 09 | Validation engine reuse + etl_validation_rules.yaml | `completed` | TBD | done 2026-05-07T03:50:00Z; coverage 86.7%; ADR: cross-entity engine отделён от data_export (in-memory Dataset, не cyclic import) |
 | 10 | Extractor (HTTP клиент к source-adapter)      | `pending`  |        |         |
 | 11 | Transformer (5 mart builders)                 | `pending`  |        |         |
 | 12 | Loader + atomic flip                          | `pending`  |        |         |
