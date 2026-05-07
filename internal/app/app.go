@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -88,7 +89,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 	}
 
 	var ldr *loader.Loader
-	if r := tryStubReader(cfg, log); r != nil {
+	if r := buildSourceReader(cfg, log); r != nil {
 		ldr = loader.NewLoader(r, repo, engine, loader.Options{Logger: log})
 	}
 
@@ -238,20 +239,40 @@ func (noopTrigger) TryTrigger(_ context.Context) (bool, error) {
 	return false, nil
 }
 
-// tryStubReader пытается загрузить in-memory ErpEZooReader из ERPBaseURL.
-func tryStubReader(cfg *config.Config, log *slog.Logger) loader.SourceReader {
+// buildSourceReader выбирает backend SourceReader по содержимому ERP_BASE_URL:
+//
+//   - "" → nil (in-memory stub, no real loads).
+//   - "http://" / "https://" → HTTPSourceReader (реальный REST-клиент к mock-erp/E-Zoo).
+//   - всё остальное (относительный/абсолютный путь) → file-backed ErpEZooReader из fixtures.
+func buildSourceReader(cfg *config.Config, log *slog.Logger) loader.SourceReader {
 	if cfg.ERPBaseURL == "" {
 		log.Warn("app: ERP_BASE_URL is empty — using in-memory stub backend (no real loads will run; "+
 			"Q-001..Q-003 blocked, POST /admin/loads will reply 202 with no DB writes); "+
-			"set ERP_BASE_URL=./testdata/fixtures (or path to ERP fixtures) to enable loads",
+			"set ERP_BASE_URL=./testdata/fixtures or http://mock-erp:8090 to enable loads",
 			"erp_auth_mode", cfg.ERPAuthMode)
 		return nil
 	}
+	if strings.HasPrefix(cfg.ERPBaseURL, "http://") || strings.HasPrefix(cfg.ERPBaseURL, "https://") {
+		log.Info("app: using HTTPSourceReader",
+			"base_url", cfg.ERPBaseURL,
+			"timeout", cfg.ERPHTTPTimeout,
+			"retry_max", cfg.ERPRetryMax,
+			"backoff_cap", cfg.ERPRetryBackoffCap,
+			"api_key_set", cfg.ERPAPIKey != "")
+		return loader.NewHTTPSourceReader(loader.HTTPSourceReaderConfig{
+			BaseURL:     cfg.ERPBaseURL,
+			APIKey:      cfg.ERPAPIKey,
+			HTTPTimeout: cfg.ERPHTTPTimeout,
+			RetryMax:    cfg.ERPRetryMax,
+			BackoffCap:  cfg.ERPRetryBackoffCap,
+			Logger:      log,
+		})
+	}
 	r, err := loader.New(cfg.ERPBaseURL)
 	if err != nil {
-		log.Warn("app: stub reader load failed", "dir", cfg.ERPBaseURL, "error", err)
+		log.Warn("app: file-backed reader load failed", "dir", cfg.ERPBaseURL, "error", err)
 		return nil
 	}
-	log.Info("app: stub reader loaded from fixtures", "dir", cfg.ERPBaseURL)
+	log.Info("app: using file-backed ErpEZooReader from fixtures", "dir", cfg.ERPBaseURL)
 	return r
 }
