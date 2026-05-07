@@ -6,7 +6,7 @@
 | #  | Фаза                                          | Status     | Commit | Заметки |
 |----|-----------------------------------------------|------------|--------|---------|
 | 01 | Bootstrap etl binary                          | `completed` |       | done 2026-05-07T01:00:00Z |
-| 02 | Sentinel errors EV-*                          | `pending`  |        |         |
+| 02 | Sentinel errors EV-*                          | `completed` |       | done 2026-05-07T01:15:00Z |
 | 03 | Migrations 1001 — schema marts + 5 mart-таблиц | `pending`  |        |         |
 | 04 | Migrations 1002 — etl_runs + reject_log + audit_access | `pending` |   |         |
 | 05 | Models / DTO                                  | `pending`  |        |         |

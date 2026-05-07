@@ -31,4 +31,40 @@ const (
 	// Loader (phase 10, internal sentinels — не доходят до клиента)
 	SupportQualityThresholdExceeded = "SA-LOAD-010"
 	SupportERPUnavailable           = "SA-LOAD-011"
+
+	// ETL/Marts module (Module 2 etl-validation, EV-*)
+	SupportEtlRunAlreadyRunning    = "EV-001"
+	SupportEtlRunNotFound          = "EV-002"
+	SupportCannotRetryEtl          = "EV-003"
+	SupportSourceUnavailable       = "EV-004"
+	SupportMartRefreshNotSupported = "EV-005"
 )
+
+// SupportMessageCodes — общий список всех допустимых support-кодов.
+// Используется в sync-тесте и (опционально) в OpenAPI enums-теге.
+var SupportMessageCodes = []string{
+	SupportBadRequest,
+	SupportUnauthorized,
+	SupportForbidden,
+	SupportNotFound,
+	SupportConflict,
+	SupportServiceUnavailable,
+	SupportInternal,
+	SupportNotImplemented,
+	SupportInvalidCursor,
+	SupportInvalidQuery,
+	SupportInvalidExportFormat,
+	SupportLoadNotFound,
+	SupportLoadAlreadyRunning,
+	SupportCannotRetry,
+	SupportSnapshotNotFound,
+	SupportSnapshotNotReady,
+	SupportAlreadyExists,
+	SupportQualityThresholdExceeded,
+	SupportERPUnavailable,
+	SupportEtlRunAlreadyRunning,
+	SupportEtlRunNotFound,
+	SupportCannotRetryEtl,
+	SupportSourceUnavailable,
+	SupportMartRefreshNotSupported,
+}
