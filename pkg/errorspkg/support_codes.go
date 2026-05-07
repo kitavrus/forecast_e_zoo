@@ -52,6 +52,16 @@ const (
 	SupportInvalidHorizon               = "FCT-005"
 	SupportInvalidPlanStatus            = "FCT-006"
 	SupportForecastSchedulerUnavailable = "FCT-007"
+
+	// Order Builder module (Module 6 order-builder, OB-*).
+	SupportPurchaseOrderNotFound   = "OB-001"
+	SupportPlanAlreadyConverted    = "OB-002"
+	SupportPlanNotApproved         = "OB-003"
+	SupportPONotCancellable        = "OB-004"
+	SupportPOAlreadySent           = "OB-005"
+	SupportInvalidPOStatus         = "OB-006"
+	SupportOrderBuilderUnavailable = "OB-007"
+	SupportOrderBuilderInProgress  = "OB-008"
 )
 
 // SupportMessageCodes — общий список всех допустимых support-кодов.
@@ -91,4 +101,12 @@ var SupportMessageCodes = []string{
 	SupportInvalidHorizon,
 	SupportInvalidPlanStatus,
 	SupportForecastSchedulerUnavailable,
+	SupportPurchaseOrderNotFound,
+	SupportPlanAlreadyConverted,
+	SupportPlanNotApproved,
+	SupportPONotCancellable,
+	SupportPOAlreadySent,
+	SupportInvalidPOStatus,
+	SupportOrderBuilderUnavailable,
+	SupportOrderBuilderInProgress,
 }
