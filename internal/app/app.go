@@ -35,6 +35,10 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/scheduler"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/snapshot"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/validation"
+	dataMartsHandler "github.com/Kitavrus/e_zoo/internal/features/data_marts/handler"
+	dataMartsRepo "github.com/Kitavrus/e_zoo/internal/features/data_marts/repository"
+	dataMartsRouter "github.com/Kitavrus/e_zoo/internal/features/data_marts/router"
+	dataMartsService "github.com/Kitavrus/e_zoo/internal/features/data_marts/service"
 	"github.com/Kitavrus/e_zoo/internal/middleware"
 	"github.com/Kitavrus/e_zoo/internal/observability"
 	"github.com/Kitavrus/e_zoo/internal/routers"
@@ -144,12 +148,14 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 	f.Use(observability.HTTPMetricsMiddleware())
 	f.Use(observability.AccessLogMiddleware(log))
 
+	jwtCfg := middleware.JWTConfig{
+		Alg:           cfg.JWTAlg,
+		Secret:        cfg.JWTSecret,
+		PublicKeyPath: cfg.JWTPublicKeyPath,
+	}
+
 	deps := dataExportRouter.Deps{
-		JWTConfig: middleware.JWTConfig{
-			Alg:           cfg.JWTAlg,
-			Secret:        cfg.JWTSecret,
-			PublicKeyPath: cfg.JWTPublicKeyPath,
-		},
+		JWTConfig:          jwtCfg,
 		HealthzHandler:     healthzH,
 		SnapshotsHandler:   snapshotsH,
 		ProductsHandler:    productsH,
@@ -159,7 +165,18 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		AuditMiddleware:    auditWriter.Middleware(),
 		MetricsHandler:     observability.Handler(metricsReg),
 	}
-	routers.Register(f, deps)
+
+	// data_marts: read-only API над marts.* (slim feature, тот же binary).
+	martsRepo := dataMartsRepo.New(pool)
+	martsReader := dataMartsService.NewPGReader(martsRepo)
+	martsSvc := dataMartsService.New(martsReader)
+	martsH := dataMartsHandler.NewHandler(martsSvc)
+	martsDeps := dataMartsRouter.Deps{
+		JWTConfig: jwtCfg,
+		Handler:   martsH,
+	}
+
+	routers.Register(f, deps, martsDeps)
 
 	return &App{
 		cfg:       cfg,
