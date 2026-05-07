@@ -1,35 +1,16 @@
-// Package routers агрегирует все feature-роутеры.
+// Package routers агрегирует feature-роутеры source-adapter binary.
+//
+// Только M1 (data_export). Остальные модули (M2..M7) — отдельные binary
+// и регистрируют свои роуты внутри собственных *app/app.go.
 package routers
 
 import (
 	"github.com/gofiber/fiber/v3"
 
-	channelsRouter "github.com/Kitavrus/e_zoo/internal/features/channels/router"
 	dataExportRouter "github.com/Kitavrus/e_zoo/internal/features/data_export/router"
-	dataMartsRouter "github.com/Kitavrus/e_zoo/internal/features/data_marts/router"
-	forecastRouter "github.com/Kitavrus/e_zoo/internal/features/forecast/router"
-	kpiRouter "github.com/Kitavrus/e_zoo/internal/features/kpi/router"
-	ordersRouter "github.com/Kitavrus/e_zoo/internal/features/orders/router"
 )
 
-// Register регистрирует все features в одной точке.
-//
-// data_marts, kpi, forecast, orders, channels встраиваются в source-adapter binary
-// как slim features (читают/пишут общую БД). Если *Deps.Handler == nil —
-// регистрация соответствующего фича-роутера пропускается.
-func Register(
-	app *fiber.App,
-	dataExportDeps dataExportRouter.Deps,
-	dataMartsDeps dataMartsRouter.Deps,
-	kpiDeps kpiRouter.Deps,
-	forecastDeps forecastRouter.Deps,
-	ordersDeps ordersRouter.Deps,
-	channelsDeps channelsRouter.Deps,
-) {
+// Register регистрирует data_export маршруты source-adapter.
+func Register(app *fiber.App, dataExportDeps dataExportRouter.Deps) {
 	dataExportRouter.Register(app, dataExportDeps)
-	dataMartsRouter.Register(app, dataMartsDeps)
-	kpiRouter.Register(app, kpiDeps)
-	forecastRouter.Register(app, forecastDeps)
-	ordersRouter.Register(app, ordersDeps)
-	channelsRouter.Register(app, channelsDeps)
 }

@@ -1,0 +1,166 @@
+// Package ordersapp собирает компоненты сервиса order-builder (Модуль 6) воедино.
+package ordersapp
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	ordersHandler "github.com/Kitavrus/e_zoo/internal/features/orders/handler"
+	ordersRepo "github.com/Kitavrus/e_zoo/internal/features/orders/repository"
+	ordersRouter "github.com/Kitavrus/e_zoo/internal/features/orders/router"
+	ordersScheduler "github.com/Kitavrus/e_zoo/internal/features/orders/scheduler"
+	ordersService "github.com/Kitavrus/e_zoo/internal/features/orders/service"
+	"github.com/Kitavrus/e_zoo/internal/middleware"
+	"github.com/Kitavrus/e_zoo/internal/observability"
+	ordersappconfig "github.com/Kitavrus/e_zoo/internal/ordersapp/config"
+)
+
+const shutdownTimeout = 30 * time.Second
+
+// App — корневая структура orders сервиса.
+type App struct {
+	cfg       *ordersappconfig.Config
+	log       *slog.Logger
+	fiber     *fiber.App
+	pool      *pgxpool.Pool
+	scheduler *ordersScheduler.Scheduler
+}
+
+// New собирает граф зависимостей.
+func New(ctx context.Context, cfg *ordersappconfig.Config, log *slog.Logger) (*App, error) {
+	if cfg == nil {
+		return nil, errors.New("ordersapp: config is nil")
+	}
+	if log == nil {
+		return nil, errors.New("ordersapp: logger is nil")
+	}
+
+	pool, err := pgxpool.New(ctx, cfg.DBDsn)
+	if err != nil {
+		return nil, fmt.Errorf("ordersapp: pgxpool: %w", err)
+	}
+
+	repo := ordersRepo.New(pool)
+	svc := ordersService.New(repo, pool, nil, log)
+	schAdapter := ordersScheduler.ServiceAdapter{
+		BuildAllFn: func(ctx context.Context, maxPlans int) (uuid.UUID, int, int, error) {
+			res, err := svc.BuildAll(ctx, maxPlans)
+			return res.RunID, res.PlansProcessed, res.POsCreated, err
+		},
+	}
+	sch, schErr := ordersScheduler.New(ordersScheduler.Config{
+		CronExpr: cfg.CronSchedule,
+		TZ:       cfg.CronTZ,
+		MaxPlans: cfg.MaxPlans,
+	}, schAdapter, pool, log)
+	if schErr != nil {
+		log.Warn("ordersapp: scheduler init failed (continue without scheduler)", "error", schErr)
+		sch = nil
+	}
+	if sch != nil {
+		// Service.trigger зависит от scheduler — пересобираем.
+		svc = ordersService.New(repo, pool, sch, log)
+	}
+	h := ordersHandler.NewHandler(svc)
+
+	metricsReg := observability.Init()
+
+	f := fiber.New(fiber.Config{
+		AppName:      "order-builder",
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		BodyLimit:    10 * 1024 * 1024,
+	})
+	f.Use(middleware.RequestID())
+	f.Use(observability.HTTPMetricsMiddleware())
+	f.Use(observability.AccessLogMiddleware(log))
+
+	f.Get("/healthz", func(c fiber.Ctx) error {
+		if err := pool.Ping(c.Context()); err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"status": "down",
+				"err":    err.Error(),
+			})
+		}
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+	f.Get("/metrics", observability.Handler(metricsReg))
+
+	jwtCfg := middleware.JWTConfig{
+		Alg:           cfg.JWTAlg,
+		Secret:        cfg.JWTSecret,
+		PublicKeyPath: cfg.JWTPublicKeyPath,
+	}
+	ordersRouter.Register(f, ordersRouter.Deps{
+		JWTConfig: jwtCfg,
+		Handler:   h,
+	})
+
+	return &App{
+		cfg:       cfg,
+		log:       log,
+		fiber:     f,
+		pool:      pool,
+		scheduler: sch,
+	}, nil
+}
+
+// Run — стартует scheduler и Fiber listener; блокируется до ctx.Done.
+func (a *App) Run(ctx context.Context) error {
+	errCh := make(chan error, 1)
+
+	if a.scheduler != nil {
+		if err := a.scheduler.Start(ctx); err != nil {
+			a.log.Warn("ordersapp: scheduler start failed", "error", err)
+		}
+	}
+
+	go func() {
+		a.log.Info("http server starting", "addr", a.cfg.HTTPAddr)
+		listenCfg := fiber.ListenConfig{DisableStartupMessage: a.cfg.Env != "dev"}
+		if err := a.fiber.Listen(a.cfg.HTTPAddr, listenCfg); err != nil {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		a.log.Info("shutdown signal received")
+		return a.Shutdown()
+	case err := <-errCh:
+		if err != nil {
+			a.log.Error("http server failed", "error", err)
+			return fmt.Errorf("ordersapp: %w", err)
+		}
+		return nil
+	}
+}
+
+// Shutdown — graceful.
+func (a *App) Shutdown() error {
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if a.scheduler != nil {
+		if err := a.scheduler.Stop(); err != nil {
+			a.log.Warn("orders scheduler stop error", "error", err)
+		}
+	}
+	if err := a.fiber.ShutdownWithContext(ctx); err != nil {
+		a.log.Error("fiber shutdown error", "error", err)
+		return fmt.Errorf("ordersapp: %w", err)
+	}
+	if a.pool != nil {
+		a.pool.Close()
+	}
+	a.log.Info("shutdown complete")
+	return nil
+}

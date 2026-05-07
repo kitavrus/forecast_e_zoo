@@ -1,12 +1,14 @@
 // Package app собирает компоненты сервиса source-adapter воедино.
 //
-// DI порядок (фаза 15):
+// Только M1 (data_export). Остальные модули (M2..M7) — отдельные binary.
+//
+// DI порядок:
 //  1. slog logger (получаем извне)
 //  2. pgxpool.New
 //  3. Repository
 //  4. Snapshot.Seed (idempotent)
 //  5. validation.Engine.Load
-//  6. Loader (с stub-reader; реальный ERP-reader — пост-MVP)
+//  6. Loader (с stub-reader)
 //  7. Scheduler (registered, started in Run)
 //  8. ExportsStorage + Exports.Service
 //  9. Audit.Writer
@@ -22,19 +24,9 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Kitavrus/e_zoo/internal/config"
-	channelsAuth "github.com/Kitavrus/e_zoo/internal/features/channels/auth"
-	channelsFormatter "github.com/Kitavrus/e_zoo/internal/features/channels/formatter"
-	channelsHandler "github.com/Kitavrus/e_zoo/internal/features/channels/handler"
-	channelsRepo "github.com/Kitavrus/e_zoo/internal/features/channels/repository"
-	channelsRouter "github.com/Kitavrus/e_zoo/internal/features/channels/router"
-	channelsRouterSvc "github.com/Kitavrus/e_zoo/internal/features/channels/router_svc"
-	channelsScheduler "github.com/Kitavrus/e_zoo/internal/features/channels/scheduler"
-	channelsSender "github.com/Kitavrus/e_zoo/internal/features/channels/sender"
-	channelsService "github.com/Kitavrus/e_zoo/internal/features/channels/service"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/audit"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/exports"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/exports_storage"
@@ -45,27 +37,6 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/scheduler"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/snapshot"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/validation"
-	dataMartsHandler "github.com/Kitavrus/e_zoo/internal/features/data_marts/handler"
-	dataMartsRepo "github.com/Kitavrus/e_zoo/internal/features/data_marts/repository"
-	dataMartsRouter "github.com/Kitavrus/e_zoo/internal/features/data_marts/router"
-	dataMartsService "github.com/Kitavrus/e_zoo/internal/features/data_marts/service"
-	forecastEngine "github.com/Kitavrus/e_zoo/internal/features/forecast/engine"
-	forecastHandler "github.com/Kitavrus/e_zoo/internal/features/forecast/handler"
-	forecastRepo "github.com/Kitavrus/e_zoo/internal/features/forecast/repository"
-	forecastRouter "github.com/Kitavrus/e_zoo/internal/features/forecast/router"
-	forecastScheduler "github.com/Kitavrus/e_zoo/internal/features/forecast/scheduler"
-	forecastService "github.com/Kitavrus/e_zoo/internal/features/forecast/service"
-	kpiEngine "github.com/Kitavrus/e_zoo/internal/features/kpi/engine"
-	kpiHandler "github.com/Kitavrus/e_zoo/internal/features/kpi/handler"
-	kpiRepo "github.com/Kitavrus/e_zoo/internal/features/kpi/repository"
-	kpiRouter "github.com/Kitavrus/e_zoo/internal/features/kpi/router"
-	kpiScheduler "github.com/Kitavrus/e_zoo/internal/features/kpi/scheduler"
-	kpiService "github.com/Kitavrus/e_zoo/internal/features/kpi/service"
-	ordersHandler "github.com/Kitavrus/e_zoo/internal/features/orders/handler"
-	ordersRepo "github.com/Kitavrus/e_zoo/internal/features/orders/repository"
-	ordersRouter "github.com/Kitavrus/e_zoo/internal/features/orders/router"
-	ordersScheduler "github.com/Kitavrus/e_zoo/internal/features/orders/scheduler"
-	ordersService "github.com/Kitavrus/e_zoo/internal/features/orders/service"
 	"github.com/Kitavrus/e_zoo/internal/middleware"
 	"github.com/Kitavrus/e_zoo/internal/observability"
 	"github.com/Kitavrus/e_zoo/internal/routers"
@@ -75,20 +46,16 @@ const shutdownTimeout = 30 * time.Second
 
 // App — корневая структура.
 type App struct {
-	cfg                *config.Config
-	log                *slog.Logger
-	fiber              *fiber.App
-	pool               *pgxpool.Pool
-	scheduler          *scheduler.Scheduler
-	kpiScheduler       *kpiScheduler.Scheduler
-	forecastScheduler  *forecastScheduler.Scheduler
-	ordersScheduler    *ordersScheduler.Scheduler
-	channelsScheduler  *channelsScheduler.Scheduler
+	cfg       *config.Config
+	log       *slog.Logger
+	fiber     *fiber.App
+	pool      *pgxpool.Pool
+	scheduler *scheduler.Scheduler
 }
 
 // New собирает граф зависимостей.
 //
-//nolint:funlen,gocyclo // DI compose-функция — длинная по природе
+//nolint:funlen,cyclop // DI compose-функция — длинная по природе
 func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error) {
 	if cfg == nil {
 		return nil, errors.New("config is nil")
@@ -197,176 +164,15 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		MetricsHandler:     observability.Handler(metricsReg),
 	}
 
-	// data_marts: read-only API над marts.* (slim feature, тот же binary).
-	martsRepo := dataMartsRepo.New(pool)
-	martsReader := dataMartsService.NewPGReader(martsRepo)
-	martsSvc := dataMartsService.New(martsReader)
-	martsH := dataMartsHandler.NewHandler(martsSvc)
-	martsDeps := dataMartsRouter.Deps{
-		JWTConfig: jwtCfg,
-		Handler:   martsH,
-	}
-
-	// kpi: KPI engine + admin API (Module 4 kpi-calibration).
-	kRepo := kpiRepo.New(pool)
-	kEng := kpiEngine.New(kRepo, log, kpiEngine.NewPrometheusMetrics())
-	kSch, kSchErr := kpiScheduler.New(kpiScheduler.Config{
-		CronExpr: cfg.KPICronSchedule,
-		TZ:       cfg.KPICronTZ,
-	}, kEng, pool, log)
-	if kSchErr != nil {
-		log.Warn("app: kpi scheduler init failed (continue without scheduler)", "error", kSchErr)
-		kSch = nil
-	}
-	var kSvcTrigger kpiService.Trigger
-	if kSch != nil {
-		kSvcTrigger = kSch
-	}
-	kSvc := kpiService.New(kRepo, kSvcTrigger)
-	kH := kpiHandler.NewHandler(kSvc)
-	kpiDeps := kpiRouter.Deps{
-		JWTConfig: jwtCfg,
-		Handler:   kH,
-	}
-
-	// forecast: Forecast engine + admin/read API (Module 5 forecast-engine).
-	fRepo := forecastRepo.New(pool)
-	fEng := forecastEngine.New(fRepo, nil, nil, nil, log,
-		forecastEngine.NewPrometheusMetrics())
-	fSch, fSchErr := forecastScheduler.New(forecastScheduler.Config{
-		CronExpr:    cfg.ForecastCronSchedule,
-		TZ:          cfg.ForecastCronTZ,
-		HorizonDays: cfg.ForecastHorizonDays,
-	}, fEng, pool, log)
-	if fSchErr != nil {
-		log.Warn("app: forecast scheduler init failed (continue without scheduler)",
-			"error", fSchErr)
-		fSch = nil
-	}
-	var fSvcTrigger forecastService.Trigger
-	if fSch != nil {
-		fSvcTrigger = fSch
-	}
-	fSvc := forecastService.New(fRepo, fSvcTrigger)
-	fH := forecastHandler.NewHandler(fSvc)
-	forecastDeps := forecastRouter.Deps{
-		JWTConfig: jwtCfg,
-		Handler:   fH,
-	}
-
-	// orders: Order Builder + admin/read API (Module 6 order-builder).
-	oRepo := ordersRepo.New(pool)
-	oSvc := ordersService.New(oRepo, pool, nil, log)
-	oSchAdapter := ordersScheduler.ServiceAdapter{
-		BuildAllFn: func(ctx context.Context, maxPlans int) (uuid.UUID, int, int, error) {
-			res, err := oSvc.BuildAll(ctx, maxPlans)
-			return res.RunID, res.PlansProcessed, res.POsCreated, err
-		},
-	}
-	oSch, oSchErr := ordersScheduler.New(ordersScheduler.Config{
-		CronExpr: cfg.OrderBuilderCronSchedule,
-		TZ:       cfg.OrderBuilderCronTZ,
-		MaxPlans: cfg.OrderBuilderMaxPlans,
-	}, oSchAdapter, pool, log)
-	if oSchErr != nil {
-		log.Warn("app: orders scheduler init failed (continue without scheduler)",
-			"error", oSchErr)
-		oSch = nil
-	}
-	if oSch != nil {
-		// Service.trigger зависит от scheduler — пересобираем (oSvc.trigger не пуст).
-		oSvc = ordersService.New(oRepo, pool, oSch, log)
-	}
-	oH := ordersHandler.NewHandler(oSvc)
-	ordersDeps := ordersRouter.Deps{
-		JWTConfig: jwtCfg,
-		Handler:   oH,
-	}
-
-	// channels: Channel Routing + admin/read API (Module 7 channel-routing).
-	chRepo := channelsRepo.New(pool)
-	chSenderRegistry := buildChannelSenderRegistry(log)
-	chRouter := channelsRouterSvc.New(chRepo, pool, chSenderRegistry, log,
-		buildChannelMetrics(metricsReg))
-	var chSch *channelsScheduler.Scheduler
-	chSchInst, chSchErr := channelsScheduler.New(channelsScheduler.Config{
-		CronExpr: cfg.ChannelRoutingCronSchedule,
-		TZ:       cfg.ChannelRoutingCronTZ,
-		MaxPOs:   cfg.ChannelRoutingMaxPos,
-	}, chRouter, pool, log)
-	if chSchErr != nil {
-		log.Warn("app: channels scheduler init failed (continue without scheduler)",
-			"error", chSchErr)
-	} else {
-		chSch = chSchInst
-	}
-	var chTrigger channelsService.Trigger
-	if chSch != nil {
-		chTrigger = chSch
-	}
-	chSvc := channelsService.New(chRepo, chRouter, chTrigger)
-	chH := channelsHandler.NewHandler(chSvc)
-	channelsDeps := channelsRouter.Deps{
-		JWTConfig: jwtCfg,
-		Handler:   chH,
-	}
-	_ = metricsReg // already passed to chMetrics
-
-	routers.Register(f, deps, martsDeps, kpiDeps, forecastDeps, ordersDeps, channelsDeps)
+	routers.Register(f, deps)
 
 	return &App{
-		cfg:                cfg,
-		log:                log,
-		fiber:              f,
-		pool:               pool,
-		scheduler:          sch,
-		kpiScheduler:       kSch,
-		forecastScheduler:  fSch,
-		ordersScheduler:    oSch,
-		channelsScheduler:  chSch,
+		cfg:       cfg,
+		log:       log,
+		fiber:     f,
+		pool:      pool,
+		scheduler: sch,
 	}, nil
-}
-
-// buildChannelSenderRegistry собирает sender.Registry с ErpAPISender (MVP)
-// + NotImplementedSender для остальных channel_type, чтобы router возвращал
-// «skipped» вместо паники для не-реализованных каналов.
-func buildChannelSenderRegistry(log *slog.Logger) *channelsSender.Registry {
-	authProvider := channelsAuth.NewAPIKeyProvider()
-	jsonFmt := channelsFormatter.NewJSONFormatter()
-	erp, err := channelsSender.NewErpAPISender(channelsSender.Config{
-		AuthProvider: authProvider,
-		Formatter:    jsonFmt,
-		Logger:       log,
-	})
-	if err != nil {
-		log.Warn("app: erp_api sender init failed", "error", err)
-		return channelsSender.NewRegistry()
-	}
-	return channelsSender.NewRegistry(
-		erp,
-		&channelsSender.NotImplementedSender{Channel: "edi_x12"},
-		&channelsSender.NotImplementedSender{Channel: "edi_edifact"},
-		&channelsSender.NotImplementedSender{Channel: "1c_xml"},
-		&channelsSender.NotImplementedSender{Channel: "crm"},
-	)
-}
-
-// buildChannelMetrics возвращает Metrics callbacks (использует observability.ChannelSendTotal etc).
-func buildChannelMetrics(_ any) channelsRouterSvc.Metrics {
-	return channelsRouterSvc.Metrics{
-		SendTotal: func(channel, status string) {
-			observability.ChannelSendTotal.WithLabelValues(channel, status).Inc()
-		},
-		SendDuration: func(channel string, seconds float64) {
-			observability.ChannelSendDuration.WithLabelValues(channel).Observe(seconds)
-		},
-		RetryCount: func(channel string, retries int) {
-			observability.ChannelRetryCountTotal.WithLabelValues(channel).Add(float64(retries))
-		},
-		IdempotentHit: func(channel string) {
-			observability.ChannelIdempotentHitTotal.WithLabelValues(channel).Inc()
-		},
-	}
 }
 
 // Run — стартует scheduler (если есть) и Fiber listener; блокируется до ctx.Done.
@@ -376,26 +182,6 @@ func (a *App) Run(ctx context.Context) error {
 	if a.scheduler != nil {
 		if err := a.scheduler.Start(ctx); err != nil {
 			a.log.Warn("app: scheduler start failed", "error", err)
-		}
-	}
-	if a.kpiScheduler != nil {
-		if err := a.kpiScheduler.Start(ctx); err != nil {
-			a.log.Warn("app: kpi scheduler start failed", "error", err)
-		}
-	}
-	if a.forecastScheduler != nil {
-		if err := a.forecastScheduler.Start(ctx); err != nil {
-			a.log.Warn("app: forecast scheduler start failed", "error", err)
-		}
-	}
-	if a.ordersScheduler != nil {
-		if err := a.ordersScheduler.Start(ctx); err != nil {
-			a.log.Warn("app: orders scheduler start failed", "error", err)
-		}
-	}
-	if a.channelsScheduler != nil {
-		if err := a.channelsScheduler.Start(ctx); err != nil {
-			a.log.Warn("app: channels scheduler start failed", "error", err)
 		}
 	}
 
@@ -416,7 +202,7 @@ func (a *App) Run(ctx context.Context) error {
 	case err := <-errCh:
 		if err != nil {
 			a.log.Error("http server failed", "error", err)
-			return err
+			return fmt.Errorf("app: %w", err)
 		}
 		return nil
 	}
@@ -432,29 +218,9 @@ func (a *App) Shutdown() error {
 			a.log.Warn("scheduler stop error", "error", err)
 		}
 	}
-	if a.kpiScheduler != nil {
-		if err := a.kpiScheduler.Stop(); err != nil {
-			a.log.Warn("kpi scheduler stop error", "error", err)
-		}
-	}
-	if a.forecastScheduler != nil {
-		if err := a.forecastScheduler.Stop(); err != nil {
-			a.log.Warn("forecast scheduler stop error", "error", err)
-		}
-	}
-	if a.ordersScheduler != nil {
-		if err := a.ordersScheduler.Stop(); err != nil {
-			a.log.Warn("orders scheduler stop error", "error", err)
-		}
-	}
-	if a.channelsScheduler != nil {
-		if err := a.channelsScheduler.Stop(); err != nil {
-			a.log.Warn("channels scheduler stop error", "error", err)
-		}
-	}
 	if err := a.fiber.ShutdownWithContext(ctx); err != nil {
 		a.log.Error("fiber shutdown error", "error", err)
-		return err
+		return fmt.Errorf("app: %w", err)
 	}
 	if a.pool != nil {
 		a.pool.Close()
@@ -464,9 +230,6 @@ func (a *App) Shutdown() error {
 }
 
 // noopTrigger — placeholder, если scheduler не сконфигурирован.
-//
-// TryTrigger возвращает (false, nil): без scheduler-а load запустить нельзя,
-// и параллельный POST /admin/loads должен получить 409 (а не «псевдо-202»).
 type noopTrigger struct{}
 
 func (noopTrigger) TriggerOnce(_ context.Context) error { return nil }
@@ -475,13 +238,7 @@ func (noopTrigger) TryTrigger(_ context.Context) (bool, error) {
 	return false, nil
 }
 
-// tryStubReader пытается загрузить in-memory ErpEZooReader из ERPBaseURL,
-// если это путь к директории с fixtures (MVP fallback).
-//
-// Если ERP_BASE_URL пуст и ERP_AUTH_MODE=none — это ожидаемый dev-сценарий,
-// но молчание сильно ухудшает DX (Issue #4 из validation): сервис стартует с
-// noopTrigger, /admin/loads возвращает 202, но в БД ничего не появляется.
-// Поэтому логируем явный WARN со ссылкой, как починить.
+// tryStubReader пытается загрузить in-memory ErpEZooReader из ERPBaseURL.
 func tryStubReader(cfg *config.Config, log *slog.Logger) loader.SourceReader {
 	if cfg.ERPBaseURL == "" {
 		log.Warn("app: ERP_BASE_URL is empty — using in-memory stub backend (no real loads will run; "+
