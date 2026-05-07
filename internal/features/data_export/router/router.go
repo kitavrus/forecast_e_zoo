@@ -19,6 +19,9 @@ type Deps struct {
 	AdminLoadsHandler  *handler.AdminLoadsHandler
 	AuditMiddleware    fiber.Handler
 
+	// MetricsHandler — Prometheus /metrics. Если nil, маршрут не регистрируется.
+	MetricsHandler fiber.Handler
+
 	// NotImplemented — placeholder для прочих 14 entity (Phase 13).
 	NotImplemented handler.NotImplementedHandlers
 }
@@ -30,6 +33,9 @@ func Register(app *fiber.App, deps Deps) {
 	// /healthz и /metrics — без JWT.
 	if deps.HealthzHandler != nil {
 		app.Get("/healthz", deps.HealthzHandler.Get)
+	}
+	if deps.MetricsHandler != nil {
+		app.Get("/metrics", deps.MetricsHandler)
 	}
 
 	jwt := middleware.JWT(deps.JWTConfig)

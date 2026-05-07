@@ -26,16 +26,16 @@
 | 13 | Read handlers | [code-plan-phase-13-read-handlers.md](code-plan-phase-13-read-handlers.md) | done | 2026-05-07T05:05:00Z | helpers (etag/streaming) + healthz + snapshots + products + receipt_line + not-implemented placeholders для прочих 14 entity (501); 12 unit-тестов; build/lint зелёные |
 | 14 | Exports storage | [code-plan-phase-14-exports-storage.md](code-plan-phase-14-exports-storage.md) | done | 2026-05-07T05:25:00Z | LocalFSStorage + exports.Service (pending→ready) + handler POST/GET /v1/exports + cleanup-cron; 11 unit-тестов; реальная сборка contents — пост-MVP |
 | 15 | Router + DI | [code-plan-phase-15-router-di.md](code-plan-phase-15-router-di.md) | done | 2026-05-07T05:45:00Z | data_export/router + internal/routers + полный DI в app.New (pool→repo→snapshot→loader→scheduler→exports→audit→handlers→router); build/lint зелёные; e2e-тесты вынесены за рамки фазы |
-| 16 | Metrics + observability | [code-plan-phase-16-metrics-observability.md](code-plan-phase-16-metrics-observability.md) | pending | 2026-05-07 | — |
+| 16 | Metrics + observability | [code-plan-phase-16-metrics-observability.md](code-plan-phase-16-metrics-observability.md) | done | 2026-05-07T06:05:00Z | Prometheus metrics (10 шт) + HTTPMetricsMiddleware + AccessLogMiddleware + /metrics route; 5 unit-тестов; build/lint зелёные. Loader/scheduler instrumentation — пост-MVP (метрики зарегистрированы, инкременты подключаются по мере) |
 
 ---
 
 ## Сводка
 
 - Всего фаз: **16**
-- pending: **1**
+- pending: **0**
 - in_progress: **0**
-- done: **15**
+- done: **16**
 - blocked: **0**
 - skipped: **0**
 

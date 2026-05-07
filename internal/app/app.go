@@ -36,6 +36,7 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/snapshot"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/validation"
 	"github.com/Kitavrus/e_zoo/internal/middleware"
+	"github.com/Kitavrus/e_zoo/internal/observability"
 	"github.com/Kitavrus/e_zoo/internal/routers"
 )
 
@@ -131,6 +132,8 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 	}
 	adminH := handler.NewAdminLoadsHandler(repo, trigger, repo)
 
+	metricsReg := observability.Init()
+
 	f := fiber.New(fiber.Config{
 		AppName:      "source-adapter",
 		ReadTimeout:  30 * time.Second,
@@ -138,6 +141,8 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		BodyLimit:    10 * 1024 * 1024,
 	})
 	f.Use(middleware.RequestID())
+	f.Use(observability.HTTPMetricsMiddleware())
+	f.Use(observability.AccessLogMiddleware(log))
 
 	deps := dataExportRouter.Deps{
 		JWTConfig: middleware.JWTConfig{
@@ -152,6 +157,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		ExportsHandler:     exportsH,
 		AdminLoadsHandler:  adminH,
 		AuditMiddleware:    auditWriter.Middleware(),
+		MetricsHandler:     observability.Handler(metricsReg),
 	}
 	routers.Register(f, deps)
 
