@@ -20,7 +20,7 @@ SELECT
              THEN rl.qty * rl.unit_price_paid ELSE 0 END)               AS revenue_paid,
     SUM(rl.discount_amount)                                             AS discount_total,
     COUNT(DISTINCT rl.receipt_id)                                       AS transactions_count,
-    bool_or(p.id IS NOT NULL)                                           AS had_promo,
+    bool_or(p.promo_id IS NOT NULL)                                     AS had_promo,
     MIN(p.type)                                                         AS promo_type,
     bool_or(sa.product_id IS NOT NULL)                                  AS was_in_assortment,
     MIN(sa.lifecycle_state)                                             AS lifecycle_state_at_date,
@@ -34,7 +34,9 @@ LEFT JOIN pg_temp.stg_promo p
 LEFT JOIN pg_temp.stg_store_assortment sa
        ON sa.product_id  = rl.product_id
       AND sa.location_id = rl.location_id
-      AND rl.event_time::date BETWEEN sa.valid_from AND COALESCE(sa.valid_to, '9999-12-31'::date)
+      AND rl.event_time::date
+          BETWEEN COALESCE(sa.effective_from, sa.valid_from)
+              AND COALESCE(sa.effective_to,  sa.valid_to, '9999-12-31'::date)
 LEFT JOIN pg_temp.stg_stock_on_hand soh
        ON soh.product_id  = rl.product_id
       AND soh.location_id = rl.location_id

@@ -24,7 +24,16 @@ func (r *Repository) UpsertDemandHistory(ctx context.Context, tx pgx.Tx, runID, 
 }
 
 // RebuildCalculationInput пересоздаёт mart_calculation_input.
+//
+// TRUNCATE выполняется отдельным Exec-вызовом, т.к. pgx.Tx.Exec запрещает
+// multi-statement prepared query с $-параметрами (SQLSTATE 42601).
 func (r *Repository) RebuildCalculationInput(ctx context.Context, tx pgx.Tx, runID, sourceLoadID uuid.UUID) (int64, error) {
+	if tx == nil {
+		return 0, fmt.Errorf("repository: RebuildCalculationInput: tx is required")
+	}
+	if _, err := tx.Exec(ctx, queries.MustGet("mart_calculation_input_truncate")); err != nil {
+		return 0, fmt.Errorf("repository: mart_calculation_input_truncate: %w", err)
+	}
 	return r.execMartQuery(ctx, tx, "mart_calculation_input_truncate_insert", runID, sourceLoadID)
 }
 
@@ -34,7 +43,16 @@ func (r *Repository) UpsertKpiDaily(ctx context.Context, tx pgx.Tx, runID, sourc
 }
 
 // RebuildMasterCurrent пересоздаёт mart_master_current (TRUNCATE + INSERT).
+//
+// TRUNCATE выполняется отдельным Exec-вызовом, т.к. pgx.Tx.Exec запрещает
+// multi-statement prepared query с $-параметрами (SQLSTATE 42601).
 func (r *Repository) RebuildMasterCurrent(ctx context.Context, tx pgx.Tx, runID, sourceLoadID uuid.UUID) (int64, error) {
+	if tx == nil {
+		return 0, fmt.Errorf("repository: RebuildMasterCurrent: tx is required")
+	}
+	if _, err := tx.Exec(ctx, queries.MustGet("mart_master_current_truncate")); err != nil {
+		return 0, fmt.Errorf("repository: mart_master_current_truncate: %w", err)
+	}
 	return r.execMartQuery(ctx, tx, "mart_master_current_truncate_insert", runID, sourceLoadID)
 }
 

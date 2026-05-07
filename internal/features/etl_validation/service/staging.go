@@ -26,52 +26,68 @@ type stagingSpec struct {
 
 // stagingByEntity — соответствие entity → staging-спецификация.
 //
-// Имена entity берутся из constants.AllowedEntities + constants.AllowedEntities
-// и должны совпадать с теми, что использует validation YAML и API source-adapter
-// (single-source-of-truth — constants).
+// Имена entity берутся из constants.AllowedEntities и должны совпадать с теми,
+// что использует validation YAML и API source-adapter (single-source-of-truth —
+// constants).
+//
+// Имена колонок строго совпадают с json-полями DTO source-adapter
+// (internal/features/data_export/models/dto/*.go) — это нужно, чтобы
+// rowSource.Values() мог брать значения по ключу из json-decoded
+// map[string]any. Если source-adapter не отдаёт колонку — её здесь нет (NULL
+// заполнится автоматически из NULLABLE-колонки в staging_create_temp_tables.sql).
 //
 //nolint:gochecknoglobals // справочная константа.
 var stagingByEntity = map[string]stagingSpec{
 	constants.EntityReceiptLine: {
+		// dto.ReceiptLine: unit_price_base / unit_price_paid (НЕ unit_price_list).
+		// had_promo / promo_type — derived в mart_demand_history; в DTO их нет,
+		// поэтому в COPY не передаём (staging-колонки NULLABLE с default false/NULL).
 		table: "stg_receipt_line",
 		columns: []string{
 			"receipt_id", "location_id", "product_id", "line_kind",
-			"qty", "unit_price_list", "unit_price_paid", "discount_amount",
-			"had_promo", "promo_type", "event_time",
+			"qty", "unit_price_base", "unit_price_paid", "discount_amount",
+			"event_time",
 		},
 	},
 	constants.EntityStockOnHand: {
+		// MVP: source-adapter exposes via dto.LocationStockSnapshot;
+		// qty_in_transit отсутствует в DTO — оставлен NULLABLE в DDL, но в COPY не передаём.
 		table:   "stg_stock_on_hand",
-		columns: []string{"product_id", "location_id", "qty_on_hand", "qty_in_transit", "as_of_date"},
+		columns: []string{"product_id", "location_id", "qty_on_hand"},
 	},
 	constants.EntityProduct: {
+		// PK source-adapter — product_id (см. dto.Product). status — TEXT.
 		table:   "stg_products",
-		columns: []string{"id", "name", "category_id", "unit_id", "is_active"},
+		columns: []string{"product_id", "name", "category_id", "status"},
 	},
 	constants.EntityLocation: {
 		table:   "stg_locations",
-		columns: []string{"id", "name", "is_active"},
+		columns: []string{"location_id", "name", "status"},
 	},
 	constants.EntitySupplier: {
 		table:   "stg_suppliers",
-		columns: []string{"id", "name", "is_active"},
+		columns: []string{"supplier_id", "name", "status"},
 	},
 	constants.EntityOrderRule: {
+		// dto.OrderRule: PK rule_id; продукт задаётся через scope/scope_ref.
+		// product_id / formula derived (источник их не отдаёт), оставляем NULL.
 		table: "stg_order_rule",
 		columns: []string{
-			"id", "product_id", "location_id", "formula",
-			"safety_stock", "forecast_horizon_days", "daily_demand",
-			"min_qty", "max_qty", "supplier_id", "lead_time_days", "is_active",
+			"rule_id", "scope", "scope_ref", "location_id",
+			"safety_stock_days", "service_level_pct", "override_moq",
 		},
 	},
 	constants.EntitySupplySpec: {
+		// dto.SupplySpec: composite-PK (supplier_id, product_id, location_id).
 		table: "stg_supply_spec",
 		columns: []string{
-			"id", "supplier_id", "product_id", "location_id",
-			"lead_time_days", "safety_stock", "min_qty", "max_qty", "is_active",
+			"supplier_id", "product_id", "location_id",
+			"lead_time_days", "min_order_qty", "purchase_price", "currency", "pack_size",
 		},
 	},
 	constants.EntityReceivingDetail: {
+		// Entity не реализован в source-adapter MVP — handler возвращает 501,
+		// extractor получает empty stream → 0 rows COPY → no-op.
 		table: "stg_receiving_details",
 		columns: []string{
 			"supplier_id", "product_id", "delivery_date",
@@ -80,12 +96,16 @@ var stagingByEntity = map[string]stagingSpec{
 		},
 	},
 	constants.EntityPromo: {
+		// PK source-adapter — promo_id (НЕ id); см. dto.Promo.
 		table:   "stg_promo",
-		columns: []string{"id", "product_id", "type", "date_from", "date_to"},
+		columns: []string{"promo_id", "product_id", "location_id", "type", "date_from", "date_to"},
 	},
 	constants.EntityStoreAssortment: {
+		// Source-adapter отдаёт effective_from/effective_to (см. dto.StoreAssortment);
+		// marts читают valid_from/valid_to. effective_* колонки заполняются из COPY,
+		// valid_* остаются NULL — зарезервированы для derive-step в transformer.
 		table:   "stg_store_assortment",
-		columns: []string{"product_id", "location_id", "valid_from", "valid_to", "lifecycle_state"},
+		columns: []string{"product_id", "location_id", "effective_from", "effective_to", "lifecycle_state"},
 	},
 }
 
@@ -258,7 +278,10 @@ func convertValue(col string, v any) (any, error) {
 
 func isDateColumn(col string) bool {
 	switch col {
-	case "as_of_date", "delivery_date", "date_from", "date_to", "valid_from", "valid_to":
+	case "as_of_date", "delivery_date",
+		"date_from", "date_to",
+		"valid_from", "valid_to",
+		"effective_from", "effective_to":
 		return true
 	}
 	return false

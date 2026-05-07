@@ -42,8 +42,10 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     GRANT USAGE  ON SCHEMA public TO mart_reader;
 
     -- Default privileges для будущих объектов в public.
+    -- TRUNCATE нужен ETL mart-pipeline'у (TRUNCATE+INSERT в transaction для
+    -- mart_master_current / mart_calculation_input).
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT
-        SELECT, INSERT, UPDATE, DELETE ON TABLES    TO e_zoo_app;
+        SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES   TO e_zoo_app;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT
         USAGE, SELECT, UPDATE                        ON SEQUENCES TO e_zoo_app;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT
@@ -57,8 +59,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- Применяется к схемам marts/kpi/forecast/orders/channels, которые
     -- создаются миграциями golang-migrate уже после init-скрипта.
     -- USAGE на сами схемы выдаётся в каждой миграции CREATE SCHEMA.
+    -- TRUNCATE нужен ETL mart-pipeline'у.
     ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} GRANT
-        SELECT, INSERT, UPDATE, DELETE ON TABLES    TO e_zoo_app;
+        SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES   TO e_zoo_app;
     ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} GRANT
         USAGE, SELECT, UPDATE          ON SEQUENCES TO e_zoo_app;
     ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} GRANT

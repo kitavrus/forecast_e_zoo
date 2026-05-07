@@ -15,6 +15,14 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA marts GRANT SELECT ON TABLES TO mart_reader;
 -- (DML default privileges объявлены в infra/pg/init/01_init.sh для роли-владельца.)
 GRANT USAGE ON SCHEMA marts TO e_zoo_app;
 
+-- TRUNCATE нужен ETL mart-pipeline'у (mart_master_current / mart_calculation_input
+-- — TRUNCATE+INSERT в одной транзакции). Выдаём на ВСЕ существующие
+-- таблицы схемы — DEFAULT PRIVILEGES не действуют на ранее созданные объекты.
+ALTER DEFAULT PRIVILEGES IN SCHEMA marts GRANT
+    SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO e_zoo_app;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE
+    ON ALL TABLES IN SCHEMA marts TO e_zoo_app;
+
 -- 3) mart_demand_history (partitioned by as_of_date, monthly)
 CREATE TABLE IF NOT EXISTS marts.mart_demand_history (
     as_of_date              DATE        NOT NULL,
