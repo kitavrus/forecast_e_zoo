@@ -1,5 +1,3 @@
-version: "3.9"
-
 # e_zoo — 7 микросервисов + Postgres 18 + миграции.
 # Запуск:
 #   cp .env.example .env
