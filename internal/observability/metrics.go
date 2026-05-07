@@ -118,6 +118,34 @@ var (
 		Name: "forecast_engine_errors_total",
 		Help: "Forecast engine errors by reason.",
 	}, []string{"reason"})
+
+	// --- Order Builder (Module 6 order-builder) ---
+
+	OrderBuilderRunTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "order_builder_run_total",
+		Help: "Order builder run outcomes.",
+	}, []string{"result"}) // result = ok|error|skipped
+
+	OrderBuilderRunDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "order_builder_run_duration_seconds",
+		Help:    "Order builder run end-to-end duration.",
+		Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1800},
+	})
+
+	OrderBuilderPOsCreatedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "order_builder_pos_created_total",
+		Help: "Purchase orders created by order builder.",
+	})
+
+	OrderBuilderPlansProcessedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "order_builder_plans_processed_total",
+		Help: "Approved plans processed by order builder.",
+	})
+
+	OrderBuilderErrorsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "order_builder_errors_total",
+		Help: "Order builder errors by reason.",
+	}, []string{"reason"})
 )
 
 // allMetrics — единый список для регистрации/тестов.
@@ -130,6 +158,9 @@ func allMetrics() []prometheus.Collector {
 		ForecastEngineRunTotal, ForecastEngineRunDuration,
 		ForecastForecastsCountTotal, ForecastLinesCountTotal, ForecastPlansCountTotal,
 		ForecastEngineErrorsTotal,
+		OrderBuilderRunTotal, OrderBuilderRunDuration,
+		OrderBuilderPOsCreatedTotal, OrderBuilderPlansProcessedTotal,
+		OrderBuilderErrorsTotal,
 	}
 }
 

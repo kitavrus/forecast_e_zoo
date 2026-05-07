@@ -49,6 +49,11 @@ type Config struct {
 	ForecastCronTZ       string `envconfig:"FORECAST_CRON_TZ" default:"Europe/Kyiv"`
 	ForecastHorizonDays  int    `envconfig:"FORECAST_HORIZON_DAYS" default:"14"`
 
+	// Order Builder (Module 6)
+	OrderBuilderCronSchedule string `envconfig:"ORDER_BUILDER_CRON_SCHEDULE" default:"0 6 * * *"`
+	OrderBuilderCronTZ       string `envconfig:"ORDER_BUILDER_CRON_TZ" default:"Europe/Kyiv"`
+	OrderBuilderMaxPlans     int    `envconfig:"ORDER_BUILDER_MAX_PLANS" default:"500"`
+
 	// Quality
 	QualityThresholdPct float64 `envconfig:"QUALITY_THRESHOLD_PCT" default:"1.0"`
 

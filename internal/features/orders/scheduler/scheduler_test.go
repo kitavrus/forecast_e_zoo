@@ -1,6 +1,7 @@
 package scheduler_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,5 +35,5 @@ func TestScheduler_Start_EmptyCron_Errors(t *testing.T) {
 		TZ:       "UTC",
 	}, nil, nil, nil)
 	require.NoError(t, err)
-	require.Error(t, s.Start(nil))
+	require.Error(t, s.Start(context.Background()))
 }

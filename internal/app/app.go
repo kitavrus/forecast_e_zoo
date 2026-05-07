@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Kitavrus/e_zoo/internal/config"
@@ -51,6 +52,11 @@ import (
 	kpiRouter "github.com/Kitavrus/e_zoo/internal/features/kpi/router"
 	kpiScheduler "github.com/Kitavrus/e_zoo/internal/features/kpi/scheduler"
 	kpiService "github.com/Kitavrus/e_zoo/internal/features/kpi/service"
+	ordersHandler "github.com/Kitavrus/e_zoo/internal/features/orders/handler"
+	ordersRepo "github.com/Kitavrus/e_zoo/internal/features/orders/repository"
+	ordersRouter "github.com/Kitavrus/e_zoo/internal/features/orders/router"
+	ordersScheduler "github.com/Kitavrus/e_zoo/internal/features/orders/scheduler"
+	ordersService "github.com/Kitavrus/e_zoo/internal/features/orders/service"
 	"github.com/Kitavrus/e_zoo/internal/middleware"
 	"github.com/Kitavrus/e_zoo/internal/observability"
 	"github.com/Kitavrus/e_zoo/internal/routers"
@@ -67,6 +73,7 @@ type App struct {
 	scheduler         *scheduler.Scheduler
 	kpiScheduler      *kpiScheduler.Scheduler
 	forecastScheduler *forecastScheduler.Scheduler
+	ordersScheduler   *ordersScheduler.Scheduler
 }
 
 // New собирает граф зависимостей.
@@ -237,7 +244,36 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		Handler:   fH,
 	}
 
-	routers.Register(f, deps, martsDeps, kpiDeps, forecastDeps)
+	// orders: Order Builder + admin/read API (Module 6 order-builder).
+	oRepo := ordersRepo.New(pool)
+	oSvc := ordersService.New(oRepo, pool, nil, log)
+	oSchAdapter := ordersScheduler.ServiceAdapter{
+		BuildAllFn: func(ctx context.Context, maxPlans int) (uuid.UUID, int, int, error) {
+			res, err := oSvc.BuildAll(ctx, maxPlans)
+			return res.RunID, res.PlansProcessed, res.POsCreated, err
+		},
+	}
+	oSch, oSchErr := ordersScheduler.New(ordersScheduler.Config{
+		CronExpr: cfg.OrderBuilderCronSchedule,
+		TZ:       cfg.OrderBuilderCronTZ,
+		MaxPlans: cfg.OrderBuilderMaxPlans,
+	}, oSchAdapter, pool, log)
+	if oSchErr != nil {
+		log.Warn("app: orders scheduler init failed (continue without scheduler)",
+			"error", oSchErr)
+		oSch = nil
+	}
+	if oSch != nil {
+		// Service.trigger зависит от scheduler — пересобираем (oSvc.trigger не пуст).
+		oSvc = ordersService.New(oRepo, pool, oSch, log)
+	}
+	oH := ordersHandler.NewHandler(oSvc)
+	ordersDeps := ordersRouter.Deps{
+		JWTConfig: jwtCfg,
+		Handler:   oH,
+	}
+
+	routers.Register(f, deps, martsDeps, kpiDeps, forecastDeps, ordersDeps)
 
 	return &App{
 		cfg:               cfg,
@@ -247,6 +283,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		scheduler:         sch,
 		kpiScheduler:      kSch,
 		forecastScheduler: fSch,
+		ordersScheduler:   oSch,
 	}, nil
 }
 
@@ -267,6 +304,11 @@ func (a *App) Run(ctx context.Context) error {
 	if a.forecastScheduler != nil {
 		if err := a.forecastScheduler.Start(ctx); err != nil {
 			a.log.Warn("app: forecast scheduler start failed", "error", err)
+		}
+	}
+	if a.ordersScheduler != nil {
+		if err := a.ordersScheduler.Start(ctx); err != nil {
+			a.log.Warn("app: orders scheduler start failed", "error", err)
 		}
 	}
 
@@ -311,6 +353,11 @@ func (a *App) Shutdown() error {
 	if a.forecastScheduler != nil {
 		if err := a.forecastScheduler.Stop(); err != nil {
 			a.log.Warn("forecast scheduler stop error", "error", err)
+		}
+	}
+	if a.ordersScheduler != nil {
+		if err := a.ordersScheduler.Stop(); err != nil {
+			a.log.Warn("orders scheduler stop error", "error", err)
 		}
 	}
 	if err := a.fiber.ShutdownWithContext(ctx); err != nil {
