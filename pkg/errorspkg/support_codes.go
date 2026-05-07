@@ -26,4 +26,8 @@ const (
 	SupportSnapshotNotFound   = "SA-SNAP-001"
 	SupportSnapshotNotReady   = "SA-SNAP-002"
 	SupportAlreadyExists      = "SA-CONF-002"
+
+	// Loader (phase 10, internal sentinels — не доходят до клиента)
+	SupportQualityThresholdExceeded = "SA-LOAD-010"
+	SupportERPUnavailable           = "SA-LOAD-011"
 )

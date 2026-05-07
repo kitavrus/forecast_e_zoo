@@ -290,4 +290,21 @@ var (
 		SupportMessage: SupportAlreadyExists,
 		HTTP:           http.StatusConflict,
 	}
+
+	// ErrQualityThresholdExceeded — internal sentinel: lines_failed/lines_total > 1%.
+	// До клиента не доходит (load mark failed), но используется в логах/тестах.
+	ErrQualityThresholdExceeded = &Error{
+		Code:           "quality_threshold_exceeded",
+		Message:        "quality threshold exceeded (>1% rows critical)",
+		SupportMessage: SupportQualityThresholdExceeded,
+		HTTP:           http.StatusInternalServerError,
+	}
+
+	// ErrERPUnavailable — internal sentinel: SourceReader вернул ошибку.
+	ErrERPUnavailable = &Error{
+		Code:           "erp_unavailable",
+		Message:        "ERP source unavailable",
+		SupportMessage: SupportERPUnavailable,
+		HTTP:           http.StatusInternalServerError,
+	}
 )
