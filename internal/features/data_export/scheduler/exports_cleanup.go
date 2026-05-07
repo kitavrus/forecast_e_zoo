@@ -22,6 +22,8 @@ func RegisterExportsCleanup(s gocron.Scheduler, storage ExportsStorageAPI, ttl t
 		logger = slog.Default()
 	}
 	job := func() {
+		// background-задача после ответа: фоновый ctx намеренный
+		// (gocron.NewTask не принимает ctx; вынужденная мера).
 		ctx := context.Background()
 		before := time.Now().Add(-ttl)
 		ids, err := storage.ListExpired(ctx, before)

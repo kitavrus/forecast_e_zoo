@@ -13,6 +13,7 @@ const (
 	SupportConflict           = "SA-CONF-001"
 	SupportServiceUnavailable = "SA-SVC-001"
 	SupportInternal           = "SA-INT-001"
+	SupportNotImplemented     = "SA-INT-002"
 
 	// Request validators (phase 07)
 	SupportInvalidCursor       = "SA-REQ-002"

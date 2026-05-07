@@ -193,6 +193,17 @@ var (
 		HTTP:           http.StatusInternalServerError,
 	}
 
+	// ErrNotImplemented — 501, эндпоинт/функция ещё не реализованы (MVP-ограничение).
+	// Используется для заглушек handlers, для которых repository-слой пока отсутствует
+	// (см. NotImplementedHandlers в data_export). Отдельный sentinel нужен, чтобы
+	// мониторинг отделял "ожидаемая фича пост-MVP" (501) от настоящих 5xx алертов.
+	ErrNotImplemented = &Error{
+		Code:           "not_implemented",
+		Message:        "Not implemented",
+		SupportMessage: SupportNotImplemented,
+		HTTP:           http.StatusNotImplemented,
+	}
+
 	// ErrAuthMissingToken — 401, отсутствует Authorization header.
 	// Code совпадает с ErrAuthInvalidToken, чтобы не раскрывать клиенту,
 	// что именно не так (защита от user-enumeration attacks).

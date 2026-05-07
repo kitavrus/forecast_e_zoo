@@ -63,6 +63,8 @@ func (h *AdminLoadsHandler) PostLoads(c fiber.Ctx) error {
 	}
 	// Async trigger (best-effort). gocron singleton mode защитит от race.
 	go func() {
+		// background-задача после ответа: фоновый ctx намеренный
+		// (c.Context() будет cancelled сразу после возврата хендлера и убьёт TriggerOnce).
 		_ = h.trigger.TriggerOnce(context.Background())
 	}()
 	resp := dto.PostLoadResponse{
@@ -111,6 +113,8 @@ func (h *AdminLoadsHandler) PostLoadsRetry(c fiber.Ctx) error {
 		return errorspkg.WriteJSON(c, errorspkg.ErrCannotRetry.WithMessage("only failed loads can be retried"))
 	}
 	go func() {
+		// background-задача после ответа: фоновый ctx намеренный
+		// (c.Context() будет cancelled сразу после возврата хендлера и убьёт TriggerOnce).
 		_ = h.trigger.TriggerOnce(context.Background())
 	}()
 	return c.Status(fiber.StatusAccepted).JSON(dto.PostLoadRetryResponse{

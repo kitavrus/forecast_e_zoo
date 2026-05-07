@@ -13,6 +13,7 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/models"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/repository"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/validation"
+	"github.com/Kitavrus/e_zoo/internal/observability"
 	"github.com/Kitavrus/e_zoo/pkg/errorspkg"
 )
 
@@ -80,9 +81,17 @@ func NewLoader(reader SourceReader, repo repository.LoaderAPI, engine *validatio
 
 // Run выполняет один load. Возвращает loadID и любую ошибку pipeline.
 // Любая internal-ошибка → MarkFailed + возврат наружу.
+//
+// Метрики Prometheus:
+//   - source_adapter_load_success_total{source}     — инкрементируется при успешном commit;
+//   - source_adapter_load_failed_total{source,reason} — инкрементируется при любом MarkFailed;
+//   - source_adapter_lines_total{entity}            — суммарные строки на сущность (после pipeline);
+//   - source_adapter_lines_failed_total{entity,severity="critical"} — неуспешные (после pipeline).
 func (l *Loader) Run(ctx context.Context, source string) (uuid.UUID, error) {
 	load, err := l.repo.InsertRunning(ctx, source)
 	if err != nil {
+		// Не дошли даже до loadID — фиксируем как failed без load_id.
+		observability.LoadFailedTotal.WithLabelValues(source, "insert_running").Inc()
 		return uuid.Nil, fmt.Errorf("loader: insert running: %w", err)
 	}
 	loadID := load.ID
@@ -96,10 +105,21 @@ func (l *Loader) Run(ctx context.Context, source string) (uuid.UUID, error) {
 
 	// 1. Master + facts pipeline.
 	if err := l.runPipeline(ctx, loadID, progress, state); err != nil {
-		// Mark failed + return.
-		_ = l.repo.MarkFailed(ctx, loadID, errReasonOf(err))
+		reason := errReasonOf(err)
+		_ = l.repo.MarkFailed(ctx, loadID, reason)
+		observability.LoadFailedTotal.WithLabelValues(source, reason).Inc()
 		l.logger.ErrorContext(ctx, "loader.failed", slog.String("load_id", loadID.String()), slog.Any("error", err))
 		return loadID, err
+	}
+
+	// Per-entity счётчики (lines_processed / lines_failed) — после удачного pipeline.
+	for _, p := range progress {
+		if p.LinesTotal > 0 {
+			observability.LinesProcessedTotal.WithLabelValues(p.Entity).Add(float64(p.LinesTotal))
+		}
+		if p.LinesFailed > 0 {
+			observability.LinesFailedTotal.WithLabelValues(p.Entity, "critical").Add(float64(p.LinesFailed))
+		}
 	}
 
 	// 2. Quality threshold.
@@ -110,6 +130,7 @@ func (l *Loader) Run(ctx context.Context, source string) (uuid.UUID, error) {
 	}
 	if totalLines > 0 && float64(totalFailed)/float64(totalLines) > QualityThresholdRatio {
 		_ = l.repo.MarkFailed(ctx, loadID, errorspkg.ErrQualityThresholdExceeded.Code)
+		observability.LoadFailedTotal.WithLabelValues(source, errorspkg.ErrQualityThresholdExceeded.Code).Inc()
 		l.logger.WarnContext(ctx, "loader.quality_threshold_exceeded",
 			slog.String("load_id", loadID.String()),
 			slog.Int64("total", totalLines),
@@ -121,23 +142,28 @@ func (l *Loader) Run(ctx context.Context, source string) (uuid.UUID, error) {
 	tx, err := l.repo.BeginTx(ctx)
 	if err != nil {
 		_ = l.repo.MarkFailed(ctx, loadID, "flip_begin_tx")
+		observability.LoadFailedTotal.WithLabelValues(source, "flip_begin_tx").Inc()
 		return loadID, fmt.Errorf("loader: begin tx: %w", err)
 	}
 	if _, err := l.repo.Flip(ctx, tx, loadID); err != nil {
 		_ = tx.Rollback(ctx)
 		_ = l.repo.MarkFailed(ctx, loadID, "flip_failed")
+		observability.LoadFailedTotal.WithLabelValues(source, "flip_failed").Inc()
 		return loadID, fmt.Errorf("loader: flip: %w", err)
 	}
 	statsJSON, _ := json.Marshal(progress)
 	if err := l.repo.MarkCommitted(ctx, tx, loadID, totalLines, totalFailed, statsJSON); err != nil {
 		_ = tx.Rollback(ctx)
 		_ = l.repo.MarkFailed(ctx, loadID, "mark_committed_failed")
+		observability.LoadFailedTotal.WithLabelValues(source, "mark_committed_failed").Inc()
 		return loadID, fmt.Errorf("loader: mark committed: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		_ = l.repo.MarkFailed(ctx, loadID, "commit_failed")
+		observability.LoadFailedTotal.WithLabelValues(source, "commit_failed").Inc()
 		return loadID, fmt.Errorf("loader: commit: %w", err)
 	}
+	observability.LoadSuccessTotal.WithLabelValues(source).Inc()
 	l.logger.InfoContext(ctx, "loader.committed",
 		slog.String("load_id", loadID.String()),
 		slog.Int64("lines_total", totalLines),

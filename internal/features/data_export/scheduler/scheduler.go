@@ -13,6 +13,7 @@ import (
 
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/loader"
 	"github.com/Kitavrus/e_zoo/internal/features/data_export/repository"
+	"github.com/Kitavrus/e_zoo/internal/observability"
 )
 
 // Config — параметры scheduler-а.
@@ -104,18 +105,29 @@ func (s *Scheduler) Stop(_ context.Context) error {
 
 // runTick — обёртка для gocron, без context из-за сигнатуры NewTask.
 func (s *Scheduler) runTick() {
+	// background-задача после ответа: фоновый ctx намеренный
+	// (gocron.NewTask не принимает ctx; вынужденная мера, см. также §Серьёзные замечания #1).
 	ctx := context.Background()
+	// Метрика SchedulerTickTotal инкрементируется внутри Tick (ok/skipped/error),
+	// чтобы корректно различить путь lock-busy (Tick возвращает nil, но это не "ok").
 	if err := s.Tick(ctx); err != nil {
 		s.logger.Error("scheduler.tick_error", slog.Any("error", err))
 	}
 }
 
 // Tick — публичный метод (для tests / TriggerOnce).
-func (s *Scheduler) Tick(ctx context.Context) error {
-	// 1. Захватываем session-scoped advisory lock на отдельном connection,
-	//    держим его до конца load-а.
+//
+// Метрика SchedulerTickTotal:
+//   - "skipped" — advisory lock занят (другой tick уже исполняется);
+//   - "error"   — любая ошибка ниже advisory-lock checkpoint;
+//   - "ok"      — load завершён без ошибок (включая lock-busy: tick формально завершился).
+//
+// Принцип: метрику считает Tick, а не runTick, чтобы lock-busy путь
+// корректно различался от "ok" (Tick возвращает nil в обоих кейсах).
+func (s *Scheduler) Tick(ctx context.Context) (retErr error) {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
+		observability.SchedulerTickTotal.WithLabelValues("error").Inc()
 		return fmt.Errorf("scheduler: acquire conn: %w", err)
 	}
 	defer conn.Release()
@@ -123,15 +135,24 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	key := LockKey(LockTagDailyLoad)
 	var locked bool
 	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&locked); err != nil {
+		observability.SchedulerTickTotal.WithLabelValues("error").Inc()
 		return fmt.Errorf("scheduler: try_advisory_lock: %w", err)
 	}
 	if !locked {
+		observability.AdvisoryLockBusyTotal.Inc()
+		observability.SchedulerTickTotal.WithLabelValues("skipped").Inc()
 		s.logger.InfoContext(ctx, "scheduler.tick_skipped_lock_busy")
 		return nil
 	}
 	defer func() {
 		// Всегда отпускаем session lock на выходе.
 		_, _ = conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", key)
+		// И только теперь — финальная классификация результата tick-а.
+		if retErr == nil {
+			observability.SchedulerTickTotal.WithLabelValues("ok").Inc()
+		} else {
+			observability.SchedulerTickTotal.WithLabelValues("error").Inc()
+		}
 	}()
 
 	// 2. Pre-step: партиции.

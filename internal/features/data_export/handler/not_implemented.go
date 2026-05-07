@@ -18,7 +18,7 @@ type NotImplementedHandlers struct{}
 // Make returns a fiber.Handler that always responds 501.
 func notImplemented(entity string) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		return errorspkg.WriteJSON(c, errorspkg.ErrInternal.WithMessage(
+		return errorspkg.WriteJSON(c, errorspkg.ErrNotImplemented.WithMessage(
 			entity+": handler not yet implemented (MVP scope: products, receipt_line; см. фазу post-MVP)").WithDetails(
 			errorspkg.Detail{Field: "entity", Message: entity}))
 	}

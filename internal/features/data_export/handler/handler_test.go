@@ -258,14 +258,19 @@ func TestStreamNDJSON_WritesLineByLine(t *testing.T) {
 
 // --- not implemented placeholder ---
 
-func TestNotImplemented_Returns500WithEntityName(t *testing.T) {
+// TestNotImplemented_Returns501WithEntityName — после фикса блокера #1 ревью
+// (см. design-errors.md ErrNotImplemented) заглушки 14 entity отдают 501,
+// а не 500. Это нужно для алертов: 5xx остаётся внутренней ошибкой,
+// а 501 — ожидаемый «фича пост-MVP».
+func TestNotImplemented_Returns501WithEntityName(t *testing.T) {
 	t.Parallel()
 	app := newApp()
 	ni := handler.NotImplementedHandlers{}
 	app.Get("/v1/category", ni.Category())
 	resp, err := app.Test(httptest.NewRequest("GET", "/v1/category", nil))
 	require.NoError(t, err)
-	require.Equal(t, 500, resp.StatusCode)
+	require.Equal(t, 501, resp.StatusCode)
 	body, _ := io.ReadAll(resp.Body)
 	require.Contains(t, string(body), "category")
+	require.Contains(t, string(body), "not_implemented")
 }

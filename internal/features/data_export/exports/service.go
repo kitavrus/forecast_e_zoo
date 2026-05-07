@@ -67,6 +67,8 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (string, exports_storag
 // runAsync — для MVP пишет stub-body (пустой NDJSON) и помечает ready.
 // В пост-MVP здесь будет потоковая запись через SourceReader/Repository.
 func (s *Service) runAsync(id uuid.UUID, req dto.PostExportRequest, meta exports_storage.Meta) {
+	// background-задача после ответа: фоновый ctx намеренный
+	// (job детачится от request-context'а, иначе POST вернёт 202 и тут же отменит запись).
 	ctx := context.Background()
 	body := emptyBody(req.Entity)
 	meta.Status = "ready"
