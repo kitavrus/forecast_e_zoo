@@ -51,7 +51,7 @@ func (s *MartRefreshService) Refresh(ctx context.Context, name, requester string
 	if err != nil {
 		return nil, err //nolint:wrapcheck // already wrapped
 	}
-	sourceLoadID, err := uuid.Parse(snap.LoadID)
+	sourceLoadID, err := uuid.Parse(snap.CurrentLoadID)
 	if err != nil {
 		return nil, fmt.Errorf("service: parse source_load_id: %w", err)
 	}

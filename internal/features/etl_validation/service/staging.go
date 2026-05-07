@@ -126,7 +126,7 @@ func extractAllEntities(ctx context.Context, extr Extractor, snap extractor.Snap
 
 // streamEntityRows скачивает NDJSON по одной entity, декодируя каждую строку в Row.
 func streamEntityRows(ctx context.Context, extr Extractor, entity string, snap extractor.Snapshot) ([]validation.Row, error) {
-	rd, err := extr.StreamEntity(ctx, entity, snap.LoadID, "")
+	rd, err := extr.StreamEntity(ctx, entity, snap.CurrentLoadID, "")
 	if err != nil {
 		return nil, fmt.Errorf("stream: %w", err)
 	}

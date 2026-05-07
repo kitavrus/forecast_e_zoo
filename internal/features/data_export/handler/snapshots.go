@@ -36,11 +36,11 @@ func (h *SnapshotsHandler) GetCurrent(c fiber.Ctx) error {
 		return errorspkg.WriteJSON(c, err)
 	}
 	resp := dto.GetSnapshotsCurrentResponse{
-		SnapshotID:  derefOrNil(sp.CurrentLoadID),
-		CommittedAt: derefOrZeroTime(sp.CommittedAt),
-		Entities:    nil, // оставляем пустым; счётчики появятся после реализации Stats (вне MVP)
+		CurrentLoadID: derefOrNil(sp.CurrentLoadID),
+		CommittedAt:   derefOrZeroTime(sp.CommittedAt),
+		Entities:      nil, // оставляем пустым; счётчики появятся после реализации Stats (вне MVP)
 	}
-	WritePageHeaders(c, resp.SnapshotID, resp.SnapshotID, "")
+	WritePageHeaders(c, resp.CurrentLoadID, resp.CurrentLoadID, "")
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
 

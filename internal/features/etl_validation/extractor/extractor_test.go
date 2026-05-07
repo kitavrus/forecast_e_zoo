@@ -121,14 +121,14 @@ func TestSnapshots_GetCurrent_OK(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("ETag", `"abc"`)
-		_, _ = w.Write([]byte(`{"load_id":"L1","created_at":"2026-05-01T00:00:00Z"}`))
+		_, _ = w.Write([]byte(`{"current_load_id":"L1","committed_at":"2026-05-01T00:00:00Z"}`))
 	}))
 	defer srv.Close()
 	c := newTestClient(t, srv.URL)
 	sc := extractor.NewSnapshotsClient(c)
 	snap, err := sc.GetCurrent(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "L1", snap.LoadID)
+	assert.Equal(t, "L1", snap.CurrentLoadID)
 	assert.Equal(t, `"abc"`, snap.ETag)
 }
 

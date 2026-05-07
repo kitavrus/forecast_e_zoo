@@ -156,7 +156,7 @@ func (p *EtlPipeline) runAsync(runID uuid.UUID) {
 		p.metrics.RecordRunFailure(time.Since(startedAt).Seconds(), "snapshot")
 		return
 	}
-	sourceLoadID, parseErr := uuid.Parse(snap.LoadID)
+	sourceLoadID, parseErr := uuid.Parse(snap.CurrentLoadID)
 	if parseErr != nil {
 		p.markFailed(ctx, runID, fmt.Sprintf("bad source load id: %v", parseErr))
 		p.metrics.RecordRunFailure(time.Since(startedAt).Seconds(), "bad_source_load_id")

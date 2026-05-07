@@ -14,8 +14,11 @@ type EntitySummary struct {
 }
 
 // GetSnapshotsCurrentResponse — GET /v1/snapshots/current.
+//
+// Имена полей соответствуют source-adapter контракту (design-sql.md):
+// snapshot_pointer.current_load_id / committed_at.
 type GetSnapshotsCurrentResponse struct {
-	SnapshotID  uuid.UUID       `json:"snapshot_id"`
-	CommittedAt time.Time       `json:"committed_at"`
-	Entities    []EntitySummary `json:"entities"`
+	CurrentLoadID uuid.UUID       `json:"current_load_id"`
+	CommittedAt   time.Time       `json:"committed_at"`
+	Entities      []EntitySummary `json:"entities"`
 }

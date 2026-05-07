@@ -11,10 +11,13 @@ import (
 )
 
 // Snapshot — DTO ответа GET /v1/snapshots/current от source-adapter.
+//
+// Имена полей соответствуют source-adapter контракту (design-sql.md):
+// snapshot_pointer.current_load_id / committed_at.
 type Snapshot struct {
-	LoadID    string    `json:"load_id"`
-	CreatedAt time.Time `json:"created_at"`
-	ETag      string    `json:"etag,omitempty"`
+	CurrentLoadID string    `json:"current_load_id"`
+	CommittedAt   time.Time `json:"committed_at"`
+	ETag          string    `json:"etag,omitempty"`
 }
 
 // SnapshotsClient — публичный интерфейс для тестов EtlPipeline.
