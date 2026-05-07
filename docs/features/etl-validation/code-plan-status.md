@@ -11,7 +11,7 @@
 | 04 | Migrations 1002 — etl_runs + reject_log + audit_access | `completed` | 34f71c7 | done 2026-05-07T01:40:00Z |
 | 05 | Models / DTO                                  | `completed` | abbf5af | done 2026-05-07T01:55:00Z |
 | 06 | Repository (pgx + go:embed) + integration test | `completed` | d692680 | done 2026-05-07T02:30:00Z; 6 integration tests pass against postgres:18-alpine |
-| 07 | SQL queries (go:embed)                        | `pending`  |        |         |
+| 07 | SQL queries (go:embed)                        | `completed` | TBD    | done 2026-05-07T03:10:00Z |
 | 08 | Validators (формат запросов)                  | `pending`  |        |         |
 | 09 | Validation engine reuse + etl_validation_rules.yaml | `pending` |   |         |
 | 10 | Extractor (HTTP клиент к source-adapter)      | `pending`  |        |         |

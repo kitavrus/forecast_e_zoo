@@ -5,19 +5,22 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/sqls/queries"
 )
 
 // CreateStagingTables создаёт TEMP TABLE pg_temp.stg_* в рамках tx.
 //
-// На фазе 06 — заглушка-заголовок: реальные DDL заполняются в фазе 07
-// через staging_create_temp_tables.sql.
+// SQL — staging_create_temp_tables.sql (CREATE TEMP TABLE ... ON COMMIT DROP).
+// Транзакция обязательна: TEMP TABLE привязана к session/tx; ON COMMIT DROP
+// гарантирует, что таблицы исчезнут вместе с tx.
 func (r *Repository) CreateStagingTables(ctx context.Context, tx pgx.Tx) error {
 	if tx == nil {
 		return fmt.Errorf("repository: CreateStagingTables: tx is required")
 	}
-	// SQL заполняется в Phase 07; на текущий момент embedded-файл может отсутствовать —
-	// этот метод вызывается только из transformer/loader (Phase 11/12), и к тому времени
-	// SQL уже будет в queries/.
+	if _, err := tx.Exec(ctx, queries.MustGet("staging_create_temp_tables")); err != nil {
+		return fmt.Errorf("repository: CreateStagingTables: %w", err)
+	}
 	return nil
 }
 
