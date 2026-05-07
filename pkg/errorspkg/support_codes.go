@@ -43,6 +43,15 @@ const (
 	SupportKpiSnapshotNotFound    = "KPI-001"
 	SupportKpiCalibrationNotFound = "KPI-002"
 	SupportInvalidKpiName         = "KPI-003"
+
+	// Forecast Engine module (Module 5 forecast-engine, FCT-*)
+	SupportForecastRunNotFound          = "FCT-001"
+	SupportForecastRunInProgress        = "FCT-002"
+	SupportPlanNotFound                 = "FCT-003"
+	SupportPlanNotDraft                 = "FCT-004"
+	SupportInvalidHorizon               = "FCT-005"
+	SupportInvalidPlanStatus            = "FCT-006"
+	SupportForecastSchedulerUnavailable = "FCT-007"
 )
 
 // SupportMessageCodes — общий список всех допустимых support-кодов.
@@ -75,4 +84,11 @@ var SupportMessageCodes = []string{
 	SupportKpiSnapshotNotFound,
 	SupportKpiCalibrationNotFound,
 	SupportInvalidKpiName,
+	SupportForecastRunNotFound,
+	SupportForecastRunInProgress,
+	SupportPlanNotFound,
+	SupportPlanNotDraft,
+	SupportInvalidHorizon,
+	SupportInvalidPlanStatus,
+	SupportForecastSchedulerUnavailable,
 }
