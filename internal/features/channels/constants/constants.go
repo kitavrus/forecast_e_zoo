@@ -89,3 +89,14 @@ const (
 
 // AuthCredentialsEnvDefault — общий fallback env var, если supplier-specific не задан.
 const AuthCredentialsEnvDefault = "CHANNEL_AUTH_ERP_API"
+
+// PO statuses (orders.purchase_orders.status) — необходимы router_svc для idempotent retry.
+//
+// Зеркалит orders/constants/POStatus*; импортируется здесь чтобы избежать
+// зависимости channels → orders (channels — отдельная фича).
+const (
+	POStatusReadyToSend    = "ready_to_send"
+	POStatusSent           = "sent"
+	POStatusConfirmedByERP = "confirmed_by_erp"
+	POStatusCancelled      = "cancelled"
+)
