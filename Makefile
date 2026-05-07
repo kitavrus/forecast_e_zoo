@@ -34,13 +34,13 @@ DB_DSN ?= postgres://adapter:adapter@localhost:5432/source_adapter?sslmode=disab
 migrate-up:
 	docker run --rm --network host \
 	  -v $(MIGRATE_PATH):/migrations \
-	  migrate/migrate:v4 \
+	  migrate/migrate:v4.18.1 \
 	  -path=/migrations -database "$(DB_DSN)" up
 
 migrate-down:
 	docker run --rm --network host \
 	  -v $(MIGRATE_PATH):/migrations \
-	  migrate/migrate:v4 \
+	  migrate/migrate:v4.18.1 \
 	  -path=/migrations -database "$(DB_DSN)" down 1
 
 migrate-create:
@@ -49,7 +49,7 @@ ifndef NAME
 endif
 	docker run --rm \
 	  -v $(MIGRATE_PATH):/migrations \
-	  migrate/migrate:v4 \
+	  migrate/migrate:v4.18.1 \
 	  create -ext sql -dir /migrations -seq $(NAME)
 
 # --- Docker ---

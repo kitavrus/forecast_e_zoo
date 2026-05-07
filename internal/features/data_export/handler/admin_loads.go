@@ -15,8 +15,16 @@ import (
 )
 
 // AdminLoadsTrigger — интерфейс scheduler-а для admin-handler.
+//
+// TryTrigger: синхронно пытается захватить advisory lock; если занят — возвращает
+// (false, nil); если успешно — стартует load в фоне и сразу же возвращает (true, nil).
+// Используется PostLoads, чтобы корректно отвечать 409 при concurrent (Issue #6).
+//
+// TriggerOnce оставлен ради обратной совместимости и ретраев — он СИНХРОННЫЙ,
+// блокируется на время load-а.
 type AdminLoadsTrigger interface {
 	TriggerOnce(ctx context.Context) error
+	TryTrigger(ctx context.Context) (acquired bool, err error)
 }
 
 // LoadsRepoAPI — узкий интерфейс repository для admin-handler.
@@ -43,30 +51,52 @@ func NewAdminLoadsHandler(repo LoadsRepoAPI, trigger AdminLoadsTrigger, rejects 
 }
 
 // PostLoads — POST /admin/loads. Стартует новый load асинхронно.
-// Если уже running → 409 ErrLoadAlreadyRunning.
+//
+// Возвращает 409 ErrLoadAlreadyRunning в двух случаях (Issue #6 validation):
+//  1. В таблице loads уже есть запись со status=running (long-running load).
+//  2. Advisory lock pg_try_advisory_lock занят другим tick-ом (race-condition,
+//     при которой первый POST стартовал load в фоне, но строка running ещё не
+//     успела появиться/уже исчезла из-за быстрого fail).
+//
+// Это делает контракт API детерминированным: «Параллельный POST → 409 +
+// ссылка на текущий load_id» (см. spec-interview, design-api-contract).
 func (h *AdminLoadsHandler) PostLoads(c fiber.Ctx) error {
 	var req dto.PostLoadRequest
 	if err := c.Bind().JSON(&req); err != nil {
 		return errorspkg.WriteJSON(c, errorspkg.ErrBadRequest.Wrap(err))
 	}
 	ctx := c.Context()
+
+	// 1. Дешёвая проверка по таблице loads: если уже есть running — 409 сразу.
 	running, err := h.repo.GetRunning(ctx)
 	if err != nil {
 		return errorspkg.WriteJSON(c, err)
 	}
 	if running != nil {
-		// 409 + currentLoadId в details.
 		return errorspkg.WriteJSON(c, errorspkg.ErrLoadAlreadyRunning.WithDetails(errorspkg.Detail{
 			Field:   "currentLoadId",
 			Message: running.ID.String(),
 		}))
 	}
-	// Async trigger (best-effort). gocron singleton mode защитит от race.
-	go func() {
-		// background-задача после ответа: фоновый ctx намеренный
-		// (c.Context() будет cancelled сразу после возврата хендлера и убьёт TriggerOnce).
-		_ = h.trigger.TriggerOnce(context.Background())
-	}()
+
+	// 2. Атомарно пробуем взять advisory lock и стартовать load в фоне.
+	// Если lock занят (другой tick / другой POST уже идёт) — 409.
+	// Сам fact "load запущен в фоне" обеспечивается реализацией TryTrigger
+	// (см. scheduler.TryTrigger) — handler не ждёт завершения.
+	acquired, err := h.trigger.TryTrigger(ctx)
+	if err != nil {
+		return errorspkg.WriteJSON(c, err)
+	}
+	if !acquired {
+		// Lock занят — возможно, более ранний POST уже стартовал load,
+		// но запись running ещё не появилась. currentLoadId в этом случае
+		// неизвестен (load_id появится после tick) — оставляем пустым.
+		return errorspkg.WriteJSON(c, errorspkg.ErrLoadAlreadyRunning.WithDetails(errorspkg.Detail{
+			Field:   "currentLoadId",
+			Message: "",
+		}))
+	}
+
 	resp := dto.PostLoadResponse{
 		LoadID: uuid.Nil, // load_id появится после tick; клиент полит GET /admin/loads
 		Status: "accepted",

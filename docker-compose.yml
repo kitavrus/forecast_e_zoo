@@ -9,6 +9,9 @@ services:
       POSTGRES_PASSWORD: adapter
       POSTGRES_DB: source_adapter
       POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+      # postgres:18-alpine отказывается инициализировать кластер прямо в /var/lib/postgresql/data
+      # (требует подкаталог). Кладём кластер в /var/lib/postgresql/data/pgdata.
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./infra/pg/postgresql.conf:/etc/postgresql/postgresql.conf:ro
@@ -22,7 +25,7 @@ services:
       retries: 10
 
   migrate:
-    image: migrate/migrate:v4
+    image: migrate/migrate:v4.18.1
     profiles: ["migrate"]
     depends_on:
       postgres:

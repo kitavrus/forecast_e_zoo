@@ -190,12 +190,40 @@ func errReasonOf(err error) string {
 //
 // Полные UPSERT-методы для всех 16 сущностей — подключаются по мере
 // расширения repository (вне этой фазы; 12+ методов).
+//
+// ВАЖНО (Issue #5 validation 2026-05-07): порядок строго master → facts.
+// products зависит от category по FK (products_category_id_fkey), поэтому
+// category ДОЛЖЕН вставляться раньше products. Раньше runPipeline стартовал
+// с products → загрузка падала на FK violation.
+//
+// Текущий порядок отражает зависимости из EntityOrder:
+//   1. category, supplier, location  — корневые master без внешних FK
+//   2. products                       — зависит от category
+//   3. receipt_line                   — fact, ссылается на products + location
+//   4. supplier_stock_snapshot        — fact, optional (ERP может вернуть [])
+//
+// Остальные master/facts (product_barcodes, store_assortment, …) пока pass-through
+// и подключаются по мере появления UPSERT-методов в repository (см. EntityOrder).
 func (l *Loader) runPipeline(ctx context.Context, loadID uuid.UUID, progress map[string]*EntityProgress, state *validation.State) error {
-	// products (с реальным UPSERT)
+	// --- 1. Master-сущности без FK (порядок внутри блока неважен) ---
+	if err := l.loadGeneric(ctx, "category", loadID, progress, state); err != nil {
+		return err
+	}
+	if err := l.loadGeneric(ctx, "supplier", loadID, progress, state); err != nil {
+		return err
+	}
+	if err := l.loadGeneric(ctx, "location", loadID, progress, state); err != nil {
+		return err
+	}
+
+	// --- 2. Master-сущности с FK на предыдущие ---
+	// products зависит от category — обязательно ПОСЛЕ category.
 	if err := l.loadProducts(ctx, loadID, progress["products"], state); err != nil {
 		return err
 	}
-	// receipt_line (с реальным batch INSERT в партиции)
+
+	// --- 3. Facts (после всех master) ---
+	// receipt_line ссылается на products + location.
 	if err := l.loadReceiptLine(ctx, loadID, progress["receipt_line"], state); err != nil {
 		return err
 	}
@@ -203,16 +231,7 @@ func (l *Loader) runPipeline(ctx context.Context, loadID uuid.UUID, progress map
 	if err := l.loadSupplierStockSnapshot(ctx, loadID, progress["supplier_stock_snapshot"], state); err != nil {
 		return err
 	}
-	// для остальных сущностей — pass-through через iterator + validator (без UPSERT в БД).
-	if err := l.loadGeneric(ctx, "category", loadID, progress, state); err != nil {
-		return err
-	}
-	if err := l.loadGeneric(ctx, "location", loadID, progress, state); err != nil {
-		return err
-	}
-	if err := l.loadGeneric(ctx, "supplier", loadID, progress, state); err != nil {
-		return err
-	}
+
 	return nil
 }
 

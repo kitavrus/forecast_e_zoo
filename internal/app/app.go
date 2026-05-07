@@ -225,14 +225,30 @@ func (a *App) Shutdown() error {
 }
 
 // noopTrigger — placeholder, если scheduler не сконфигурирован.
+//
+// TryTrigger возвращает (false, nil): без scheduler-а load запустить нельзя,
+// и параллельный POST /admin/loads должен получить 409 (а не «псевдо-202»).
 type noopTrigger struct{}
 
 func (noopTrigger) TriggerOnce(_ context.Context) error { return nil }
 
+func (noopTrigger) TryTrigger(_ context.Context) (bool, error) {
+	return false, nil
+}
+
 // tryStubReader пытается загрузить in-memory ErpEZooReader из ERPBaseURL,
 // если это путь к директории с fixtures (MVP fallback).
+//
+// Если ERP_BASE_URL пуст и ERP_AUTH_MODE=none — это ожидаемый dev-сценарий,
+// но молчание сильно ухудшает DX (Issue #4 из validation): сервис стартует с
+// noopTrigger, /admin/loads возвращает 202, но в БД ничего не появляется.
+// Поэтому логируем явный WARN со ссылкой, как починить.
 func tryStubReader(cfg *config.Config, log *slog.Logger) loader.SourceReader {
 	if cfg.ERPBaseURL == "" {
+		log.Warn("app: ERP_BASE_URL is empty — using in-memory stub backend (no real loads will run; "+
+			"Q-001..Q-003 blocked, POST /admin/loads will reply 202 with no DB writes); "+
+			"set ERP_BASE_URL=./testdata/fixtures (or path to ERP fixtures) to enable loads",
+			"erp_auth_mode", cfg.ERPAuthMode)
 		return nil
 	}
 	r, err := loader.New(cfg.ERPBaseURL)
@@ -240,5 +256,6 @@ func tryStubReader(cfg *config.Config, log *slog.Logger) loader.SourceReader {
 		log.Warn("app: stub reader load failed", "dir", cfg.ERPBaseURL, "error", err)
 		return nil
 	}
+	log.Info("app: stub reader loaded from fixtures", "dir", cfg.ERPBaseURL)
 	return r
 }
