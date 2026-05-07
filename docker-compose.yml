@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: ezoo_pg
+    environment:
+      POSTGRES_USER: adapter
+      POSTGRES_PASSWORD: adapter
+      POSTGRES_DB: source_adapter
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./infra/pg/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adapter -d source_adapter"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4
+    profiles: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./internal/features/data_export/sqls/migrations:/migrations:ro
+    command: [
+      "-path=/migrations",
+      "-database=postgres://adapter:adapter@postgres:5432/source_adapter?sslmode=disable",
+      "up"
+    ]
+
+  source-adapter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ezoo_source_adapter
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_DSN: "postgres://adapter:adapter@postgres:5432/source_adapter?sslmode=disable&pool_max_conns=20"
+      HTTP_ADDR: ":8080"
+      LOG_LEVEL: INFO
+      JWT_ALG: HS256
+      JWT_SECRET: "dev-secret-change-in-prod"
+      JWT_ADMIN_ROLE: "admin-cli"
+      JWT_READ_ROLES: "x-flow-etl,it-read"
+      SOURCE_ADAPTER_CRON_SCHEDULE: "0 2 * * *"
+      SOURCE_ADAPTER_TZ: "Europe/Kyiv"
+      EXPORTS_BASE_DIR: "/var/exports"
+      APP_ENV: "dev"
+    ports:
+      - "8080:8080"
+    volumes:
+      - exports_data:/var/exports
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ezoo_prometheus
+    profiles: ["observability"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+volumes:
+  pg_data:
+  exports_data:

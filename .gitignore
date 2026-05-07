@@ -34,3 +34,14 @@ go.work.sum
 # OS / tooling
 .DS_Store
 .claude/
+
+# Build artifacts
+bin/
+coverage.out
+
+# Local export storage
+var/exports/
+
+# Local env overrides
+.env.local
+.env.prod
