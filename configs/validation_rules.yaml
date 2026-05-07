@@ -1,0 +1,57 @@
+# Severity-движок source-adapter (см. ADR-006).
+# version: 1 — стартовый набор правил.
+# severity: critical → fail load (ничего не коммитим).
+# severity: soft     → пишем в reject_log, load продолжается.
+version: 1
+rules:
+  - id: receipt_line.qty_negative
+    entity: receipt_line
+    check: negative_qty
+    field: qty
+    severity: critical
+
+  - id: receipt_line.event_time_future
+    entity: receipt_line
+    check: future_event_time
+    field: event_time
+    severity: critical
+
+  - id: location_stock.qty_negative
+    entity: location_stock_snapshot
+    check: negative_stock
+    field: qty_on_hand
+    severity: critical
+
+  - id: products.duplicate_pk
+    entity: products
+    check: duplicate_pk
+    field: id
+    severity: critical
+
+  - id: products.barcode_format
+    entity: product_barcodes
+    check: regex_match
+    field: barcode
+    pattern: "^[0-9]{8,14}$"
+    severity: soft
+
+  - id: location.required_fields
+    entity: location
+    check: missing_required
+    fields:
+      - id
+      - name
+      - type
+    severity: critical
+
+  - id: supply_spec.lead_time_range
+    entity: supply_spec
+    check: numeric_range
+    field: lead_time_days
+    min: 0
+    max: 90
+    severity: soft
+
+# Сущности, для которых отсутствие правил — норма (engine не падает).
+entity_optional:
+  - supplier_stock_snapshot

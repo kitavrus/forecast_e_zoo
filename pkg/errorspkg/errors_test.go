@@ -53,6 +53,34 @@ func TestAuthSentinels_HTTP(t *testing.T) {
 	assert.False(t, errors.Is(wrappedMissing, ErrAuthForbidden))
 }
 
+// TestPhase07_Sentinels_Defaults — проверяем дефолты новых sentinel'ов фазы 7.
+func TestPhase07_Sentinels_Defaults(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		err  *Error
+		code string
+		http int
+		sup  string
+	}{
+		{"InvalidCursor", ErrInvalidCursor, "invalid_cursor", http.StatusBadRequest, SupportInvalidCursor},
+		{"InvalidQuery", ErrInvalidQuery, "invalid_query", http.StatusBadRequest, SupportInvalidQuery},
+		{"InvalidExportFormat", ErrInvalidExportFormat, "invalid_export_format", http.StatusBadRequest, SupportInvalidExportFormat},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.NotNil(t, tc.err)
+			assert.Equal(t, tc.code, tc.err.Code)
+			assert.Equal(t, tc.http, tc.err.HTTP)
+			assert.Equal(t, tc.sup, tc.err.SupportMessage)
+			// errors.Is через wrap.
+			wrapped := tc.err.Wrap(fmt.Errorf("cause"))
+			assert.True(t, errors.Is(wrapped, tc.err))
+		})
+	}
+}
+
 // TestError_WithDetails_Idempotent — проверяем, что WithDetails не мутирует оригинал.
 func TestError_WithDetails_Idempotent(t *testing.T) {
 	t.Parallel()

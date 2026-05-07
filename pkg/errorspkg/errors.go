@@ -218,4 +218,28 @@ var (
 		SupportMessage: SupportForbidden,
 		HTTP:           http.StatusForbidden,
 	}
+
+	// ErrInvalidCursor — 400, cursor не парсится / повреждён.
+	ErrInvalidCursor = &Error{
+		Code:           "invalid_cursor",
+		Message:        "invalid pagination cursor",
+		SupportMessage: SupportInvalidCursor,
+		HTTP:           http.StatusBadRequest,
+	}
+
+	// ErrInvalidQuery — 400, query-параметры противоречат друг другу/диапазону.
+	ErrInvalidQuery = &Error{
+		Code:           "invalid_query",
+		Message:        "invalid query parameters",
+		SupportMessage: SupportInvalidQuery,
+		HTTP:           http.StatusBadRequest,
+	}
+
+	// ErrInvalidExportFormat — 400, format ∉ {ndjson, parquet}.
+	ErrInvalidExportFormat = &Error{
+		Code:           "invalid_export_format",
+		Message:        "unsupported export format",
+		SupportMessage: SupportInvalidExportFormat,
+		HTTP:           http.StatusBadRequest,
+	}
 )
