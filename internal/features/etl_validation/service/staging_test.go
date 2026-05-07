@@ -99,11 +99,17 @@ func TestRowSource_BadDate(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestStagingByEntity_AllAllowedEntitiesCovered(t *testing.T) {
+func TestStagingByEntity_AllStagedEntitiesAreAllowed(t *testing.T) {
 	t.Parallel()
-	for _, entity := range constants.AllowedEntities {
-		_, ok := stagingByEntity[entity]
-		assert.True(t, ok, "entity %q must be present in stagingByEntity", entity)
+	// Контракт: каждая entity, имеющая staging-спеку, должна присутствовать в
+	// constants.AllowedEntities (имена строго соответствуют путям source-adapter).
+	// Обратное НЕ требуется — entity без mart-логики (product_barcodes, category,
+	// supply_plan, master_change_log, store_assortment_lifecycle_events,
+	// stock_movement, supplier_stock_snapshot) экстрактятся, но не загружаются
+	// в pg_temp.stg_*.
+	for entity := range stagingByEntity {
+		assert.Contains(t, constants.AllowedEntities, entity,
+			"entity %q in stagingByEntity must be in constants.AllowedEntities", entity)
 	}
 }
 

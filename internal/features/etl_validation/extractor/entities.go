@@ -32,8 +32,6 @@ var FactEntities = map[string]struct{}{
 	"location_stock_snapshot": {},
 	"stock_movement":          {},
 	"supplier_stock_snapshot": {},
-	"stock_on_hand":           {},
-	"receiving_detail":        {},
 }
 
 // IsFactEntity возвращает true, если entity — fact (партиционированная таблица),
@@ -122,8 +120,7 @@ func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag st
 		// Source-adapter MVP реализует только подмножество entities (см.
 		// internal/features/data_export/handler/not_implemented.go: 501 для
 		// 14 master/facts entities вне products + receipt_line). Fiber default
-		// 404 — для не-зарегистрированных маршрутов (например, /v1/stock_on_hand,
-		// который ещё не объявлен в router).
+		// 404 — для не-зарегистрированных маршрутов.
 		//
 		// Трактуем оба статуса как «entity ещё не экспортируется» → пустой stream.
 		// populateStaging уже толерантен к пустым/неизвестным entities (см. staging.go).

@@ -362,13 +362,12 @@ func TestEntities_Stream_FactsDateRange(t *testing.T) {
 	var v map[string]any
 	require.ErrorIs(t, rd.Next(&v), io.EOF)
 
-	// Sanity: IsFactEntity покрывает receipt_line + 5 других fact-сущностей.
+	// Sanity: IsFactEntity покрывает 4 fact-сущности source-adapter
+	// (receipt_line + location_stock_snapshot + stock_movement + supplier_stock_snapshot).
 	assert.True(t, extractor.IsFactEntity("receipt_line"))
 	assert.True(t, extractor.IsFactEntity("location_stock_snapshot"))
 	assert.True(t, extractor.IsFactEntity("stock_movement"))
 	assert.True(t, extractor.IsFactEntity("supplier_stock_snapshot"))
-	assert.True(t, extractor.IsFactEntity("stock_on_hand"))
-	assert.True(t, extractor.IsFactEntity("receiving_detail"))
 	assert.False(t, extractor.IsFactEntity("products"))
 	assert.False(t, extractor.IsFactEntity("location"))
 }
@@ -384,7 +383,7 @@ func TestEntities_Stream_NotFoundAndNotImplemented_Tolerated(t *testing.T) {
 		}))
 		c := newTestClient(t, srv.URL)
 		ec := extractor.NewEntitiesClient(c)
-		rd, err := ec.Stream(context.Background(), "stock_on_hand", "L1", "", time.Time{}, time.Time{})
+		rd, err := ec.Stream(context.Background(), "category", "L1", "", time.Time{}, time.Time{})
 		require.NoError(t, err, "status=%d", status)
 		require.NotNil(t, rd)
 		var v map[string]any

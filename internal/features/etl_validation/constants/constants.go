@@ -78,34 +78,56 @@ var MartRefreshable = []string{
 }
 
 // Допустимые значения query-параметра entity для GET /admin/reject-log.
-// Совпадают с именами staging-сущностей источника.
+// Имена строго совпадают с путями source-adapter (/v1/{entity}, см.
+// internal/features/data_export/router/router.go) — single source of truth.
+//
+// Список из 16 сущностей покрывает полный контракт source-adapter:
+// 12 master + 4 fact (см. extractor.FactEntities).
 const (
-	EntityReceiptLine     = "receipt_line"
-	EntityStockOnHand     = "stock_on_hand"
-	EntityProduct         = "product"
-	EntityLocation        = "location"
-	EntitySupplier        = "supplier"
-	EntityOrderRule       = "order_rule"
-	EntitySupplySpec      = "supply_spec"
-	EntityReceivingDetail = "receiving_detail"
-	EntityPromo           = "promo"
-	EntityStoreAssortment = "store_assortment"
+	// Master entities.
+	EntityProducts                        = "products"
+	EntityProductBarcodes                 = "product_barcodes"
+	EntityCategory                        = "category"
+	EntityLocation                        = "location"
+	EntitySupplier                        = "supplier"
+	EntitySupplySpec                      = "supply_spec"
+	EntityPromo                           = "promo"
+	EntityOrderRule                       = "order_rule"
+	EntitySupplyPlan                      = "supply_plan"
+	EntityMasterChangeLog                 = "master_change_log"
+	EntityStoreAssortment                 = "store_assortment"
+	EntityStoreAssortmentLifecycleEvents  = "store_assortment_lifecycle_events"
+
+	// Fact entities (партиционированные, требуют event_date_from/to).
+	EntityReceiptLine            = "receipt_line"
+	EntityLocationStockSnapshot  = "location_stock_snapshot"
+	EntityStockMovement          = "stock_movement"
+	EntitySupplierStockSnapshot  = "supplier_stock_snapshot"
 )
 
 // AllowedEntities — допустимые значения query-параметра entity для reject_log.
+// Полный список из 16 сущностей source-adapter.
 //
 //nolint:gochecknoglobals // публичный enum-список.
 var AllowedEntities = []string{
-	EntityReceiptLine,
-	EntityStockOnHand,
-	EntityProduct,
+	// Master.
+	EntityProducts,
+	EntityProductBarcodes,
+	EntityCategory,
 	EntityLocation,
 	EntitySupplier,
-	EntityOrderRule,
 	EntitySupplySpec,
-	EntityReceivingDetail,
 	EntityPromo,
+	EntityOrderRule,
+	EntitySupplyPlan,
+	EntityMasterChangeLog,
 	EntityStoreAssortment,
+	EntityStoreAssortmentLifecycleEvents,
+	// Facts.
+	EntityReceiptLine,
+	EntityLocationStockSnapshot,
+	EntityStockMovement,
+	EntitySupplierStockSnapshot,
 }
 
 // Лимиты пагинации для admin endpoints.

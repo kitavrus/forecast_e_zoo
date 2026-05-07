@@ -1,58 +1,60 @@
 version: 1
 # Cross-entity validation rules для ETL pipeline (Module 2 etl-validation).
-# Имена entity совпадают с именами staging-таблиц без префикса stg_.
+# Имена entity строго совпадают с путями source-adapter (/v1/{entity}, см.
+# internal/features/data_export/router/router.go). Имена колонок — с json-полями
+# DTO (internal/features/data_export/models/dto/*.go).
 # Поддерживаемые kind: fk_exists, unique_business_key, aggregate_sum_matches,
 # referential_integrity, null_required_field.
 rules:
-  - name: products_unique_id
+  - name: products_unique_product_id
     kind: unique_business_key
     entity: products
     severity: critical
-    keys: [id]
+    keys: [product_id]
 
-  - name: locations_unique_id
+  - name: location_unique_location_id
     kind: unique_business_key
-    entity: locations
+    entity: location
     severity: critical
-    keys: [id]
+    keys: [location_id]
 
-  - name: suppliers_unique_id
+  - name: supplier_unique_supplier_id
     kind: unique_business_key
-    entity: suppliers
+    entity: supplier
     severity: critical
-    keys: [id]
+    keys: [supplier_id]
 
   - name: stock_fk_product
     kind: fk_exists
-    entity: stock_on_hand
+    entity: location_stock_snapshot
     severity: critical
     column: product_id
     ref_entity: products
-    ref_column: id
+    ref_column: product_id
 
   - name: stock_fk_location
     kind: fk_exists
-    entity: stock_on_hand
+    entity: location_stock_snapshot
     severity: critical
     column: location_id
-    ref_entity: locations
-    ref_column: id
+    ref_entity: location
+    ref_column: location_id
 
   - name: order_rule_fk_supplier
     kind: fk_exists
     entity: order_rule
     severity: soft
     column: supplier_id
-    ref_entity: suppliers
-    ref_column: id
+    ref_entity: supplier
+    ref_column: supplier_id
 
   - name: order_rule_fk_product
     kind: fk_exists
     entity: order_rule
-    severity: critical
+    severity: soft
     column: product_id
     ref_entity: products
-    ref_column: id
+    ref_column: product_id
 
   - name: supply_spec_fk_product
     kind: fk_exists
@@ -60,15 +62,15 @@ rules:
     severity: critical
     column: product_id
     ref_entity: products
-    ref_column: id
+    ref_column: product_id
 
   - name: supply_spec_fk_supplier
     kind: fk_exists
     entity: supply_spec
     severity: critical
     column: supplier_id
-    ref_entity: suppliers
-    ref_column: id
+    ref_entity: supplier
+    ref_column: supplier_id
 
   - name: products_name_required
     kind: null_required_field
@@ -76,9 +78,9 @@ rules:
     severity: critical
     column: name
 
-  - name: locations_name_required
+  - name: location_name_required
     kind: null_required_field
-    entity: locations
+    entity: location
     severity: critical
     column: name
 

@@ -49,13 +49,15 @@ var stagingByEntity = map[string]stagingSpec{
 			"event_time",
 		},
 	},
-	constants.EntityStockOnHand: {
-		// MVP: source-adapter exposes via dto.LocationStockSnapshot;
+	constants.EntityLocationStockSnapshot: {
+		// Source-adapter exposes via dto.LocationStockSnapshot (/v1/location_stock_snapshot).
 		// qty_in_transit отсутствует в DTO — оставлен NULLABLE в DDL, но в COPY не передаём.
+		// Staging-таблица называется stg_stock_on_hand (исторически), но entity-имя
+		// строго совпадает с путём source-adapter.
 		table:   "stg_stock_on_hand",
 		columns: []string{"product_id", "location_id", "qty_on_hand"},
 	},
-	constants.EntityProduct: {
+	constants.EntityProducts: {
 		// PK source-adapter — product_id (см. dto.Product). status — TEXT.
 		table:   "stg_products",
 		columns: []string{"product_id", "name", "category_id", "status"},
@@ -83,16 +85,6 @@ var stagingByEntity = map[string]stagingSpec{
 		columns: []string{
 			"supplier_id", "product_id", "location_id",
 			"lead_time_days", "min_order_qty", "purchase_price", "currency", "pack_size",
-		},
-	},
-	constants.EntityReceivingDetail: {
-		// Entity не реализован в source-adapter MVP — handler возвращает 501,
-		// extractor получает empty stream → 0 rows COPY → no-op.
-		table: "stg_receiving_details",
-		columns: []string{
-			"supplier_id", "product_id", "delivery_date",
-			"fill_rate", "otif", "lead_time_actual",
-			"qty_short", "qty_damaged", "qty_returned", "late",
 		},
 	},
 	constants.EntityPromo: {
