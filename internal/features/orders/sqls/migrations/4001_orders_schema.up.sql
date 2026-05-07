@@ -35,12 +35,15 @@ CREATE TABLE IF NOT EXISTS orders.purchase_orders_2026_06 PARTITION OF orders.pu
 CREATE TABLE IF NOT EXISTS orders.purchase_orders_2026_07 PARTITION OF orders.purchase_orders
     FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
 
+-- Partition key (created_at) обязан входить в UNIQUE-индекс на partitioned таблице.
+-- PO number имеет date-prefix (PO-YYYYMMDD-NNNNNN), поэтому уникальность сохраняется по построению.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_orders_po_number
-    ON orders.purchase_orders(po_number);
+    ON orders.purchase_orders(po_number, created_at);
 
 -- 1:1 plan→PO для не-cancelled (regenerate помечает старый cancelled и вставляет новый).
+-- Partition key (created_at) добавлен по требованию PG для partitioned-таблицы.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_orders_plan_active
-    ON orders.purchase_orders(plan_id) WHERE status <> 'cancelled';
+    ON orders.purchase_orders(plan_id, created_at) WHERE status <> 'cancelled';
 
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_status
     ON orders.purchase_orders(status);
