@@ -14,8 +14,8 @@
 | 07 | SQL queries (go:embed)                        | `completed` | 1fb900a | done 2026-05-07T03:10:00Z |
 | 08 | Validators (формат запросов)                  | `completed` | 2c0605a | done 2026-05-07T03:25:00Z; coverage 100% |
 | 09 | Validation engine reuse + etl_validation_rules.yaml | `completed` | 9844363 | done 2026-05-07T03:50:00Z; coverage 86.7%; ADR: cross-entity engine отделён от data_export (in-memory Dataset, не cyclic import) |
-| 10 | Extractor (HTTP клиент к source-adapter)      | `completed` | TBD | done 2026-05-07T04:15:00Z; coverage 83.6%; HS256+RS256+Static, 1 MiB NDJSON, retry+backoff cap |
-| 11 | Transformer (5 mart builders)                 | `pending`  |        |         |
+| 10 | Extractor (HTTP клиент к source-adapter)      | `completed` | 96cc87a | done 2026-05-07T04:15:00Z; coverage 83.6%; HS256+RS256+Static, 1 MiB NDJSON, retry+backoff cap |
+| 11 | Transformer (5 mart builders)                 | `completed` | TBD | done 2026-05-07T04:30:00Z; coverage 93.1%; ADR-024 resolver в SQL phase 07 |
 | 12 | Loader + atomic flip                          | `pending`  |        |         |
 | 13 | EtlPipeline service (orchestration)           | `pending`  |        |         |
 | 14 | Scheduler (gocron + advisory lock)            | `pending`  |        |         |
