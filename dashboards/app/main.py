@@ -17,6 +17,7 @@ from pydantic_settings import BaseSettings
 
 from app import db, queries
 from app.descriptions import MODULE_DESCRIPTIONS, PIPELINE_OVERVIEW
+from app.entity_descriptions import enrich_kv_rows
 from app.field_specs import get_module_spec
 from app.mock_erp_client import MockErpClient
 
@@ -341,13 +342,13 @@ async def m0(request: Request) -> HTMLResponse:
                 "Mock-erp генерирует данные сам (Faker, 90 дней истории) и не "
                 "имеет внешних входов. Также принимает входящие заказы от M7 "
                 "в POST /api/v1/orders."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "orders.purchase_orders ↔ mock-erp /orders/received",
             "output_summary": (
                 "Mock-erp отдаёт 16 типов сущностей через REST для M1 и "
                 "принимает обратно заказы от M7. Match-проверка ниже сверяет "
                 "число sent POs с числом полученных в mock-erp."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": samples,
             "extras": extras,
             "field_specs": get_module_spec("m0"),
@@ -422,14 +423,14 @@ async def m1(request: Request) -> HTMLResponse:
                 "Cron 02:00 ходит за 16 сущностями в mock-erp по HTTP "
                 "(GET /api/v1/{entity}, X-API-Key). В таблице ниже — что есть "
                 "в источнике в данный момент."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "public.* tables (PostgreSQL)",
             "output_summary": (
                 f"После последнего успешного load M1 положил {pulled_total:,} "
                 "строк во все public.* таблицы (см. разбивку ниже). Snapshot "
                 "pointer flip-нут атомарно — потребители видят консистентный "
                 "снимок."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": [
                 {"title": "Recent products (top 10 by updated_at)",
                  "caption": "10 последних загруженных продуктов в public.products (по полю updated_at).",
@@ -494,13 +495,13 @@ async def m2(request: Request) -> HTMLResponse:
                 "Cron 02:30 ходит за 16 сущностями в API M1 (NDJSON streaming, "
                 "JWT с ролью x-flow-etl). Все берутся из одного "
                 "source_load_id для атомарного snapshot."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "marts.* schema",
             "output_summary": (
                 "После успешной валидации построены 5 mart-таблиц + reject_log. "
                 "Atomic flip всех mart выполнен в одной транзакции — "
                 "потребители (M3, M4, M5) видят консистентный набор."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": [
                 {"title": "Top 10 mart_demand_history by qty_sold DESC",
                  "caption": (
@@ -601,12 +602,12 @@ async def m3(request: Request) -> HTMLResponse:
                 "M3 не имеет своего ETL — только читает marts.* через DB role "
                 "mart_reader. Cache 60s для current snapshot уменьшает "
                 "повторные запросы по той же версии."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "HTTP /v1/marts/* (data-marts service)",
             "output_summary": (
                 "Live-проверка endpoint'ов data-marts: status code, размер "
                 "тела ответа. NDJSON streaming с cursor-pagination + ETag."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": samples_with_captions,
             "extras": [],
             "field_specs": get_module_spec("m3"),
@@ -670,13 +671,13 @@ async def m4(request: Request) -> HTMLResponse:
             "input_summary": (
                 "Cron 04:00 читает напрямую из marts.* (без HTTP) — "
                 "consistency snapshot гарантирована atomic flip M2."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "kpi.kpi_snapshots + kpi.kpi_calibrations",
             "output_summary": (
                 "Считаются три KPI (OSA, OTIF, Stock Days) для каждой пары "
                 "product×location. Hierarchical калибровки применяются по "
                 "приоритету: pair → location → supplier → category → global."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": [
                 {"title": "10 critical KPI (lowest values)",
                  "caption": (
@@ -765,14 +766,14 @@ async def m5(request: Request) -> HTMLResponse:
                 "Cron 05:00 читает напрямую из marts.* и kpi.* через DB role "
                 "(без HTTP — производительность важна на больших фан-аутах). "
                 "Forecaster использует историю продаж за 90 дней."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "forecast.* schema",
             "output_summary": (
                 f"Прогнозы записаны в forecast.forecasts ({forecasts_count} "
                 f"строк), а replenishment_plans ({plans_count} планов, в т.ч. "
                 f"{draft_count} в status=draft) ждут одобрения admin'ом перед "
                 "конвертацией в Order Builder (M6)."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": [
                 {"title": "Top 10 forecasts by forecast_qty DESC",
                  "caption": (
@@ -829,14 +830,14 @@ async def m6(request: Request) -> HTMLResponse:
                 f"Cron 06:00 подбирает approved-планы (всего одобрено: "
                 f"{approved} из {plans_total}). Только approved конвертируются "
                 "в полноценные purchase orders — draft и rejected пропускаются."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "orders.purchase_orders + orders.po_lines",
             "output_summary": (
                 f"После последнего run: {po_total} purchase_orders, "
                 f"{lines_total} po_lines (одна на каждую позицию заказа). "
                 "PO numbers формата PO-YYYYMMDD-NNNNNN, delivery_date = "
                 "today + supplier.lead_time_days."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": [
                 {"title": "Recent purchase_orders (top 10)",
                  "caption": (
@@ -914,14 +915,14 @@ async def m7(request: Request) -> HTMLResponse:
                 f"Cron 06:30 подбирает POs со status=ready_to_send "
                 f"({ready} штук готовы к отправке). Per-PO транзакция с "
                 "SELECT FOR UPDATE — конкурентность безопасна."),
-            "input_counts": input_counts,
+            "input_counts": enrich_kv_rows(input_counts),
             "output_title": "channels.send_attempts + POST к mock-erp",
             "output_summary": (
                 f"Всего {attempts_total} попыток отправки в журнале "
                 "send_attempts. Успешные (status=success) переводят PO в "
                 "sent; mock-erp принимает заказы через POST /api/v1/orders "
                 "и возвращает их через /orders/received."),
-            "output_counts": output_counts,
+            "output_counts": enrich_kv_rows(output_counts),
             "samples": [
                 {"title": "Recent send_attempts (top 10)",
                  "caption": (

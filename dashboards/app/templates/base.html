@@ -108,6 +108,49 @@
         td { white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
         .kv td:first-child { color: #6b7280; font-weight: 500; width: 40%; }
         .kv td:last-child { font-family: monospace; }
+        /* 3-колоночный вариант KV-таблицы (с описанием) */
+        .kv.kv-3col { table-layout: fixed; }
+        .kv.kv-3col td { white-space: normal; vertical-align: top; max-width: none; overflow: visible; text-overflow: clip; }
+        .kv.kv-3col th:nth-child(1), .kv.kv-3col td:nth-child(1) { width: 26%; }
+        .kv.kv-3col th:nth-child(2), .kv.kv-3col td:nth-child(2) { width: 12%; text-align: right; }
+        .kv.kv-3col th:nth-child(3), .kv.kv-3col td:nth-child(3) { width: 62%; }
+        .kv.kv-3col td:first-child { color: #1f2937; font-weight: 500; }
+        .kv.kv-3col td:first-child code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+            background: #f3f4f6;
+            color: #1f2937;
+            padding: 1px 6px;
+            border-radius: 3px;
+        }
+        .kv.kv-3col td.kv-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; color: #4338ca; }
+        .kv.kv-3col td.kv-desc { font-family: inherit; font-size: 12.5px; color: #4b5563; line-height: 1.5; }
+        .kv.kv-3col tr[id]:target { background: #fef3c7; }
+        .kv.kv-3col tr[id]:target td:first-child code { background: #fde68a; }
+        .desc-text { color: #374151; }
+        .desc-value { margin-top: 4px; color: #4b5563; }
+        .desc-value strong { color: #1f2937; font-weight: 600; }
+        .desc-purpose { margin-top: 4px; font-style: italic; color: #6b7280; }
+        .desc-links { margin-top: 6px; line-height: 1.7; }
+        .desc-missing { color: #9ca3af; font-style: italic; }
+        .cross-link {
+            display: inline-block;
+            background: #ddf4ff;
+            color: #0969da;
+            padding: 1px 7px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            margin-right: 4px;
+            border: 1px solid #b6e3ff;
+        }
+        .cross-link:hover { background: #b6e3ff; text-decoration: none; }
+        @media (max-width: 900px) {
+            .kv.kv-3col { table-layout: auto; }
+            .kv.kv-3col th:nth-child(n), .kv.kv-3col td:nth-child(n) { width: auto; }
+        }
         footer {
             display: flex;
             justify-content: space-between;

@@ -33,13 +33,17 @@
         {% if input_summary %}
         <p class="io-summary">{{ input_summary }}</p>
         {% endif %}
-        <table class="kv">
-            <thead><tr><th>Источник</th><th>Значение</th></tr></thead>
+        <table class="kv kv-3col">
+            <thead><tr><th>Источник</th><th>Значение</th><th>Описание</th></tr></thead>
             <tbody>
-            {% for label, value in input_counts %}
-                <tr><td>{{ label }}</td><td>{{ value }}</td></tr>
+            {% for label, value, desc_html, anchor in input_counts %}
+                <tr{% if anchor %} id="{{ anchor }}"{% endif %}>
+                    <td><code>{{ label }}</code></td>
+                    <td class="kv-value">{{ value }}</td>
+                    <td class="kv-desc">{{ desc_html | safe }}</td>
+                </tr>
             {% endfor %}
-            {% if not input_counts %}<tr><td colspan="2" class="empty">no data</td></tr>{% endif %}
+            {% if not input_counts %}<tr><td colspan="3" class="empty">no data</td></tr>{% endif %}
             </tbody>
         </table>
 
@@ -67,13 +71,17 @@
         {% if output_summary %}
         <p class="io-summary">{{ output_summary }}</p>
         {% endif %}
-        <table class="kv">
-            <thead><tr><th>Цель</th><th>Значение</th></tr></thead>
+        <table class="kv kv-3col">
+            <thead><tr><th>Цель</th><th>Значение</th><th>Описание</th></tr></thead>
             <tbody>
-            {% for label, value in output_counts %}
-                <tr><td>{{ label }}</td><td>{{ value }}</td></tr>
+            {% for label, value, desc_html, anchor in output_counts %}
+                <tr{% if anchor %} id="{{ anchor }}"{% endif %}>
+                    <td><code>{{ label }}</code></td>
+                    <td class="kv-value">{{ value }}</td>
+                    <td class="kv-desc">{{ desc_html | safe }}</td>
+                </tr>
             {% endfor %}
-            {% if not output_counts %}<tr><td colspan="2" class="empty">no data</td></tr>{% endif %}
+            {% if not output_counts %}<tr><td colspan="3" class="empty">no data</td></tr>{% endif %}
             </tbody>
         </table>
 
