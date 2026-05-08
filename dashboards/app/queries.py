@@ -33,6 +33,27 @@ M1_PUBLIC_TABLES: list[str] = [
     "location_stock_snapshot",
 ]
 
+# Mapping mock-erp entity → имя таблицы в public.* (None = MVP не реализует).
+# Используется на /m0 для сборки сводной pipeline-таблицы.
+ENTITY_TO_PUBLIC_TABLE: dict[str, str | None] = {
+    "products": "products",
+    "product_barcodes": None,
+    "category": "category",
+    "location": "location",
+    "supplier": "supplier",
+    "supply_spec": "supply_spec",
+    "promo": None,
+    "order_rule": "order_rule",
+    "supply_plan": None,
+    "master_change_log": None,
+    "store_assortment": None,
+    "store_assortment_lifecycle_events": None,
+    "receipt_line": "receipt_line",
+    "location_stock_snapshot": "location_stock_snapshot",
+    "stock_movement": None,
+    "supplier_stock_snapshot": None,
+}
+
 # marts.* — output ETL.
 M2_MARTS_TABLES: list[str] = [
     "mart_master_current",
@@ -271,4 +292,37 @@ M7_QUERIES = {
         LIMIT 10
     """,
     "attempts_count": "SELECT COUNT(*) AS n FROM channels.send_attempts",
+}
+
+# ----- M0 Mock ERP (source) ----------------------------------------------------
+
+M0_QUERIES = {
+    # PO sent vs received counter — для сравнения с mock-erp /orders/received.
+    "po_sent_count": """
+        SELECT COUNT(*) AS n
+        FROM orders.purchase_orders
+        WHERE status IN ('sent', 'ready_to_send', 'acknowledged')
+    """,
+    "po_total_count": "SELECT COUNT(*) AS n FROM orders.purchase_orders",
+    # Last successful end-to-end run timestamps — для отображения "когда последний раз шёл pipeline".
+    "last_load_committed": """
+        SELECT MAX(committed_at) AS ts
+        FROM loads
+        WHERE status = 'committed'
+    """,
+    "last_etl_committed": """
+        SELECT MAX(finished_at) AS ts
+        FROM marts.etl_runs
+        WHERE status = 'committed'
+    """,
+    "last_forecast_run": """
+        SELECT MAX(finished_at) AS ts
+        FROM forecast.forecast_runs
+        WHERE status = 'completed'
+    """,
+    "last_send_attempt": """
+        SELECT MAX(finished_at) AS ts
+        FROM channels.send_attempts
+        WHERE status = 'success'
+    """,
 }

@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic_settings import BaseSettings
 
 from app import db, queries
+from app.mock_erp_client import MockErpClient
 
 logger = logging.getLogger("dashboards")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -68,6 +69,8 @@ app = FastAPI(title="e_zoo dashboards", version="0.1.0", lifespan=lifespan)
 # ----- Helpers -----------------------------------------------------------------
 
 MODULES = [
+    {"n": 0, "slug": "m0", "emoji": "🌱", "name": "Mock ERP (Source)",
+     "flow": "16 entities → REST API (X-Total-Count) — корень pipeline"},
     {"n": 1, "slug": "m1", "emoji": "📥", "name": "Source Adapter",
      "flow": "mock-erp REST → public.* tables"},
     {"n": 2, "slug": "m2", "emoji": "🔄", "name": "ETL Validation",
@@ -113,8 +116,24 @@ async def healthz() -> dict[str, str]:
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     cards: list[dict[str, Any]] = []
+    # M0 metric — async fetch из mock-erp (products X-Total-Count).
+    m0_products: str = "n/a"
+    try:
+        client = MockErpClient(
+            settings.MOCK_ERP_URL,
+            settings.MOCK_ERP_API_KEY,
+            timeout=settings.HTTP_TIMEOUT_SEC,
+        )
+        cnt = await client.get_total_count("products")
+        m0_products = str(cnt) if cnt is not None else "n/a"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("index M0 metric failed: %s", exc)
+
     for m in MODULES:
-        metric = _index_metric_for(m["n"])
+        if m["n"] == 0:
+            metric = ("mock-erp products", m0_products)
+        else:
+            metric = _index_metric_for(m["n"])
         cards.append({**m, "metric_label": metric[0], "metric_value": metric[1]})
     return templates.TemplateResponse(
         "index.html",
@@ -123,7 +142,11 @@ async def index(request: Request) -> HTMLResponse:
 
 
 def _index_metric_for(n: int) -> tuple[str, str]:
-    """Return one headline metric for the index card of module N."""
+    """Return one headline metric for the index card of module N (sync — DB only).
+
+    Для M0 метрика берётся из mock-erp (async) в самом index-handler;
+    эта функция вызывается только для N >= 1.
+    """
     try:
         if n == 1:
             return ("products в БД", str(_safe_count("products")))
@@ -146,6 +169,154 @@ def _index_metric_for(n: int) -> tuple[str, str]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("index metric failed for m%s: %s", n, exc)
     return ("rows", "0")
+
+
+# ----- M0 Mock ERP (source) ---------------------------------------------------
+
+
+def _format_loaded_status(source_cnt: int | None, pulled_cnt: int,
+                          mvp_skipped: bool) -> tuple[str, str]:
+    """Return (status_label, loss_str) for pipeline summary table."""
+    if mvp_skipped:
+        return ("MVP skip", "—")
+    if source_cnt is None:
+        return ("⚠️ source n/a", "—")
+    if source_cnt == 0 and pulled_cnt == 0:
+        return ("∅ both empty", "0")
+    threshold = source_cnt * 0.95
+    if pulled_cnt >= threshold:
+        return ("✅", str(source_cnt - pulled_cnt))
+    if pulled_cnt == 0:
+        return ("⛔ not loaded", str(source_cnt))
+    return ("⚠️ partial", str(source_cnt - pulled_cnt))
+
+
+@app.get("/m0", response_class=HTMLResponse)
+async def m0(request: Request) -> HTMLResponse:
+    """Mock ERP source dashboard — shows pipeline-wide data flow."""
+    client = MockErpClient(
+        settings.MOCK_ERP_URL,
+        settings.MOCK_ERP_API_KEY,
+        timeout=settings.HTTP_TIMEOUT_SEC,
+    )
+
+    # 1. Initial inventory in mock-erp — 16 entities X-Total-Count.
+    source_counts = await client.get_total_counts(queries.MOCK_ERP_ENTITIES)
+
+    # 2. Pulled counts from public.*.
+    pipeline_rows: list[dict[str, Any]] = []
+    for entity in queries.MOCK_ERP_ENTITIES:
+        public_table = queries.ENTITY_TO_PUBLIC_TABLE.get(entity)
+        mvp_skipped = public_table is None
+        pulled = 0 if mvp_skipped else _safe_count(public_table)
+        src = source_counts.get(entity)
+        status, loss = _format_loaded_status(src, pulled, mvp_skipped)
+        pipeline_rows.append({
+            "entity": entity,
+            "source_count": str(src) if src is not None else "n/a",
+            "public_table": public_table or "(MVP skip)",
+            "pulled_count": str(pulled),
+            "loaded": status,
+            "loss": loss,
+        })
+
+    # 3. POs received from pipeline (via mock-erp).
+    received_count = await client.get_received_orders_count()
+    received_sample = await client.get_received_orders_sample(limit=10)
+
+    # 4. Compare with our orders.purchase_orders (sent-status).
+    po_sent = int(db.fetch_scalar(queries.M0_QUERIES["po_sent_count"], default=0) or 0)
+    po_total = int(db.fetch_scalar(queries.M0_QUERIES["po_total_count"], default=0) or 0)
+
+    received_str = str(received_count) if received_count is not None else "n/a"
+    match_label = "—"
+    if received_count is not None:
+        if received_count == po_sent:
+            match_label = f"✅ совпадает ({received_count})"
+        else:
+            match_label = f"⚠️ mismatch (mock-erp={received_count} vs sent={po_sent})"
+
+    # 5. Last-run timestamps for end-to-end visibility.
+    last_load = db.fetch_one(queries.M0_QUERIES["last_load_committed"]) or {}
+    last_etl = db.fetch_one(queries.M0_QUERIES["last_etl_committed"]) or {}
+    last_fc = db.fetch_one(queries.M0_QUERIES["last_forecast_run"]) or {}
+    last_send = db.fetch_one(queries.M0_QUERIES["last_send_attempt"]) or {}
+
+    # ASCII flow diagram with real numbers.
+    products_src = source_counts.get("products")
+    receipt_src = source_counts.get("receipt_line")
+    flow_diagram = (
+        "mock-erp (source)\n"
+        f"  ├── 16 entities (e.g. products={products_src or '?'}, "
+        f"receipt_line={receipt_src or '?'})\n"
+        f"  │       ↓ source-adapter (M1) → public.*  "
+        f"[products={_safe_count('products')}, receipt_line={_safe_count('receipt_line')}]\n"
+        f"  │       ↓ etl (M2) → marts.*              "
+        f"[demand={_safe_count('marts.mart_demand_history')}, "
+        f"calc={_safe_count('marts.mart_calculation_input')}]\n"
+        f"  │       ↓ kpi (M4) → kpi.kpi_snapshots    "
+        f"[{_safe_count('kpi.kpi_snapshots')}]\n"
+        f"  │       ↓ forecast (M5) → forecast.*      "
+        f"[{_safe_count('forecast.forecasts')} forecasts, "
+        f"{_safe_count('forecast.replenishment_plans')} plans]\n"
+        f"  │       ↓ order-builder (M6) → orders.*   "
+        f"[{po_total} POs]\n"
+        f"  │       ↓ channel-router (M7) → mock-erp\n"
+        f"  └── ← received_orders ←                   "
+        f"[mock-erp got: {received_str}]\n"
+    )
+
+    input_counts: list[tuple[str, str]] = [
+        (entity, str(cnt) if cnt is not None else "n/a")
+        for entity, cnt in source_counts.items()
+    ]
+
+    output_counts: list[tuple[str, str]] = [
+        ("orders.purchase_orders (всего)", str(po_total)),
+        ("orders.purchase_orders (sent/ready/ack)", str(po_sent)),
+        ("mock-erp /api/v1/orders/received", received_str),
+        ("⇄ match", match_label),
+    ]
+
+    extras = [
+        {"title": "End-to-end data flow (с реальными счётчиками)",
+         "pre": flow_diagram},
+        {"title": "Last successful runs", "kv": [
+            ("last loads.committed_at",
+             str(last_load.get("ts") or "—")),
+            ("last marts.etl_runs.finished_at (committed)",
+             str(last_etl.get("ts") or "—")),
+            ("last forecast.forecast_runs.finished_at (completed)",
+             str(last_fc.get("ts") or "—")),
+            ("last channels.send_attempts.finished_at (success)",
+             str(last_send.get("ts") or "—")),
+        ]},
+    ]
+
+    samples = [
+        {"title": "Pipeline movement summary (entity × source × pulled × loss)",
+         "rows": pipeline_rows},
+        {"title": f"Received POs sample (top {len(received_sample)})",
+         "rows": received_sample},
+    ]
+
+    prev_m, next_m = _module_neighbours(0)
+    return templates.TemplateResponse(
+        "module.html",
+        {
+            "request": request,
+            "module": MODULES[0],
+            "title": "M0 Mock ERP (Source)",
+            "input_title": "mock-erp /api/v1/{entity} — initial inventory (16 entities)",
+            "input_counts": input_counts,
+            "output_title": "orders.purchase_orders ↔ mock-erp /orders/received",
+            "output_counts": output_counts,
+            "samples": samples,
+            "extras": extras,
+            "prev": prev_m,
+            "next": next_m,
+        },
+    )
 
 
 # ----- M1 ---------------------------------------------------------------------
@@ -179,12 +350,32 @@ async def m1(request: Request) -> HTMLResponse:
     receipts = db.fetch_all(queries.M1_QUERIES["recent_receipts"])
     recent_loads = db.fetch_all(queries.M1_QUERIES["recent_loads"])
 
+    # Source delta: сколько данных из mock-erp прошло через M1 в public.*.
+    delta_kv: list[tuple[str, str]] = []
+    for entity in queries.M1_PUBLIC_TABLES:
+        # entity name == public table name для M1 (см. ENTITY_TO_PUBLIC_TABLE).
+        src = next((c for e, c in input_counts if e == entity), None)
+        pulled = _safe_count(entity)
+        if src is None or src in ("?", "n/a"):
+            delta_kv.append((entity, f"public={pulled} / source=n/a"))
+            continue
+        try:
+            src_int = int(src)
+        except (TypeError, ValueError):
+            delta_kv.append((entity, f"public={pulled} / source={src}"))
+            continue
+        loss = src_int - pulled
+        sign = "✅" if loss == 0 else ("⚠️" if pulled > 0 else "⛔")
+        delta_kv.append(
+            (entity, f"{sign} public={pulled} / source={src_int} (loss={loss})"),
+        )
+
     prev_m, next_m = _module_neighbours(1)
     return templates.TemplateResponse(
         "module.html",
         {
             "request": request,
-            "module": MODULES[0],
+            "module": MODULES[1],
             "title": "M1 Source Adapter",
             "input_title": "mock-erp REST API (16 entities)",
             "input_counts": input_counts,
@@ -196,6 +387,8 @@ async def m1(request: Request) -> HTMLResponse:
                 {"title": "Recent loads (top 5)", "rows": recent_loads},
             ],
             "extras": [
+                {"title": "Source delta — сколько прошло через M1 (mock-erp → public.*)",
+                 "kv": delta_kv},
                 {"title": "Latest load run", "kv": _kv_from_row(latest_load)},
                 {"title": "Snapshot pointer", "kv": _kv_from_row(pointer)},
             ],
@@ -229,7 +422,7 @@ async def m2(request: Request) -> HTMLResponse:
         "module.html",
         {
             "request": request,
-            "module": MODULES[1],
+            "module": MODULES[2],
             "title": "M2 ETL Validation",
             "input_title": "source-adapter HTTP API",
             "input_counts": input_counts,
@@ -298,7 +491,7 @@ async def m3(request: Request) -> HTMLResponse:
         "module.html",
         {
             "request": request,
-            "module": MODULES[2],
+            "module": MODULES[3],
             "title": "M3 Data Marts API",
             "input_title": "marts.* (read-only role mart_reader)",
             "input_counts": input_counts,
@@ -353,7 +546,7 @@ async def m4(request: Request) -> HTMLResponse:
         "module.html",
         {
             "request": request,
-            "module": MODULES[3],
+            "module": MODULES[4],
             "title": "M4 KPI Calibration",
             "input_title": "marts.* (demand history + calc input + scorecard)",
             "input_counts": input_counts,
@@ -414,7 +607,7 @@ async def m5(request: Request) -> HTMLResponse:
         "module.html",
         {
             "request": request,
-            "module": MODULES[4],
+            "module": MODULES[5],
             "title": "M5 Forecast Engine",
             "input_title": "marts.* + kpi.kpi_snapshots (через DB read)",
             "input_counts": input_counts,
@@ -461,7 +654,7 @@ async def m6(request: Request) -> HTMLResponse:
         "module.html",
         {
             "request": request,
-            "module": MODULES[5],
+            "module": MODULES[6],
             "title": "M6 Order Builder",
             "input_title": "forecast.replenishment_plans WHERE status='approved'",
             "input_counts": input_counts,
@@ -525,7 +718,7 @@ async def m7(request: Request) -> HTMLResponse:
         "module.html",
         {
             "request": request,
-            "module": MODULES[6],
+            "module": MODULES[7],
             "title": "M7 Channel Router",
             "input_title": "orders.purchase_orders WHERE status='ready_to_send'",
             "input_counts": input_counts,

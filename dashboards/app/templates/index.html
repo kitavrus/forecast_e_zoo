@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Pipeline overview</h2>
-<p>7 модулей e_zoo: данные текут от mock-erp в физические заказы поставщикам.
+<p>e_zoo pipeline — от источника (M0 mock-erp) через 7 модулей до отправки заказов поставщикам.
 Каждая карточка — отдельный модуль. Нажмите для деталей входа/выхода.</p>
 
 <div class="grid">
@@ -16,6 +16,18 @@
         </div>
     </div>
     {% endfor %}
+</div>
+
+<div class="card" style="margin-top: 24px; border-left: 4px solid #10b981;">
+    <h3>🔗 End-to-end view</h3>
+    <div style="font-size: 13px; color: #6b7280;">
+        Полный pipeline: 16 entities в mock-erp → public.* → marts.* → kpi/forecast →
+        orders.purchase_orders → mock-erp /orders/received. Сводная таблица потерь данных
+        (entity × source × pulled × loss) и сравнение sent vs received POs.
+    </div>
+    <div style="margin-top: 12px;">
+        <a href="/m0">Открыть pipeline visualization →</a>
+    </div>
 </div>
 
 <div style="margin-top: 32px; font-size: 13px; color: #6b7280;">

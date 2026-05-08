@@ -33,13 +33,17 @@
 {% for extra in extras %}
 <div class="card" style="margin-top: 16px;">
     <h3>{{ extra.title }}</h3>
+    {% if extra.pre %}
+    <pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.4;margin:0;">{{ extra.pre }}</pre>
+    {% else %}
     <table class="kv">
         <tbody>
         {% for k, v in extra.kv %}
-            <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+            <tr><td>{{ k }}</td><td style="white-space: pre-wrap; font-family: monospace;">{{ v }}</td></tr>
         {% endfor %}
         </tbody>
     </table>
+    {% endif %}
 </div>
 {% endfor %}
 
