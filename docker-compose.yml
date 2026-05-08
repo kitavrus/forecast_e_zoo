@@ -65,11 +65,19 @@ services:
     image: e_zoo/mock-erp:latest
     container_name: ezoo_mock_erp
     restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MOCK_ERP_API_KEY: "${MOCK_ERP_API_KEY:-test-api-key}"
+      MOCK_ERP_DSN: "${MOCK_ERP_DSN:-postgres://e_zoo_app:ezoo_app_dev@postgres:5432/mock_erp_db}"
+      # Admin creds — used once on startup to CREATE DATABASE mock_erp_db inside
+      # the shared ezoo_pg instance (mock-erp owns its own logical DB).
+      POSTGRES_USER: "${POSTGRES_USER:-adapter}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-adapter}"
       SEED_PRODUCTS: "${SEED_PRODUCTS:-200}"
       SEED_LOCATIONS: "${SEED_LOCATIONS:-10}"
-      SEED_DAYS: "${SEED_DAYS:-180}"
+      SEED_DAYS: "${SEED_DAYS:-90}"
       SEED_SUPPLIERS: "${SEED_SUPPLIERS:-20}"
       SEED_TRANSACTIONS_PER_PAIR_PER_DAY: "${SEED_TRANSACTIONS_PER_PAIR_PER_DAY:-5}"
       SEED_INITIAL_STOCK_DAYS_OF_DEMAND: "${SEED_INITIAL_STOCK_DAYS_OF_DEMAND:-14}"
@@ -79,17 +87,14 @@ services:
       SEED_LEAD_TIME_MAX_DAYS: "${SEED_LEAD_TIME_MAX_DAYS:-21}"
       SEED_DAILY_DEMAND_MIN: "${SEED_DAILY_DEMAND_MIN:-1}"
       SEED_DAILY_DEMAND_MAX: "${SEED_DAILY_DEMAND_MAX:-20}"
-      DB_PATH: "/data/mock_erp.db"
     ports:
       - "8090:8090"
-    volumes:
-      - mock_erp_data:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8090/healthz"]
-      interval: 30s
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 1800s
+      start_period: 30s
     networks: [e_zoo]
 
   source-adapter:
@@ -363,7 +368,6 @@ services:
 volumes:
   pg_data:
   exports_data:
-  mock_erp_data:
 
 networks:
   e_zoo:

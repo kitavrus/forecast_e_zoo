@@ -1,5 +1,5 @@
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-sqlmodel==0.0.22
 pydantic==2.9.2
 faker==30.8.2
+psycopg[binary,pool]==3.2.3
