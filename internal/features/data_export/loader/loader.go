@@ -222,9 +222,23 @@ func (l *Loader) runPipeline(ctx context.Context, loadID uuid.UUID, progress map
 		return err
 	}
 
+	// --- 2.1 Master с FK на supplier+products+location: supply_spec, order_rule ---
+	// supply_spec ссылается на products + supplier.
+	if err := l.loadSupplySpec(ctx, loadID, progress["supply_spec"], state); err != nil {
+		return err
+	}
+	// order_rule ссылается на location, optional на products/category.
+	if err := l.loadOrderRule(ctx, loadID, progress["order_rule"], state); err != nil {
+		return err
+	}
+
 	// --- 3. Facts (после всех master) ---
 	// receipt_line ссылается на products + location.
 	if err := l.loadReceiptLine(ctx, loadID, progress["receipt_line"], state); err != nil {
+		return err
+	}
+	// location_stock_snapshot ссылается на products + location.
+	if err := l.loadLocationStockSnapshot(ctx, loadID, progress["location_stock_snapshot"], state); err != nil {
 		return err
 	}
 	// supplier_stock_snapshot — optional: если ERP вернул [] — не считаем ошибкой.
@@ -579,6 +593,216 @@ func (l *Loader) loadLocation(ctx context.Context, loadID uuid.UUID, p *EntityPr
 		batch = append(batch, repository.LocationRow{
 			ID: loc.ID, Type: loc.Type, Name: loc.Name,
 			Region: loc.Region, Address: loc.Address, Lat: loc.Lat, Lon: loc.Lon,
+		})
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := it.Err(); err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	return flush()
+}
+
+// loadOrderRule — UPSERT order_rule в БД. Зависит от location (FK) и
+// optional category/products. Пакетный UPSERT по аналогии с loadCategory.
+func (l *Loader) loadOrderRule(ctx context.Context, loadID uuid.UUID, p *EntityProgress, state *validation.State) error {
+	it, err := l.reader.ReadOrderRule(ctx, l.since)
+	if err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	defer func() { _ = it.Close() }()
+
+	const batchSize = 500
+	batch := make([]repository.OrderRuleRow, 0, batchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		tx, err := l.repo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range batch {
+			if err := l.repo.UpsertOrderRule(ctx, tx, row, loadID); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
+	for it.Next(ctx) {
+		o := it.Item()
+		p.LinesTotal++
+		// product_id / category_id оба могут быть NULL (location-wide rule;
+		// прежний CHECK снят миграцией 0004).
+		payload := map[string]any{"id": o.ID, "rule_type": o.RuleType}
+		violations := l.engine.Check("order_rule", payload, state)
+		if hasCritical(violations) {
+			p.LinesFailed++
+			pl, _ := json.Marshal(o)
+			ev, _ := json.Marshal(violations)
+			_ = l.repo.InsertReject(ctx, repository.RejectInput{
+				LoadID: loadID, Entity: "order_rule", Severity: "error", Payload: pl, Errors: ev,
+			})
+			continue
+		}
+		var payloadJSON []byte
+		if o.Payload != nil {
+			payloadJSON, _ = json.Marshal(o.Payload)
+		}
+		batch = append(batch, repository.OrderRuleRow{
+			ID:         o.ID,
+			LocationID: o.LocationID,
+			ProductID:  o.ProductID,
+			CategoryID: o.CategoryID,
+			RuleType:   o.RuleType,
+			Payload:    payloadJSON,
+			ValidFrom:  o.ValidFrom,
+			ValidTo:    o.ValidTo,
+		})
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := it.Err(); err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	return flush()
+}
+
+// loadSupplySpec — UPSERT supply_spec в БД. Зависит от products + supplier (FK).
+func (l *Loader) loadSupplySpec(ctx context.Context, loadID uuid.UUID, p *EntityProgress, state *validation.State) error {
+	it, err := l.reader.ReadSupplySpec(ctx, l.since)
+	if err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	defer func() { _ = it.Close() }()
+
+	const batchSize = 500
+	batch := make([]repository.SupplySpecRow, 0, batchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		tx, err := l.repo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range batch {
+			if err := l.repo.UpsertSupplySpec(ctx, tx, row, loadID); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
+	for it.Next(ctx) {
+		s := it.Item()
+		p.LinesTotal++
+		payload := map[string]any{"product_id": s.ProductID, "supplier_id": s.SupplierID}
+		violations := l.engine.Check("supply_spec", payload, state)
+		if hasCritical(violations) {
+			p.LinesFailed++
+			pl, _ := json.Marshal(s)
+			ev, _ := json.Marshal(violations)
+			_ = l.repo.InsertReject(ctx, repository.RejectInput{
+				LoadID: loadID, Entity: "supply_spec", Severity: "error", Payload: pl, Errors: ev,
+			})
+			continue
+		}
+		batch = append(batch, repository.SupplySpecRow{
+			ProductID:    s.ProductID,
+			SupplierID:   s.SupplierID,
+			PackQty:      s.PackQty,
+			LeadTimeDays: s.LeadTimeDays,
+			MinOrderQty:  s.MinOrderQty,
+			Multiple:     s.Multiple,
+			ValidFrom:    s.ValidFrom,
+			ValidTo:      s.ValidTo,
+		})
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := it.Err(); err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	return flush()
+}
+
+// loadLocationStockSnapshot — UPSERT location_stock_snapshot (партиционированный
+// fact). Зависит от products + location (FK). Окно — dateFrom..dateTo.
+func (l *Loader) loadLocationStockSnapshot(ctx context.Context, loadID uuid.UUID, p *EntityProgress, state *validation.State) error {
+	it, err := l.reader.ReadLocationStockSnapshot(ctx, l.dateFrom, l.dateTo)
+	if err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	defer func() { _ = it.Close() }()
+
+	const batchSize = 1000
+	batch := make([]repository.LocationStockSnapshotRow, 0, batchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		tx, err := l.repo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range batch {
+			if err := l.repo.UpsertLocationStockSnapshot(ctx, tx, row, loadID); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
+	for it.Next(ctx) {
+		e := it.Item()
+		p.LinesTotal++
+		payload := map[string]any{"qty_on_hand": e.QtyOnHand, "event_date": e.EventDate}
+		violations := l.engine.Check("location_stock_snapshot", payload, state)
+		if hasCritical(violations) {
+			p.LinesFailed++
+			pl, _ := json.Marshal(e)
+			ev, _ := json.Marshal(violations)
+			_ = l.repo.InsertReject(ctx, repository.RejectInput{
+				LoadID: loadID, Entity: "location_stock_snapshot", Severity: "error", Payload: pl, Errors: ev,
+			})
+			continue
+		}
+		batch = append(batch, repository.LocationStockSnapshotRow{
+			EventDate:   e.EventDate,
+			LocationID:  e.LocationID,
+			ProductID:   e.ProductID,
+			QtyOnHand:   e.QtyOnHand,
+			QtyReserved: e.QtyReserved,
+			AsOf:        e.AsOf,
 		})
 		if len(batch) >= batchSize {
 			if err := flush(); err != nil {

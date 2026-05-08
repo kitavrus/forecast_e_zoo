@@ -13,7 +13,7 @@ func TestScheduler_New_InvalidTZ(t *testing.T) {
 	_, err := scheduler.New(scheduler.Config{
 		CronExpr: "0 5 * * *",
 		TZ:       "Invalid/TZ",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 	require.Error(t, err)
 }
 
@@ -22,7 +22,7 @@ func TestScheduler_New_DefaultTimeoutAndHorizon(t *testing.T) {
 	s, err := scheduler.New(scheduler.Config{
 		CronExpr: "0 5 * * *",
 		TZ:       "UTC",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, s)
 }
@@ -32,7 +32,7 @@ func TestScheduler_Start_EmptyCron_Errors(t *testing.T) {
 	s, err := scheduler.New(scheduler.Config{
 		CronExpr: "",
 		TZ:       "UTC",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.Error(t, s.Start(nil))
 }

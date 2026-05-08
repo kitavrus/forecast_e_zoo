@@ -76,12 +76,20 @@ func (h *ReceiptLineHandler) Get(c fiber.Ctx) error {
 
 	items := make([]dto.ReceiptLine, 0, len(rows))
 	for _, r := range rows {
+		// line_kind: e_zoo/mock-erp кодирует возвраты отрицательным qty.
+		// mart_demand_history фильтрует по line_kind='sale' для qty_sold —
+		// без явного kind поле было пустым и all qty_sold = 0.
+		kind := "sale"
+		if r.Qty < 0 {
+			kind = "return"
+		}
 		items = append(items, dto.ReceiptLine{
 			ReceiptID:     r.ReceiptID,
 			LineNo:        int(r.ID),
 			LocationID:    r.LocationID,
 			ProductID:     r.ProductID,
 			Qty:           r.Qty,
+			LineKind:      kind,
 			UnitPriceBase: r.Price,
 			UnitPricePaid: r.Price,
 			EventDate:     r.EventDate,

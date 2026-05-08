@@ -53,22 +53,36 @@ chosen AS (
     SELECT DISTINCT ON (product_id, location_id) *
     FROM   rule_priority
     ORDER  BY product_id, location_id, prio
+),
+-- supplier_fallback берёт первый supply_spec (по supplier_id) для каждого
+-- (product_id, location_id) — нужен, когда order_rule выигрывает приоритет, но
+-- не отдаёт supplier_id/lead_time_days. Без этого fallback'а forecast не может
+-- построить replenishment_plans (требуется supplier_id для сборки PO).
+supplier_fallback AS (
+    SELECT DISTINCT ON (product_id, location_id)
+           product_id, location_id, supplier_id, lead_time_days,
+           min_qty AS ss_min_qty, max_qty AS ss_max_qty,
+           safety_stock AS ss_safety_stock
+    FROM   pg_temp.stg_supply_spec
+    WHERE  COALESCE(is_active, true)
+    ORDER  BY product_id, location_id, supplier_id
 )
 SELECT s.product_id,
        s.location_id,
        s.on_hand,
        s.in_transit,
-       c.safety_stock,
+       COALESCE(c.safety_stock, sf.ss_safety_stock)         AS safety_stock,
        c.forecast_horizon_days,
        c.daily_demand,
-       c.min_qty,
-       c.max_qty,
-       c.rule_id                                  AS applicable_rule_id,
-       COALESCE(c.rule_kind, 'none')              AS applicable_rule_kind,
+       COALESCE(c.min_qty, sf.ss_min_qty)                   AS min_qty,
+       COALESCE(c.max_qty, sf.ss_max_qty)                   AS max_qty,
+       c.rule_id                                            AS applicable_rule_id,
+       COALESCE(c.rule_kind, 'none')                        AS applicable_rule_kind,
        c.formula,
-       c.supplier_id,
-       c.lead_time_days,
-       $1                                         AS etl_run_id,
-       $2                                         AS source_load_id
+       COALESCE(c.supplier_id, sf.supplier_id)              AS supplier_id,
+       COALESCE(c.lead_time_days, sf.lead_time_days)        AS lead_time_days,
+       $1                                                   AS etl_run_id,
+       $2                                                   AS source_load_id
 FROM   stock s
-LEFT JOIN chosen c USING (product_id, location_id);
+LEFT JOIN chosen c USING (product_id, location_id)
+LEFT JOIN supplier_fallback sf USING (product_id, location_id);

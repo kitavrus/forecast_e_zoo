@@ -10,14 +10,20 @@ import (
 
 // Deps — все зависимости, нужные для регистрации маршрутов.
 type Deps struct {
-	JWTConfig          middleware.JWTConfig
-	HealthzHandler     *handler.HealthzHandler
-	SnapshotsHandler   *handler.SnapshotsHandler
-	ProductsHandler    *handler.ProductsHandler
-	ReceiptLineHandler *handler.ReceiptLineHandler
-	ExportsHandler     *handler.ExportsHandler
-	AdminLoadsHandler  *handler.AdminLoadsHandler
-	AuditMiddleware    fiber.Handler
+	JWTConfig                    middleware.JWTConfig
+	HealthzHandler               *handler.HealthzHandler
+	SnapshotsHandler             *handler.SnapshotsHandler
+	ProductsHandler              *handler.ProductsHandler
+	ReceiptLineHandler           *handler.ReceiptLineHandler
+	CategoryHandler              *handler.CategoryHandler
+	LocationHandler              *handler.LocationHandler
+	SupplierHandler              *handler.SupplierHandler
+	OrderRuleHandler             *handler.OrderRuleHandler
+	SupplySpecHandler            *handler.SupplySpecHandler
+	LocationStockSnapshotHandler *handler.LocationStockSnapshotHandler
+	ExportsHandler               *handler.ExportsHandler
+	AdminLoadsHandler            *handler.AdminLoadsHandler
+	AuditMiddleware              fiber.Handler
 
 	// MetricsHandler — Prometheus /metrics. Если nil, маршрут не регистрируется.
 	MetricsHandler fiber.Handler
@@ -55,22 +61,46 @@ func Register(app *fiber.App, deps Deps) {
 		v1.Get("/products", deps.ProductsHandler.Get, readRoles)
 	}
 	v1.Get("/product_barcodes", deps.NotImplemented.ProductBarcodes(), readRoles)
-	v1.Get("/category", deps.NotImplemented.Category(), readRoles)
-	v1.Get("/location", deps.NotImplemented.Location(), readRoles)
-	v1.Get("/supplier", deps.NotImplemented.Supplier(), readRoles)
+	if deps.CategoryHandler != nil {
+		v1.Get("/category", deps.CategoryHandler.Get, readRoles)
+	} else {
+		v1.Get("/category", deps.NotImplemented.Category(), readRoles)
+	}
+	if deps.LocationHandler != nil {
+		v1.Get("/location", deps.LocationHandler.Get, readRoles)
+	} else {
+		v1.Get("/location", deps.NotImplemented.Location(), readRoles)
+	}
+	if deps.SupplierHandler != nil {
+		v1.Get("/supplier", deps.SupplierHandler.Get, readRoles)
+	} else {
+		v1.Get("/supplier", deps.NotImplemented.Supplier(), readRoles)
+	}
 	v1.Get("/store_assortment", deps.NotImplemented.StoreAssortment(), readRoles)
 	v1.Get("/store_assortment/lifecycle_events", deps.NotImplemented.StoreAssortmentLifecycle(), readRoles)
 	v1.Get("/master_change_log", deps.NotImplemented.MasterChangeLog(), readRoles)
-	v1.Get("/supply_spec", deps.NotImplemented.SupplySpec(), readRoles)
+	if deps.SupplySpecHandler != nil {
+		v1.Get("/supply_spec", deps.SupplySpecHandler.Get, readRoles)
+	} else {
+		v1.Get("/supply_spec", deps.NotImplemented.SupplySpec(), readRoles)
+	}
 	v1.Get("/promo", deps.NotImplemented.Promo(), readRoles)
-	v1.Get("/order_rule", deps.NotImplemented.OrderRule(), readRoles)
+	if deps.OrderRuleHandler != nil {
+		v1.Get("/order_rule", deps.OrderRuleHandler.Get, readRoles)
+	} else {
+		v1.Get("/order_rule", deps.NotImplemented.OrderRule(), readRoles)
+	}
 	v1.Get("/supply_plan", deps.NotImplemented.SupplyPlan(), readRoles)
 
 	// Facts.
 	if deps.ReceiptLineHandler != nil {
 		v1.Get("/receipt_line", deps.ReceiptLineHandler.Get, readRoles)
 	}
-	v1.Get("/location_stock_snapshot", deps.NotImplemented.LocationStockSnapshot(), readRoles)
+	if deps.LocationStockSnapshotHandler != nil {
+		v1.Get("/location_stock_snapshot", deps.LocationStockSnapshotHandler.Get, readRoles)
+	} else {
+		v1.Get("/location_stock_snapshot", deps.NotImplemented.LocationStockSnapshot(), readRoles)
+	}
 	v1.Get("/stock_movement", deps.NotImplemented.StockMovement(), readRoles)
 	v1.Get("/supplier_stock_snapshot", deps.NotImplemented.SupplierStockSnapshot(), readRoles)
 

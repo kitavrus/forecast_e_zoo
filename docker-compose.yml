@@ -298,6 +298,11 @@ services:
       CHANNEL_ROUTING_CRON_TZ: "${CHANNEL_ROUTING_CRON_TZ:-Europe/Kyiv}"
       CHANNEL_ROUTING_MAX_POS: "${CHANNEL_ROUTING_MAX_POS:-500}"
       CHANNEL_ROUTING_HTTP_TIMEOUT_SEC: "30"
+      # ERP API ключ для channel-sender. supplier_channel_config.auth_credentials_ref
+      # хранит имя ENV переменной, sender читает её через os.Getenv. По умолчанию
+      # ref = MOCK_ERP_API_KEY (constants.AuthCredentialsEnvDefault).
+      MOCK_ERP_API_KEY: "${MOCK_ERP_API_KEY:-test-api-key}"
+      CHANNEL_AUTH_ERP_API: "${CHANNEL_AUTH_ERP_API:-${MOCK_ERP_API_KEY:-test-api-key}}"
     ports:
       - "8087:8087"
     healthcheck:

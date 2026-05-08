@@ -71,11 +71,13 @@ var stagingByEntity = map[string]stagingSpec{
 		columns: []string{"supplier_id", "name", "status"},
 	},
 	constants.EntityOrderRule: {
-		// dto.OrderRule: PK rule_id; продукт задаётся через scope/scope_ref.
-		// product_id / formula derived (источник их не отдаёт), оставляем NULL.
+		// dto.OrderRule: PK rule_id. Source-adapter fan-out'ит правила в
+		// per-product строки (см. handler/order_rule.go) — поэтому product_id
+		// и location_id всегда set и копируются в staging. mart_calculation_input
+		// использует (product_id, location_id) как JOIN-ключ к stock_on_hand.
 		table: "stg_order_rule",
 		columns: []string{
-			"rule_id", "scope", "scope_ref", "location_id",
+			"rule_id", "scope", "scope_ref", "product_id", "location_id",
 			"safety_stock_days", "service_level_pct", "override_moq",
 		},
 	},

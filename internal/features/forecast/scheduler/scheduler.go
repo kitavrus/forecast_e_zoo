@@ -15,7 +15,14 @@ import (
 
 	"github.com/Kitavrus/e_zoo/internal/features/forecast/constants"
 	"github.com/Kitavrus/e_zoo/internal/features/forecast/engine"
+	forecastModels "github.com/Kitavrus/e_zoo/internal/features/forecast/models"
 )
+
+// EngineRepo — узкий интерфейс repository для синхронной вставки forecast_run
+// в TryTrigger. Объявлен здесь, чтобы избежать циклического импорта engine.
+type EngineRepo interface {
+	InsertRun(ctx context.Context, in forecastModels.InsertRunInput) (forecastModels.ForecastRun, error)
+}
 
 // Config — параметры scheduler-а.
 type Config struct {
@@ -27,19 +34,24 @@ type Config struct {
 
 // Scheduler — обёртка над gocron + Engine + advisory lock.
 type Scheduler struct {
-	cron   gocron.Scheduler
-	pool   *pgxpool.Pool
-	engine *engine.Engine
-	cfg    Config
-	logger *slog.Logger
-	job    gocron.Job
+	cron       gocron.Scheduler
+	pool       *pgxpool.Pool
+	engine     *engine.Engine
+	engineRepo EngineRepo
+	cfg        Config
+	logger     *slog.Logger
+	job        gocron.Job
 
 	LockBusyMetric func()
 	TickMetric     func(result string)
 }
 
 // New создаёт scheduler.
-func New(cfg Config, eng *engine.Engine, pool *pgxpool.Pool, logger *slog.Logger) (*Scheduler, error) {
+//
+// engineRepo нужен для синхронной вставки forecast_run в TryTrigger; если nil,
+// TryTrigger откатится на старое поведение (uuid.New() — небезопасно для
+// API-poll'еров, см. ADR-027).
+func New(cfg Config, eng *engine.Engine, engineRepo EngineRepo, pool *pgxpool.Pool, logger *slog.Logger) (*Scheduler, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -62,11 +74,12 @@ func New(cfg Config, eng *engine.Engine, pool *pgxpool.Pool, logger *slog.Logger
 		return nil, fmt.Errorf("forecast scheduler: gocron init: %w", err)
 	}
 	return &Scheduler{
-		cron:   cron,
-		pool:   pool,
-		engine: eng,
-		cfg:    cfg,
-		logger: logger,
+		cron:       cron,
+		pool:       pool,
+		engine:     eng,
+		engineRepo: engineRepo,
+		cfg:        cfg,
+		logger:     logger,
 	}, nil
 }
 
@@ -190,7 +203,28 @@ func (s *Scheduler) TryTrigger(
 	if horizonDays <= 0 {
 		horizonDays = s.cfg.HorizonDays
 	}
-	runID := uuid.New()
+	// Вставляем forecast_run row синхронно, чтобы вернуть клиенту тот же
+	// run_id, что персистится в БД (раньше TryTrigger возвращал uuid.New(),
+	// а engine генерил свой ID — приводило к 404 на poll API).
+	var runID uuid.UUID
+	if s.engineRepo != nil {
+		run, insertErr := s.engineRepo.InsertRun(ctx, forecastModels.InsertRunInput{
+			HorizonDays: horizonDays,
+		})
+		if insertErr != nil {
+			if _, unlockErr := conn.Exec(ctx,
+				"SELECT pg_advisory_unlock($1)", constants.AdvisoryLockKey); unlockErr != nil {
+				s.logger.Error("forecast scheduler: insert-run unlock failed", slog.Any("error", unlockErr))
+			}
+			conn.Release()
+			return uuid.Nil, false, fmt.Errorf("forecast scheduler: insert run: %w", insertErr)
+		}
+		runID = run.ID
+	} else {
+		// Fallback (tests без репо) — uuid.New() как раньше; API-poll'ер
+		// получит 404, что и было до фикса.
+		runID = uuid.New()
+	}
 	go func() { //nolint:gosec // bgCtx намеренный
 		bgCtx := context.Background()
 		defer func() {
@@ -205,6 +239,7 @@ func (s *Scheduler) TryTrigger(
 		if _, runErr := s.engine.Run(bgCtx, engine.RunInput{
 			AsOf:        asOf,
 			HorizonDays: horizonDays,
+			PresetRunID: runID,
 		}); runErr != nil {
 			s.logger.Error("forecast scheduler: triggered run failed",
 				slog.Any("error", runErr),

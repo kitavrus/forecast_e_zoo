@@ -236,5 +236,21 @@ func (m *mockRepo) InsertReceiptLineBatch(_ context.Context, _ pgx.Tx, batch []r
 	return nil
 }
 
+func (m *mockRepo) UpsertOrderRule(_ context.Context, _ pgx.Tx, _ repository.OrderRuleRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) UpsertSupplySpec(_ context.Context, _ pgx.Tx, _ repository.SupplySpecRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) UpsertLocationStockSnapshot(_ context.Context, _ pgx.Tx, _ repository.LocationStockSnapshotRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+
 // _ used in TestLoader_FlipFailure_MarksFailed to construct typed errors.
 var _ = errors.New

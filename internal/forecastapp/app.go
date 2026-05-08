@@ -54,7 +54,7 @@ func New(ctx context.Context, cfg *forecastappconfig.Config, log *slog.Logger) (
 		CronExpr:    cfg.CronSchedule,
 		TZ:          cfg.CronTZ,
 		HorizonDays: cfg.HorizonDays,
-	}, eng, pool, log)
+	}, eng, repo, pool, log)
 	if schErr != nil {
 		log.Warn("forecastapp: scheduler init failed (continue without scheduler)", "error", schErr)
 		sch = nil

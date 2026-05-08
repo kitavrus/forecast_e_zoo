@@ -124,6 +124,12 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 	snapshotsH := handler.NewSnapshotsHandler(snapSvc)
 	productsH := handler.NewProductsHandler(repo, snapSvc)
 	receiptH := handler.NewReceiptLineHandler(repo, snapSvc)
+	categoryH := handler.NewCategoryHandler(repo, snapSvc)
+	locationH := handler.NewLocationHandler(repo, snapSvc)
+	supplierH := handler.NewSupplierHandler(repo, snapSvc)
+	orderRuleH := handler.NewOrderRuleHandler(repo, snapSvc)
+	supplySpecH := handler.NewSupplySpecHandler(repo, snapSvc)
+	locationStockH := handler.NewLocationStockSnapshotHandler(repo, snapSvc)
 	var exportsH *handler.ExportsHandler
 	if exportsSvc != nil {
 		exportsH = handler.NewExportsHandler(exportsSvc)
@@ -154,15 +160,21 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 	}
 
 	deps := dataExportRouter.Deps{
-		JWTConfig:          jwtCfg,
-		HealthzHandler:     healthzH,
-		SnapshotsHandler:   snapshotsH,
-		ProductsHandler:    productsH,
-		ReceiptLineHandler: receiptH,
-		ExportsHandler:     exportsH,
-		AdminLoadsHandler:  adminH,
-		AuditMiddleware:    auditWriter.Middleware(),
-		MetricsHandler:     observability.Handler(metricsReg),
+		JWTConfig:                    jwtCfg,
+		HealthzHandler:               healthzH,
+		SnapshotsHandler:             snapshotsH,
+		ProductsHandler:              productsH,
+		ReceiptLineHandler:           receiptH,
+		CategoryHandler:              categoryH,
+		LocationHandler:              locationH,
+		SupplierHandler:              supplierH,
+		OrderRuleHandler:             orderRuleH,
+		SupplySpecHandler:            supplySpecH,
+		LocationStockSnapshotHandler: locationStockH,
+		ExportsHandler:               exportsH,
+		AdminLoadsHandler:            adminH,
+		AuditMiddleware:              auditWriter.Middleware(),
+		MetricsHandler:               observability.Handler(metricsReg),
 	}
 
 	routers.Register(f, deps)

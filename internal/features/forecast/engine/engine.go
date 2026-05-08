@@ -114,9 +114,15 @@ func New(
 }
 
 // RunInput — параметры запуска.
+//
+// PresetRunID — если не uuid.Nil, engine не делает InsertRun (caller уже
+// вставил forecast_run строку и хочет, чтобы engine использовал тот же ID).
+// Без этого scheduler.TryTrigger возвращал клиенту runID, который никогда
+// не персистился (engine генерил свой), что ломало poll API после POST.
 type RunInput struct {
 	AsOf        time.Time
 	HorizonDays int
+	PresetRunID uuid.UUID
 }
 
 // RunResult — итог.
@@ -150,13 +156,20 @@ func (e *Engine) Run(ctx context.Context, in RunInput) (RunResult, error) {
 		return RunResult{}, fmt.Errorf("forecast engine: get etl_run: %w", err)
 	}
 
-	run, err := e.repo.InsertRun(ctx, models.InsertRunInput{
-		HorizonDays:      horizon,
-		SnapshotEtlRunID: snapshotID,
-	})
-	if err != nil {
-		e.metrics.IncRun("error")
-		return RunResult{}, fmt.Errorf("forecast engine: insert run: %w", err)
+	var run models.ForecastRun
+	if in.PresetRunID != uuid.Nil {
+		// Caller (scheduler.TryTrigger) уже вставил forecast_run row
+		// синхронно — используем готовый ID.
+		run = models.ForecastRun{ID: in.PresetRunID}
+	} else {
+		run, err = e.repo.InsertRun(ctx, models.InsertRunInput{
+			HorizonDays:      horizon,
+			SnapshotEtlRunID: snapshotID,
+		})
+		if err != nil {
+			e.metrics.IncRun("error")
+			return RunResult{}, fmt.Errorf("forecast engine: insert run: %w", err)
+		}
 	}
 
 	res, runErr := e.runInner(ctx, run.ID, snapshotID, asOf, horizon)

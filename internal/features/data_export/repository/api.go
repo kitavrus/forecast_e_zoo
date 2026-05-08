@@ -28,6 +28,9 @@ type LoaderAPI interface {
 	UpsertSupplier(ctx context.Context, tx pgx.Tx, s SupplierRow, loadID uuid.UUID) error
 	UpsertLocation(ctx context.Context, tx pgx.Tx, l LocationRow, loadID uuid.UUID) error
 	UpsertProduct(ctx context.Context, tx pgx.Tx, p ProductRow, loadID uuid.UUID) error
+	UpsertOrderRule(ctx context.Context, tx pgx.Tx, row OrderRuleRow, loadID uuid.UUID) error
+	UpsertSupplySpec(ctx context.Context, tx pgx.Tx, row SupplySpecRow, loadID uuid.UUID) error
+	UpsertLocationStockSnapshot(ctx context.Context, tx pgx.Tx, row LocationStockSnapshotRow, loadID uuid.UUID) error
 	InsertReceiptLineBatch(ctx context.Context, tx pgx.Tx, batch []ReceiptLineRow, loadID uuid.UUID) error
 
 	BeginTx(ctx context.Context) (pgx.Tx, error)
