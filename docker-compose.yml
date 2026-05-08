@@ -78,10 +78,10 @@ services:
       - mock_erp_data:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8090/healthz"]
-      interval: 10s
-      timeout: 3s
+      interval: 30s
+      timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 1800s
     networks: [e_zoo]
 
   source-adapter:
