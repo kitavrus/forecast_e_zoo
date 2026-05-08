@@ -316,7 +316,8 @@ async def m0(request: Request) -> HTMLResponse:
          "caption": (
              "Сравнение количества сущностей в источнике (mock-erp) и в "
              "public.* PostgreSQL после загрузки M1. Loss = source − pulled. "
-             "MVP skip — сущность пока не реплицируется в M1."),
+             "Все 16 сущностей реплицируются (Phase 13). "
+             "Для facts может быть ⚠️ partial — это нормально (окно since/window)."),
          "rows": pipeline_rows},
         {"title": f"Received POs sample (top {len(received_sample)})",
          "caption": (

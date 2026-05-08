@@ -22,36 +22,46 @@ MOCK_ERP_ENTITIES: list[str] = [
 ]
 
 # Public-таблицы куда source-adapter пишет committed snapshot.
+# Phase 13: 16/16 entities — полный ingest всех master + facts.
 M1_PUBLIC_TABLES: list[str] = [
     "products",
+    "product_barcodes",
     "supplier",
     "location",
     "category",
     "order_rule",
     "supply_spec",
+    "promo",
+    "supply_plan",
+    "master_change_log",
+    "store_assortment",
+    "store_assortment_lifecycle_events",
     "receipt_line",
     "location_stock_snapshot",
+    "stock_movement",
+    "supplier_stock_snapshot",
 ]
 
 # Mapping mock-erp entity → имя таблицы в public.* (None = MVP не реализует).
 # Используется на /m0 для сборки сводной pipeline-таблицы.
+# Phase 13: все 16 entities загружаются — нет MVP-skip.
 ENTITY_TO_PUBLIC_TABLE: dict[str, str | None] = {
     "products": "products",
-    "product_barcodes": None,
+    "product_barcodes": "product_barcodes",
     "category": "category",
     "location": "location",
     "supplier": "supplier",
     "supply_spec": "supply_spec",
-    "promo": None,
+    "promo": "promo",
     "order_rule": "order_rule",
-    "supply_plan": None,
-    "master_change_log": None,
-    "store_assortment": None,
-    "store_assortment_lifecycle_events": None,
+    "supply_plan": "supply_plan",
+    "master_change_log": "master_change_log",
+    "store_assortment": "store_assortment",
+    "store_assortment_lifecycle_events": "store_assortment_lifecycle_events",
     "receipt_line": "receipt_line",
     "location_stock_snapshot": "location_stock_snapshot",
-    "stock_movement": None,
-    "supplier_stock_snapshot": None,
+    "stock_movement": "stock_movement",
+    "supplier_stock_snapshot": "supplier_stock_snapshot",
 }
 
 # marts.* — output ETL.
