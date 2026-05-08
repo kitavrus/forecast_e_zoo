@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Pipeline overview</h2>
+<p>7 модулей e_zoo: данные текут от mock-erp в физические заказы поставщикам.
+Каждая карточка — отдельный модуль. Нажмите для деталей входа/выхода.</p>
+
+<div class="grid">
+    {% for m in modules %}
+    <div class="card">
+        <h3>{{ m.emoji }} M{{ m.n }} — {{ m.name }}</h3>
+        <div style="font-size: 13px; color: #6b7280; min-height: 36px;">{{ m.flow }}</div>
+        <div class="metric" style="margin-top: 12px;">{{ m.metric_value }}</div>
+        <div class="metric-label">{{ m.metric_label }}</div>
+        <div style="margin-top: 12px;">
+            <a href="/{{ m.slug }}">Открыть детали →</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div style="margin-top: 32px; font-size: 13px; color: #6b7280;">
+    <p>Авто-обновление каждые 30 секунд. Данные читаются из PostgreSQL и mock-erp в реальном времени.</p>
+</div>
+{% endblock %}

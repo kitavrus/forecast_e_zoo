@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ module.emoji }} {{ title }}</h2>
+<p style="color: #6b7280;">{{ module.flow }}</p>
+
+<div class="io-row">
+    <div class="io-card input">
+        <h3>⬅️ Input — {{ input_title }}</h3>
+        <table class="kv">
+            <thead><tr><th>Источник</th><th>Значение</th></tr></thead>
+            <tbody>
+            {% for label, value in input_counts %}
+                <tr><td>{{ label }}</td><td>{{ value }}</td></tr>
+            {% endfor %}
+            {% if not input_counts %}<tr><td colspan="2" class="empty">no data</td></tr>{% endif %}
+            </tbody>
+        </table>
+    </div>
+    <div class="io-card output">
+        <h3>Output — {{ output_title }} ➡️</h3>
+        <table class="kv">
+            <thead><tr><th>Цель</th><th>Значение</th></tr></thead>
+            <tbody>
+            {% for label, value in output_counts %}
+                <tr><td>{{ label }}</td><td>{{ value }}</td></tr>
+            {% endfor %}
+            {% if not output_counts %}<tr><td colspan="2" class="empty">no data</td></tr>{% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% for extra in extras %}
+<div class="card" style="margin-top: 16px;">
+    <h3>{{ extra.title }}</h3>
+    <table class="kv">
+        <tbody>
+        {% for k, v in extra.kv %}
+            <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+{% for sample in samples %}
+<div class="card" style="margin-top: 16px;">
+    <h3>{{ sample.title }}</h3>
+    {% if sample.rows and sample.rows|length > 0 %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                {% for key in sample.rows[0].keys() %}
+                    <th>{{ key }}</th>
+                {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in sample.rows %}
+                <tr>
+                {% for key in sample.rows[0].keys() %}
+                    <td title="{{ row[key] }}">{{ row[key] if row[key] is not none else '—' }}</td>
+                {% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty">no rows</div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<footer>
+    <div>{% if prev %}<a href="/{{ prev.slug }}">← M{{ prev.n }} {{ prev.name }}</a>{% endif %}</div>
+    <div>{% if next %}<a href="/{{ next.slug }}">M{{ next.n }} {{ next.name }} →</a>{% endif %}</div>
+</footer>
+{% endblock %}

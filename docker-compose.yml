@@ -313,6 +313,35 @@ services:
       start_period: 10s
     networks: [e_zoo]
 
+  dashboards:
+    build:
+      context: ./dashboards
+      dockerfile: Dockerfile
+    image: e_zoo/dashboards:latest
+    container_name: ezoo_dashboards
+    restart: *restart
+    environment:
+      DASHBOARDS_DSN: "postgres://e_zoo_app:ezoo_app_dev@postgres:5432/source_adapter"
+      MOCK_ERP_URL: "http://mock-erp:8090"
+      MOCK_ERP_API_KEY: "${MOCK_ERP_API_KEY:-test-api-key}"
+      DATA_MARTS_URL: "http://data-marts:8082"
+      JWT_SECRET: "${JWT_SECRET:-dev-secret-change-in-prod}"
+      JWT_ROLE: "it-read"
+    ports:
+      - "8091:8091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-erp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8091/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [e_zoo]
+
   prometheus:
     image: prom/prometheus:latest
     container_name: ezoo_prometheus

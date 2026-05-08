@@ -1,0 +1,10 @@
+{# Reusable key-value table partial. Usage: {% set kv = [(label, value), ...] %} {% include "partials/kv_table.html" %} #}
+{% if kv is defined and kv %}
+<table class="kv">
+    <tbody>
+    {% for label, value in kv %}
+        <tr><td>{{ label }}</td><td>{{ value }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
