@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -79,6 +80,11 @@ func (h *OrderRuleHandler) Get(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotModified)
 	}
 	WritePageHeaders(c, loadID, loadID, etag)
+	// X-Next-Cursor: если страница «полная» (len == limit), вероятно есть продолжение.
+	if len(rows) == limit && limit > 0 {
+		last := rows[len(rows)-1]
+		WriteNextCursor(c, loadID, fmt.Sprintf("%s|%s", last.RuleID, last.ProductID))
+	}
 
 	items := make([]orderRuleStreamItem, 0, len(rows))
 	for _, r := range rows {

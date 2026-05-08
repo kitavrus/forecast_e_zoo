@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -73,6 +74,14 @@ func (h *ReceiptLineHandler) Get(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotModified)
 	}
 	WritePageHeaders(c, loadID, loadID, etag)
+	// X-Next-Cursor: если страница «полная» (len == limit), вероятно есть
+	// продолжение. AfterPK для receipt_line — "<event_date YYYY-MM-DD>|<id>"
+	// (см. select_receipt_line.sql).
+	if len(rows) == limit && limit > 0 {
+		last := rows[len(rows)-1]
+		afterPK := fmt.Sprintf("%s|%d", last.EventDate.UTC().Format("2006-01-02"), last.ID)
+		WriteNextCursor(c, loadID, afterPK)
+	}
 
 	items := make([]dto.ReceiptLine, 0, len(rows))
 	for _, r := range rows {

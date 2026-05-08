@@ -6,12 +6,15 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
+
+	"github.com/Kitavrus/e_zoo/internal/features/data_export/models"
 )
 
 // HeaderSnapshotID — выставляется на каждый /v1/* response.
 const (
 	HeaderSnapshotID = "X-Snapshot-Id"
 	HeaderLoadID     = "X-Load-Id"
+	HeaderNextCursor = "X-Next-Cursor"
 )
 
 // WritePageHeaders — общие headers для read-handlers /v1/*.
@@ -26,6 +29,24 @@ func WritePageHeaders(c fiber.Ctx, snapshotID, loadID uuid.UUID, etag string) {
 		c.Set(fiber.HeaderETag, etag)
 	}
 	c.Set(fiber.HeaderCacheControl, "private, max-age=86400")
+}
+
+// WriteNextCursor — сериализует cursor (loadID + afterPK) в base64
+// и выставляет X-Next-Cursor header. Используется handlers, когда rows
+// заполнили весь limit (значит, есть продолжение).
+//
+// При afterPK == "" header не выставляется. При ошибке Encode header
+// тоже пропускается — клиент остановит итерацию (один лишний reload не критичен).
+func WriteNextCursor(c fiber.Ctx, loadID uuid.UUID, afterPK string) {
+	if afterPK == "" {
+		return
+	}
+	cur := models.Cursor{LoadID: loadID.String(), AfterPK: afterPK}
+	enc, err := cur.Encode()
+	if err != nil || enc == "" {
+		return
+	}
+	c.Set(HeaderNextCursor, enc)
 }
 
 // StreamNDJSON — выставляет Content-Type: application/x-ndjson и пишет тело.

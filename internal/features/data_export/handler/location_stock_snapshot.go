@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -86,6 +87,11 @@ func (h *LocationStockSnapshotHandler) Get(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotModified)
 	}
 	WritePageHeaders(c, loadID, loadID, etag)
+	// X-Next-Cursor: если страница «полная» (len == limit), вероятно есть продолжение.
+	if len(rows) == limit && limit > 0 {
+		last := rows[len(rows)-1]
+		WriteNextCursor(c, loadID, fmt.Sprintf("%s|%s|%s", last.EventDate.UTC().Format("2006-01-02"), last.LocationID, last.ProductID))
+	}
 
 	items := make([]locationStockSnapshotStreamItem, 0, len(rows))
 	for _, r := range rows {

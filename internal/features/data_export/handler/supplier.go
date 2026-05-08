@@ -69,6 +69,11 @@ func (h *SupplierHandler) Get(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotModified)
 	}
 	WritePageHeaders(c, loadID, loadID, etag)
+	// X-Next-Cursor: если страница «полная» (len == limit), вероятно есть продолжение.
+	if len(rows) == limit && limit > 0 {
+		last := rows[len(rows)-1]
+		WriteNextCursor(c, loadID, last.ID)
+	}
 
 	items := make([]supplierStreamItem, 0, len(rows))
 	for _, r := range rows {

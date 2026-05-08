@@ -20,6 +20,16 @@ const NDJSONScannerBufSize = 1 << 20 // 1 MiB
 // dateLayout — формат для query-параметров event_date_from / event_date_to.
 const dateLayout = "2006-01-02"
 
+// nextCursorHeader — header, в котором source-adapter возвращает курсор
+// следующей страницы (см. internal/features/data_export/handler/streaming.go
+// WriteNextCursor). Пустое значение / отсутствие header → конец стрима.
+const nextCursorHeader = "X-Next-Cursor"
+
+// pageFetchSafetyCap — мягкий потолок числа страниц на одну Stream() вызов.
+// 1.6M строк / 1000 ≈ 1600 страниц; ставим 100k чтобы поймать «бесконечный
+// цикл» (например баг сервера, не сбрасывающий cursor).
+const pageFetchSafetyCap = 100_000
+
 // FactEntities — entities, для которых source-adapter требует обязательный
 // event_date_from / event_date_to (партиционированные таблицы).
 //
@@ -76,6 +86,13 @@ func NewEntitiesClient(c *Client) EntitiesClient {
 // Для facts-сущностей (см. IsFactEntity) source-adapter требует обязательные
 // event_date_from / event_date_to (партиционирование). from/to добавляются в
 // query как YYYY-MM-DD, если оба не нулевые. Для master-сущностей — игнорируются.
+//
+// Pagination: source-adapter отдаёт страницы по 1000 строк (limit по умолчанию)
+// и в response header X-Next-Cursor — opaque cursor следующей страницы.
+// Stream() возвращает NDJSONReader, который автоматически перелистывает
+// все страницы до пустого X-Next-Cursor; для caller это выглядит как один
+// непрерывный поток NDJSON. См. internal/features/data_export/handler/streaming.go
+// (WriteNextCursor) — handler ставит cursor только при len(rows) == limit.
 func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag string, from, to time.Time) (NDJSONReader, error) {
 	if entity == "" {
 		return nil, errors.New("extractor: entity is empty")
@@ -83,9 +100,35 @@ func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag st
 	if snapshotID == "" {
 		return nil, errors.New("extractor: snapshotID is empty")
 	}
+	pr := &paginatedNDJSONReader{
+		ec:         e,
+		ctx:        ctx,
+		entity:     entity,
+		snapshotID: snapshotID,
+		ifNoneTag:  etag,
+		from:       from,
+		to:         to,
+		cursor:     "",
+		exhausted:  false,
+	}
+	if err := pr.openNextPage(); err != nil {
+		return nil, err
+	}
+	return pr, nil
+}
+
+// fetchPage делает один запрос и возвращает (NDJSONReader-страница, nextCursor, error).
+// Используется paginatedNDJSONReader.
+//
+//nolint:funlen,cyclop // линейный switch по статусам + сборка query.
+func (e *entitiesClient) fetchPage(
+	ctx context.Context,
+	entity, snapshotID, ifNoneTag, cursor string,
+	from, to time.Time,
+) (page *ndjsonReader, nextCursor string, err error) {
 	u, err := url.Parse(e.c.BaseURL() + "/v1/" + url.PathEscape(entity))
 	if err != nil {
-		return nil, fmt.Errorf("extractor: parse url: %w", err)
+		return nil, "", fmt.Errorf("extractor: parse url: %w", err)
 	}
 	q := u.Query()
 	q.Set("snapshot_id", snapshotID)
@@ -93,29 +136,32 @@ func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag st
 		q.Set("event_date_from", from.UTC().Format(dateLayout))
 		q.Set("event_date_to", to.UTC().Format(dateLayout))
 	}
+	if cursor != "" {
+		q.Set("cursor", cursor)
+	}
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("extractor: build entities req: %w", err)
+		return nil, "", fmt.Errorf("extractor: build entities req: %w", err)
 	}
 	req.Header.Set("Accept", "application/x-ndjson")
-	if etag != "" {
-		req.Header.Set("If-None-Match", etag)
+	if ifNoneTag != "" {
+		req.Header.Set("If-None-Match", ifNoneTag)
 	}
 
 	resp, err := e.c.Do(ctx, req)
 	if err != nil {
-		return nil, err //nolint:wrapcheck // already wrapped
+		return nil, "", err //nolint:wrapcheck // already wrapped
 	}
 
 	switch resp.StatusCode {
 	case http.StatusOK:
 		respETag := resp.Header.Get("ETag")
-		return newNDJSONReader(resp.Body, respETag), nil
+		return newNDJSONReader(resp.Body, respETag), resp.Header.Get(nextCursorHeader), nil
 	case http.StatusNotModified:
 		drainAndClose(resp)
-		return newNDJSONReader(io.NopCloser(emptyReader{}), etag), nil
+		return newNDJSONReader(io.NopCloser(emptyReader{}), ifNoneTag), "", nil
 	case http.StatusNotFound, http.StatusNotImplemented:
 		// Source-adapter MVP реализует только подмножество entities (см.
 		// internal/features/data_export/handler/not_implemented.go: 501 для
@@ -125,13 +171,103 @@ func (e *entitiesClient) Stream(ctx context.Context, entity, snapshotID, etag st
 		// Трактуем оба статуса как «entity ещё не экспортируется» → пустой stream.
 		// populateStaging уже толерантен к пустым/неизвестным entities (см. staging.go).
 		drainAndClose(resp)
-		return newNDJSONReader(io.NopCloser(emptyReader{}), ""), nil
+		return newNDJSONReader(io.NopCloser(emptyReader{}), ""), "", nil
 	default:
 		drainAndClose(resp)
-		return nil, errorspkg.ErrSourceUnavailable.Wrap(
+		return nil, "", errorspkg.ErrSourceUnavailable.Wrap(
 			fmt.Errorf("unexpected status %d on /v1/%s", resp.StatusCode, entity),
 		)
 	}
+}
+
+// paginatedNDJSONReader — NDJSONReader, который прозрачно склеивает страницы
+// X-Next-Cursor pagination в один поток.
+//
+// Лениво подгружает следующую страницу, когда текущая исчерпана. Не загружает
+// все строки в память (≠ http_source_reader.fetchAll, который для упрощения
+// аккумулирует master-сущности целиком — там объёмы небольшие).
+type paginatedNDJSONReader struct {
+	ec         *entitiesClient
+	ctx        context.Context //nolint:containedctx // ctx живёт всё время iteration по pageам
+	entity     string
+	snapshotID string
+	ifNoneTag  string // If-None-Match для первой страницы
+	from, to   time.Time
+
+	page      *ndjsonReader // текущая открытая страница (nil после Close)
+	etag      string        // ETag первой 200/304 страницы (фиксируется только один раз)
+	cursor    string        // X-Next-Cursor предыдущей страницы; "" → больше нет
+	exhausted bool          // true, если cursor == "" после последнего fetch (больше страниц не будет)
+	pages     int           // счётчик страниц (защита от runaway)
+}
+
+// openNextPage делает запрос и устанавливает p.page / p.cursor.
+// На первом вызове использует p.cursor == "" (initial request).
+// Сбрасывает p.exhausted, если сервер вернул следующую страницу.
+func (p *paginatedNDJSONReader) openNextPage() error {
+	if p.page != nil {
+		_ = p.page.Close()
+		p.page = nil
+	}
+	if p.pages >= pageFetchSafetyCap {
+		return fmt.Errorf("extractor: pagination safety cap reached (%d pages) on /v1/%s",
+			pageFetchSafetyCap, p.entity)
+	}
+	page, next, err := p.ec.fetchPage(p.ctx, p.entity, p.snapshotID, p.ifNoneTag, p.cursor, p.from, p.to)
+	if err != nil {
+		return err
+	}
+	p.pages++
+	p.page = page
+	// ETag берём только с первой страницы (он привязан к (load_id, entity, committed_at)
+	// и не меняется между страницами одного snapshot).
+	if p.etag == "" {
+		p.etag = page.etag
+	}
+	// Subsequent requests не должны слать If-None-Match (иначе сервер на page 2+
+	// может вернуть 304 для unchanged ETag и оборвать загрузку).
+	p.ifNoneTag = ""
+	p.cursor = next
+	if next == "" {
+		p.exhausted = true
+	}
+	return nil
+}
+
+// Next декодирует следующую строку, прозрачно перелистывая страницы.
+func (p *paginatedNDJSONReader) Next(target any) error {
+	for {
+		if p.page == nil {
+			return io.EOF
+		}
+		err := p.page.Next(target)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, io.EOF) {
+			return err
+		}
+		// Текущая страница исчерпана. Если есть cursor — открываем следующую.
+		if p.exhausted || p.cursor == "" {
+			return io.EOF
+		}
+		if openErr := p.openNextPage(); openErr != nil {
+			return openErr
+		}
+	}
+}
+
+// ETag возвращает ETag первой страницы (он стабилен в пределах snapshot).
+func (p *paginatedNDJSONReader) ETag() string { return p.etag }
+
+// Close освобождает ресурсы текущей страницы.
+func (p *paginatedNDJSONReader) Close() error {
+	if p.page == nil {
+		return nil
+	}
+	err := p.page.Close()
+	p.page = nil
+	return err //nolint:wrapcheck // delegating
 }
 
 type ndjsonReader struct {

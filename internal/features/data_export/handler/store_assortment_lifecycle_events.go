@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -72,6 +73,11 @@ func (h *LifecycleEventsHandler) Get(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotModified)
 	}
 	WritePageHeaders(c, loadID, loadID, etag)
+	// X-Next-Cursor: если страница «полная» (len == limit), вероятно есть продолжение.
+	if len(rows) == limit && limit > 0 {
+		last := rows[len(rows)-1]
+		WriteNextCursor(c, loadID, fmt.Sprintf("%d", last.ID))
+	}
 
 	items := make([]lifecycleEventStreamItem, 0, len(rows))
 	for _, r := range rows {

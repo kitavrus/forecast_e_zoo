@@ -413,3 +413,114 @@ func TestStaticTokenSource_BearerFmt(t *testing.T) {
 	tok, _ := extractor.StaticTokenSource{Value: "abc"}.Token(context.Background())
 	assert.Equal(t, "Bearer "+tok, fmt.Sprintf("Bearer %s", tok))
 }
+
+// Verify Stream() follows X-Next-Cursor across multiple pages and yields
+// rows from all pages as one continuous stream.
+//
+// Этот regression-тест ловит баг "load only first 1000 rows" — когда
+// extractor не следует за X-Next-Cursor и ETL получает только первую
+// страницу из 1.6M строк receipt_line.
+func TestEntities_Stream_FollowsXNextCursor(t *testing.T) {
+	t.Parallel()
+	page1 := []string{
+		`{"id":"p1","name":"Apple"}`,
+		`{"id":"p2","name":"Banana"}`,
+	}
+	page2 := []string{
+		`{"id":"p3","name":"Cherry"}`,
+	}
+	page3 := []string{
+		`{"id":"p4","name":"Durian"}`,
+		`{"id":"p5","name":"Elderberry"}`,
+	}
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		cursor := r.URL.Query().Get("cursor")
+		assert.Equal(t, "L1", r.URL.Query().Get("snapshot_id"))
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		switch n {
+		case 1:
+			assert.Empty(t, cursor, "first request must NOT have cursor")
+			w.Header().Set("ETag", `"v1"`)
+			w.Header().Set("X-Next-Cursor", "cur-page2")
+			_, _ = io.WriteString(w, strings.Join(page1, "\n")+"\n")
+		case 2:
+			assert.Equal(t, "cur-page2", cursor)
+			w.Header().Set("X-Next-Cursor", "cur-page3")
+			_, _ = io.WriteString(w, strings.Join(page2, "\n")+"\n")
+		case 3:
+			assert.Equal(t, "cur-page3", cursor)
+			// no X-Next-Cursor → end of stream
+			_, _ = io.WriteString(w, strings.Join(page3, "\n")+"\n")
+		default:
+			t.Fatalf("unexpected extra request #%d", n)
+		}
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv.URL)
+	ec := extractor.NewEntitiesClient(c)
+	rd, err := ec.Stream(context.Background(), "products", "L1", "", time.Time{}, time.Time{})
+	require.NoError(t, err)
+	defer rd.Close()
+	type prod struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	var got []prod
+	for {
+		var p prod
+		err := rd.Next(&p)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err)
+		got = append(got, p)
+	}
+	require.Len(t, got, 5, "must yield rows from all 3 pages")
+	assert.Equal(t, "p1", got[0].ID)
+	assert.Equal(t, "p5", got[4].ID)
+	// ETag фиксируется по первой странице.
+	assert.Equal(t, `"v1"`, rd.ETag())
+	// 3 страницы — 3 запроса; If-None-Match не пересылается на page 2/3.
+	assert.Equal(t, int32(3), atomic.LoadInt32(&calls))
+}
+
+// Verify If-None-Match НЕ пересылается на subsequent page requests
+// (если не сбросить — сервер на page 2 может вернуть 304 для unchanged ETag
+// и оборвать pagination loop).
+func TestEntities_Stream_DoesNotResendIfNoneMatchOnPage2(t *testing.T) {
+	t.Parallel()
+	var calls int32
+	var page2Auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		switch n {
+		case 1:
+			assert.Equal(t, `"prev"`, r.Header.Get("If-None-Match"))
+			w.Header().Set("X-Next-Cursor", "next")
+			_, _ = io.WriteString(w, `{"id":"a"}`+"\n")
+		case 2:
+			page2Auth = r.Header.Get("If-None-Match")
+			_, _ = io.WriteString(w, `{"id":"b"}`+"\n")
+		default:
+			t.Fatalf("unexpected request #%d", n)
+		}
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv.URL)
+	ec := extractor.NewEntitiesClient(c)
+	rd, err := ec.Stream(context.Background(), "products", "L1", `"prev"`, time.Time{}, time.Time{})
+	require.NoError(t, err)
+	defer rd.Close()
+	for {
+		var v map[string]any
+		if err := rd.Next(&v); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatalf("next: %v", err)
+		}
+	}
+	assert.Empty(t, page2Auth, "If-None-Match must NOT be sent on page 2+")
+}
