@@ -166,6 +166,144 @@
 </div>
 {% endif %}
 
+{% if show_seed_panel and erp_state %}
+<section class="control-panel">
+    <h2>🎮 Управление мок-ERP</h2>
+    {% if erp_state._unavailable %}
+    <p class="cp-warn">⚠️ mock-erp недоступен — кнопки заблокированы.</p>
+    {% endif %}
+    <div class="state-grid">
+        <div>Master seeded:</div>
+        <div>{% if erp_state.master_seeded %}✅ да{% else %}❌ нет{% endif %}</div>
+        <div>Текущая дата (sim):</div>
+        <div><code>{{ erp_state.current_date }}</code></div>
+        <div>Дней сгенерировано:</div>
+        <div><strong>{{ erp_state.days_generated }}</strong></div>
+        <div>receipt_line всего:</div>
+        <div>{{ "{:,}".format(erp_state.total_receipts).replace(",", " ") }}</div>
+        <div>stock_movements:</div>
+        <div>{{ "{:,}".format(erp_state.total_movements).replace(",", " ") }}</div>
+        <div>stock snapshots:</div>
+        <div>{{ "{:,}".format(erp_state.total_stock_snapshots).replace(",", " ") }}</div>
+        <div>supplier snapshots:</div>
+        <div>{{ "{:,}".format(erp_state.total_supplier_snapshots).replace(",", " ") }}</div>
+    </div>
+    <p class="cp-hint">
+        Используйте кнопки для пошаговой генерации тестовых данных:
+        <br>1. <strong>Initial seed</strong> — создаст master-данные (товары, поставщики, локации).
+        <br>2. <strong>+N days</strong> — добавит факты (продажи, движения, остатки) за N следующих дней.
+        <br>3. После seed запустите pipeline через кнопки на страницах модулей <a href="/m1">M1</a>..<a href="/m7">M7</a>.
+        <br>4. <strong>Reset</strong> — удалит ВСЕ данные mock-erp (требует подтверждения).
+    </p>
+    <div class="control-buttons">
+        <button onclick="seedAction('initial')" {% if erp_state.master_seeded %}disabled title="Уже seeded — повторный запуск idempotent"{% endif %}>
+            🌱 Initial seed
+        </button>
+        <button onclick="seedDays(1)" {% if not erp_state.master_seeded %}disabled{% endif %}>+1 day</button>
+        <button onclick="seedDays(10)" {% if not erp_state.master_seeded %}disabled{% endif %}>+10 days</button>
+        <button onclick="seedDays(30)" {% if not erp_state.master_seeded %}disabled{% endif %}>+30 days</button>
+        <input type="number" id="customDays" placeholder="N" min="1" max="365" style="width: 80px;" {% if not erp_state.master_seeded %}disabled{% endif %}>
+        <button onclick="seedDaysCustom()" {% if not erp_state.master_seeded %}disabled{% endif %}>+ Generate</button>
+        <button onclick="resetAll()" class="danger">🔥 Reset all</button>
+    </div>
+    <pre id="control-output" class="control-output" style="display:none;"></pre>
+</section>
+{% endif %}
+
+{% if run_module %}
+<section class="run-module">
+    <h2>▶️ Запуск модуля</h2>
+    <p class="cp-hint">
+        Триггер вручную (вместо ожидания cron). После клика модуль начнёт обработку
+        текущего snapshot. Ответ — асинхронный (202 + run_id), процесс продолжается в фоне.
+        <br>Endpoint: <code>{{ run_module.endpoint }}</code>
+    </p>
+    <div class="control-buttons">
+        {% if run_module.readonly %}
+        <button disabled title="M3 — read-only API, admin trigger отсутствует">
+            {{ run_module.label }}
+        </button>
+        {% else %}
+        <button onclick="runModule('{{ run_module.slug }}')">{{ run_module.label }}</button>
+        {% endif %}
+        {% if run_module.with_approve %}
+        <button onclick="approvePlans()" class="secondary">✅ Approve all draft plans</button>
+        {% endif %}
+    </div>
+    <pre id="run-output" class="control-output" style="display:none;"></pre>
+</section>
+{% endif %}
+
+<script>
+function _show(id, msg) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = msg;
+}
+function _showCtrl(msg) { _show('control-output', msg); }
+function _showRun(msg) { _show('run-output', msg); }
+
+async function _postJSON(url) {
+    var r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}});
+    var body;
+    try { body = await r.json(); } catch (e) { body = {raw: await r.text()}; }
+    return {status: r.status, body: body};
+}
+
+async function seedAction(action) {
+    _showCtrl('⏳ Выполняется initial seed (master-данные)...');
+    try {
+        var res = await _postJSON('/api/seed/' + action);
+        _showCtrl('Status: ' + res.status + '\n' + JSON.stringify(res.body, null, 2));
+        setTimeout(function () { location.reload(); }, 2000);
+    } catch (e) { _showCtrl('❌ Ошибка: ' + e); }
+}
+
+async function seedDays(count) {
+    _showCtrl('⏳ Генерируется ' + count + ' day(s) данных (может занять минуту)...');
+    try {
+        var res = await _postJSON('/api/seed/days?count=' + count);
+        _showCtrl('Status: ' + res.status + '\n' + JSON.stringify(res.body, null, 2));
+        setTimeout(function () { location.reload(); }, 2000);
+    } catch (e) { _showCtrl('❌ Ошибка: ' + e); }
+}
+
+async function seedDaysCustom() {
+    var v = document.getElementById('customDays');
+    var count = parseInt(v && v.value, 10);
+    if (!count || count < 1) { _showCtrl('⚠️ Введите число >= 1'); return; }
+    await seedDays(count);
+}
+
+async function resetAll() {
+    if (!confirm('Удалить ВСЕ данные mock-erp? Это необратимо.')) return;
+    _showCtrl('⏳ Reset выполняется...');
+    try {
+        var res = await _postJSON('/api/seed/reset');
+        _showCtrl('Status: ' + res.status + '\n' + JSON.stringify(res.body, null, 2));
+        setTimeout(function () { location.reload(); }, 2000);
+    } catch (e) { _showCtrl('❌ Ошибка: ' + e); }
+}
+
+async function runModule(slug) {
+    _showRun('⏳ Запуск ' + slug + '...');
+    try {
+        var res = await _postJSON('/api/run/' + slug);
+        var ok = res.status >= 200 && res.status < 300;
+        _showRun((ok ? '✅' : '⚠️') + ' Status: ' + res.status + '\n' + JSON.stringify(res.body, null, 2));
+    } catch (e) { _showRun('❌ Ошибка: ' + e); }
+}
+
+async function approvePlans() {
+    _showRun('⏳ Approve всех draft replenishment plans...');
+    try {
+        var res = await _postJSON('/api/approve-plans');
+        _showRun('Status: ' + res.status + '\n' + JSON.stringify(res.body, null, 2));
+    } catch (e) { _showRun('❌ Ошибка: ' + e); }
+}
+</script>
+
 <footer>
     <div>{% if prev %}<a href="/{{ prev.slug }}">← M{{ prev.n }} {{ prev.name }}</a>{% endif %}</div>
     <div>{% if next %}<a href="/{{ next.slug }}">M{{ next.n }} {{ next.name }} →</a>{% endif %}</div>

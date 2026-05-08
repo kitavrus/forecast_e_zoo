@@ -57,6 +57,69 @@ def _make_jwt() -> str:
     return pyjwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
 
+def _make_admin_jwt() -> str:
+    """Mint HS256 JWT for admin-cli endpoints (source-adapter, etl, kpi, ...).
+
+    Issuer must be 'admin-cli' (см. middleware.RoleAdminCLI).
+    """
+    now = int(time.time())
+    payload = {
+        "iss": "admin-cli",
+        "sub": "dashboards-user",
+        "iat": now,
+        "exp": now + 3600,
+    }
+    return pyjwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+
+
+# Module → admin-trigger endpoint mapping (host:port + path).
+# Используется handler-ом /api/run/{module}.
+MODULE_RUN_ENDPOINTS: dict[str, tuple[str, str]] = {
+    "m1": ("http://source-adapter:8080", "/admin/loads"),
+    "m2": ("http://etl:8081", "/api/v1/admin/etl-runs"),
+    # m3 — read-only API, нет admin trigger.
+    "m4": ("http://kpi:8083", "/v1/kpi/snapshots/refresh"),
+    "m5": ("http://forecast:8084", "/v1/forecast/runs/refresh"),
+    "m6": ("http://order-builder:8086", "/v1/orders/purchase-orders/build"),
+    "m7": ("http://channel-router:8087", "/v1/channels/send"),
+}
+
+
+async def _fetch_erp_state() -> dict[str, Any]:
+    """Best-effort fetch /admin/seed/state из mock-erp.
+
+    Возвращает dict со значениями по умолчанию при ошибке — UI не падает.
+    """
+    default: dict[str, Any] = {
+        "master_seeded": False,
+        "current_date": "—",
+        "days_generated": 0,
+        "total_receipts": 0,
+        "total_movements": 0,
+        "total_stock_snapshots": 0,
+        "total_supplier_snapshots": 0,
+        "_unavailable": True,
+    }
+    url = f"{settings.MOCK_ERP_URL}/admin/seed/state"
+    try:
+        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SEC) as client:
+            r = await client.get(url, headers={"X-API-Key": settings.MOCK_ERP_API_KEY})
+        if r.status_code == 200:
+            data = r.json()
+            # Normalize None values for safe template rendering.
+            data["current_date"] = data.get("current_date") or "—"
+            for k in ("days_generated", "total_receipts", "total_movements",
+                     "total_stock_snapshots", "total_supplier_snapshots"):
+                data[k] = int(data.get(k) or 0)
+            data["master_seeded"] = bool(data.get("master_seeded"))
+            data["_unavailable"] = False
+            return data
+        logger.warning("mock-erp seed/state status=%s", r.status_code)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("mock-erp seed/state failed: %s", exc)
+    return default
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.init_pool(settings.DASHBOARDS_DSN)
@@ -330,6 +393,7 @@ async def m0(request: Request) -> HTMLResponse:
     ]
 
     prev_m, next_m = _module_neighbours(0)
+    erp_state = await _fetch_erp_state()
     return templates.TemplateResponse(
         "module.html",
         {
@@ -337,6 +401,8 @@ async def m0(request: Request) -> HTMLResponse:
             "module": MODULES[0],
             "description": _description_for("m0"),
             "title": "M0 Mock ERP (Source)",
+            "erp_state": erp_state,
+            "show_seed_panel": True,
             "input_title": "mock-erp /api/v1/{entity} — initial inventory (16 entities)",
             "input_summary": (
                 "Mock-erp генерирует данные сам (Faker, 90 дней истории) и не "
@@ -418,6 +484,9 @@ async def m1(request: Request) -> HTMLResponse:
             "module": MODULES[1],
             "description": _description_for("m1"),
             "title": "M1 Source Adapter",
+            "run_module": {"slug": "m1",
+                           "label": "▶ Запустить pull из mock-erp",
+                           "endpoint": "POST /admin/loads (source-adapter)"},
             "input_title": "mock-erp REST API (16 entities)",
             "input_summary": (
                 "Cron 02:00 ходит за 16 сущностями в mock-erp по HTTP "
@@ -490,6 +559,9 @@ async def m2(request: Request) -> HTMLResponse:
             "module": MODULES[2],
             "description": _description_for("m2"),
             "title": "M2 ETL Validation",
+            "run_module": {"slug": "m2",
+                           "label": "▶ Запустить ETL run",
+                           "endpoint": "POST /api/v1/admin/etl-runs (etl)"},
             "input_title": "source-adapter HTTP API",
             "input_summary": (
                 "Cron 02:30 ходит за 16 сущностями в API M1 (NDJSON streaming, "
@@ -597,6 +669,9 @@ async def m3(request: Request) -> HTMLResponse:
             "module": MODULES[3],
             "description": _description_for("m3"),
             "title": "M3 Data Marts API",
+            "run_module": {"slug": "m3", "readonly": True,
+                           "label": "Read-only API — нет admin trigger",
+                           "endpoint": "GET /v1/marts/* (HTTP только на чтение)"},
             "input_title": "marts.* (read-only role mart_reader)",
             "input_summary": (
                 "M3 не имеет своего ETL — только читает marts.* через DB role "
@@ -667,6 +742,9 @@ async def m4(request: Request) -> HTMLResponse:
             "module": MODULES[4],
             "description": _description_for("m4"),
             "title": "M4 KPI Calibration",
+            "run_module": {"slug": "m4",
+                           "label": "▶ Refresh KPI",
+                           "endpoint": "POST /v1/kpi/snapshots/refresh (kpi)"},
             "input_title": "marts.* (demand history + calc input + scorecard)",
             "input_summary": (
                 "Cron 04:00 читает напрямую из marts.* (без HTTP) — "
@@ -761,6 +839,9 @@ async def m5(request: Request) -> HTMLResponse:
             "module": MODULES[5],
             "description": _description_for("m5"),
             "title": "M5 Forecast Engine",
+            "run_module": {"slug": "m5", "with_approve": True,
+                           "label": "▶ Refresh forecast",
+                           "endpoint": "POST /v1/forecast/runs/refresh (forecast)"},
             "input_title": "marts.* + kpi.kpi_snapshots (через DB read)",
             "input_summary": (
                 "Cron 05:00 читает напрямую из marts.* и kpi.* через DB role "
@@ -825,6 +906,9 @@ async def m6(request: Request) -> HTMLResponse:
             "module": MODULES[6],
             "description": _description_for("m6"),
             "title": "M6 Order Builder",
+            "run_module": {"slug": "m6",
+                           "label": "▶ Build POs",
+                           "endpoint": "POST /v1/orders/purchase-orders/build (order-builder)"},
             "input_title": "forecast.replenishment_plans WHERE status='approved'",
             "input_summary": (
                 f"Cron 06:00 подбирает approved-планы (всего одобрено: "
@@ -910,6 +994,9 @@ async def m7(request: Request) -> HTMLResponse:
             "module": MODULES[7],
             "description": _description_for("m7"),
             "title": "M7 Channel Router",
+            "run_module": {"slug": "m7",
+                           "label": "▶ Send POs",
+                           "endpoint": "POST /v1/channels/send (channel-router)"},
             "input_title": "orders.purchase_orders WHERE status='ready_to_send'",
             "input_summary": (
                 f"Cron 06:30 подбирает POs со status=ready_to_send "
@@ -955,3 +1042,144 @@ def _kv_from_row(row: dict[str, Any] | None) -> list[tuple[str, str]]:
     if not row:
         return [("(no rows)", "—")]
     return [(k, str(v) if v is not None else "—") for k, v in row.items()]
+
+
+# ----- Control API: mock-erp seed proxy ---------------------------------------
+
+
+async def _proxy_to_mock_erp(method: str, path: str,
+                             params: dict[str, Any] | None = None) -> JSONResponse:
+    """Generic proxy to mock-erp /admin/seed/* with X-API-Key.
+
+    Возвращает JSON ответа mock-erp + http статус. Long-running операции
+    (seed_days) блокирующие — поэтому ставим большой timeout (5 мин).
+    """
+    url = f"{settings.MOCK_ERP_URL}{path}"
+    headers = {"X-API-Key": settings.MOCK_ERP_API_KEY}
+    timeout = httpx.Timeout(connect=10.0, read=600.0, write=10.0, pool=10.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.request(method, url, headers=headers, params=params)
+        try:
+            body = r.json()
+        except Exception:  # noqa: BLE001
+            body = {"raw": r.text[:1000]}
+        return JSONResponse(status_code=r.status_code, content=body)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("mock-erp proxy %s %s failed: %s", method, path, exc)
+        return JSONResponse(status_code=502,
+                            content={"error": "mock-erp unreachable",
+                                     "detail": str(exc)})
+
+
+@app.get("/api/seed/state")
+async def api_seed_state() -> JSONResponse:
+    state = await _fetch_erp_state()
+    return JSONResponse(content=state)
+
+
+@app.post("/api/seed/initial")
+async def api_seed_initial() -> JSONResponse:
+    return await _proxy_to_mock_erp("POST", "/admin/seed/initial")
+
+
+@app.post("/api/seed/days")
+async def api_seed_days(count: int = 1) -> JSONResponse:
+    return await _proxy_to_mock_erp("POST", "/admin/seed/days", {"count": count})
+
+
+@app.post("/api/seed/reset")
+async def api_seed_reset() -> JSONResponse:
+    return await _proxy_to_mock_erp("POST", "/admin/seed/reset", {"confirm": "true"})
+
+
+# ----- Control API: module run trigger ----------------------------------------
+
+
+@app.post("/api/run/{module}")
+async def api_run_module(module: str) -> JSONResponse:
+    """Trigger admin endpoint of given module (m1..m7, m3 not supported)."""
+    if module not in MODULE_RUN_ENDPOINTS:
+        return JSONResponse(status_code=400,
+                            content={"error": f"unsupported module: {module}",
+                                     "supported": list(MODULE_RUN_ENDPOINTS.keys())})
+    base, path = MODULE_RUN_ENDPOINTS[module]
+    url = f"{base}{path}"
+    token = _make_admin_jwt()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.post(url, headers=headers, json={})
+        try:
+            body = r.json()
+        except Exception:  # noqa: BLE001
+            body = {"raw": r.text[:1000]}
+        return JSONResponse(status_code=r.status_code,
+                            content={"module": module, "url": url,
+                                     "status": r.status_code, "body": body})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("run-module %s POST %s failed: %s", module, url, exc)
+        return JSONResponse(status_code=502,
+                            content={"error": f"{module} unreachable",
+                                     "url": url, "detail": str(exc)})
+
+
+@app.post("/api/approve-plans")
+async def api_approve_plans() -> JSONResponse:
+    """List draft replenishment plans from forecast service, approve each.
+
+    GET /v1/replenishment/plans?status=draft (cursor-paginated) →
+    POST /v1/replenishment/plans/{id}/approve для каждого.
+    """
+    forecast_base = "http://forecast:8084"
+    token = _make_admin_jwt()
+    headers = {"Authorization": f"Bearer {token}",
+               "Content-Type": "application/json"}
+    approved = 0
+    failed = 0
+    errors: list[str] = []
+    timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            cursor: str | None = None
+            plan_ids: list[str] = []
+            for _ in range(100):  # safety: max 100 pages
+                params = {"status": "draft", "limit": 100}
+                if cursor:
+                    params["cursor"] = cursor
+                r = await client.get(f"{forecast_base}/v1/replenishment/plans",
+                                     headers=headers, params=params)
+                if r.status_code != 200:
+                    return JSONResponse(status_code=502,
+                                        content={"error": "list plans failed",
+                                                 "status": r.status_code,
+                                                 "body": r.text[:500]})
+                body = r.json()
+                items = body.get("items", body if isinstance(body, list) else [])
+                for item in items:
+                    if isinstance(item, dict) and item.get("id"):
+                        plan_ids.append(item["id"])
+                cursor = body.get("next_cursor") if isinstance(body, dict) else None
+                if not cursor:
+                    break
+            for pid in plan_ids:
+                pr = await client.post(
+                    f"{forecast_base}/v1/replenishment/plans/{pid}/approve",
+                    headers=headers, json={"approved_by": "dashboards-user"},
+                )
+                if pr.status_code in (200, 201, 204):
+                    approved += 1
+                else:
+                    failed += 1
+                    errors.append(f"{pid}: {pr.status_code}")
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=502,
+                            content={"error": "forecast unreachable",
+                                     "detail": str(exc), "approved": approved,
+                                     "failed": failed})
+    return JSONResponse(content={"approved": approved, "failed": failed,
+                                 "errors": errors[:20]})
