@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic_settings import BaseSettings
 
 from app import db, queries
+from app.descriptions import MODULE_DESCRIPTIONS, PIPELINE_OVERVIEW
 from app.mock_erp_client import MockErpClient
 
 logger = logging.getLogger("dashboards")
@@ -102,6 +103,11 @@ def _module_neighbours(n: int) -> tuple[dict | None, dict | None]:
     return prev_m, next_m
 
 
+def _description_for(slug: str) -> dict[str, Any] | None:
+    """Получить русскоязычное описание модуля из descriptions.py."""
+    return MODULE_DESCRIPTIONS.get(slug)  # type: ignore[return-value]
+
+
 # ----- Healthcheck -------------------------------------------------------------
 
 
@@ -134,10 +140,22 @@ async def index(request: Request) -> HTMLResponse:
             metric = ("mock-erp products", m0_products)
         else:
             metric = _index_metric_for(m["n"])
-        cards.append({**m, "metric_label": metric[0], "metric_value": metric[1]})
+        desc = MODULE_DESCRIPTIONS.get(m["slug"])
+        card_desc = desc["card_short"] if desc else m["flow"]
+        cards.append({
+            **m,
+            "metric_label": metric[0],
+            "metric_value": metric[1],
+            "card_desc": card_desc,
+        })
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "modules": cards, "title": "e_zoo pipeline dashboards"},
+        {
+            "request": request,
+            "modules": cards,
+            "title": "e_zoo pipeline dashboards",
+            "pipeline_overview": PIPELINE_OVERVIEW,
+        },
     )
 
 
@@ -295,8 +313,16 @@ async def m0(request: Request) -> HTMLResponse:
 
     samples = [
         {"title": "Pipeline movement summary (entity × source × pulled × loss)",
+         "caption": (
+             "Сравнение количества сущностей в источнике (mock-erp) и в "
+             "public.* PostgreSQL после загрузки M1. Loss = source − pulled. "
+             "MVP skip — сущность пока не реплицируется в M1."),
          "rows": pipeline_rows},
         {"title": f"Received POs sample (top {len(received_sample)})",
+         "caption": (
+             f"Последние {len(received_sample)} заказов, которые mock-erp принял "
+             "от Channel Router (M7) через POST /api/v1/orders. Замыкает loop "
+             "pipeline."),
          "rows": received_sample},
     ]
 
@@ -306,10 +332,19 @@ async def m0(request: Request) -> HTMLResponse:
         {
             "request": request,
             "module": MODULES[0],
+            "description": _description_for("m0"),
             "title": "M0 Mock ERP (Source)",
             "input_title": "mock-erp /api/v1/{entity} — initial inventory (16 entities)",
+            "input_summary": (
+                "Mock-erp генерирует данные сам (Faker, 90 дней истории) и не "
+                "имеет внешних входов. Также принимает входящие заказы от M7 "
+                "в POST /api/v1/orders."),
             "input_counts": input_counts,
             "output_title": "orders.purchase_orders ↔ mock-erp /orders/received",
+            "output_summary": (
+                "Mock-erp отдаёт 16 типов сущностей через REST для M1 и "
+                "принимает обратно заказы от M7. Match-проверка ниже сверяет "
+                "число sent POs с числом полученных в mock-erp."),
             "output_counts": output_counts,
             "samples": samples,
             "extras": extras,
@@ -371,26 +406,51 @@ async def m1(request: Request) -> HTMLResponse:
         )
 
     prev_m, next_m = _module_neighbours(1)
+    pulled_total = sum(int(v) for _, v in output_counts if str(v).isdigit())
     return templates.TemplateResponse(
         "module.html",
         {
             "request": request,
             "module": MODULES[1],
+            "description": _description_for("m1"),
             "title": "M1 Source Adapter",
             "input_title": "mock-erp REST API (16 entities)",
+            "input_summary": (
+                "Cron 02:00 ходит за 16 сущностями в mock-erp по HTTP "
+                "(GET /api/v1/{entity}, X-API-Key). В таблице ниже — что есть "
+                "в источнике в данный момент."),
             "input_counts": input_counts,
             "output_title": "public.* tables (PostgreSQL)",
+            "output_summary": (
+                f"После последнего успешного load M1 положил {pulled_total:,} "
+                "строк во все public.* таблицы (см. разбивку ниже). Snapshot "
+                "pointer flip-нут атомарно — потребители видят консистентный "
+                "снимок."),
             "output_counts": output_counts,
             "samples": [
-                {"title": "Recent products (top 10 by updated_at)", "rows": products},
-                {"title": "Recent receipt_line (top 10 by event_time DESC)", "rows": receipts},
-                {"title": "Recent loads (top 5)", "rows": recent_loads},
+                {"title": "Recent products (top 10 by updated_at)",
+                 "caption": "10 последних загруженных продуктов в public.products (по полю updated_at).",
+                 "rows": products},
+                {"title": "Recent receipt_line (top 10 by event_time DESC)",
+                 "caption": "10 последних строк продаж в public.receipt_line (партиционированная таблица фактов).",
+                 "rows": receipts},
+                {"title": "Recent loads (top 5)",
+                 "caption": "5 последних запусков load-джобы M1 со статусом и длительностью.",
+                 "rows": recent_loads},
             ],
             "extras": [
                 {"title": "Source delta — сколько прошло через M1 (mock-erp → public.*)",
+                 "caption": (
+                     "Разница между числом строк в mock-erp и в public.*. "
+                     "✅ — потерь нет, ⚠️ — частичная загрузка, ⛔ — таблица "
+                     "не загружалась (или MVP skip)."),
                  "kv": delta_kv},
-                {"title": "Latest load run", "kv": _kv_from_row(latest_load)},
-                {"title": "Snapshot pointer", "kv": _kv_from_row(pointer)},
+                {"title": "Latest load run",
+                 "caption": "Последний run load-джобы M1 (status, started_at, finished_at, lines_total/failed).",
+                 "kv": _kv_from_row(latest_load)},
+                {"title": "Snapshot pointer",
+                 "caption": "Текущий snapshot_pointer — current_load_id, на который смотрят downstream-консумеры (M2).",
+                 "kv": _kv_from_row(pointer)},
             ],
             "prev": prev_m,
             "next": next_m,
@@ -423,18 +483,40 @@ async def m2(request: Request) -> HTMLResponse:
         {
             "request": request,
             "module": MODULES[2],
+            "description": _description_for("m2"),
             "title": "M2 ETL Validation",
             "input_title": "source-adapter HTTP API",
+            "input_summary": (
+                "Cron 02:30 ходит за 16 сущностями в API M1 (NDJSON streaming, "
+                "JWT с ролью x-flow-etl). Все берутся из одного "
+                "source_load_id для атомарного snapshot."),
             "input_counts": input_counts,
             "output_title": "marts.* schema",
+            "output_summary": (
+                "После успешной валидации построены 5 mart-таблиц + reject_log. "
+                "Atomic flip всех mart выполнен в одной транзакции — "
+                "потребители (M3, M4, M5) видят консистентный набор."),
             "output_counts": output_counts,
             "samples": [
-                {"title": "Top 10 mart_demand_history by qty_sold DESC", "rows": top_demand},
-                {"title": "Top 10 mart_calculation_input by on_hand DESC", "rows": top_calc},
-                {"title": "Recent etl_runs (top 5)", "rows": recent_runs},
+                {"title": "Top 10 mart_demand_history by qty_sold DESC",
+                 "caption": (
+                     "Топ-10 строк mart_demand_history с наибольшим qty_sold. "
+                     "Используется Forecast (M5) для построения SMA30."),
+                 "rows": top_demand},
+                {"title": "Top 10 mart_calculation_input by on_hand DESC",
+                 "caption": (
+                     "Топ-10 строк mart_calculation_input с наибольшим "
+                     "on_hand (текущий остаток). Pre-resolved supply_spec и "
+                     "order_rule готовы для калькулятора M5."),
+                 "rows": top_calc},
+                {"title": "Recent etl_runs (top 5)",
+                 "caption": "5 последних запусков ETL-джобы (status, source_load_id, finished_at, длительность).",
+                 "rows": recent_runs},
             ],
             "extras": [
-                {"title": "Latest etl_run", "kv": _kv_from_row(latest_run)},
+                {"title": "Latest etl_run",
+                 "caption": "Последний run M2 — status, source_load_id (который снимок M1 он читал), длительность.",
+                 "kv": _kv_from_row(latest_run)},
             ],
             "prev": prev_m,
             "next": next_m,
@@ -487,19 +569,40 @@ async def m3(request: Request) -> HTMLResponse:
     versions = db.fetch_all(queries.M3_QUERIES["marts_versions"])
 
     prev_m, next_m = _module_neighbours(3)
+    samples_with_captions: list[dict[str, Any]] = []
+    for s in samples:
+        s_with = dict(s)
+        s_with.setdefault(
+            "caption",
+            "Реальный ответ data-marts API через JWT it-read (limit=5).",
+        )
+        samples_with_captions.append(s_with)
+    samples_with_captions.append({
+        "title": "Recent committed etl_runs (top 10)",
+        "caption": (
+            "10 последних committed etl_runs — каждая запись соответствует "
+            "версии mart, доступной через API."),
+        "rows": versions,
+    })
     return templates.TemplateResponse(
         "module.html",
         {
             "request": request,
             "module": MODULES[3],
+            "description": _description_for("m3"),
             "title": "M3 Data Marts API",
             "input_title": "marts.* (read-only role mart_reader)",
+            "input_summary": (
+                "M3 не имеет своего ETL — только читает marts.* через DB role "
+                "mart_reader. Cache 60s для current snapshot уменьшает "
+                "повторные запросы по той же версии."),
             "input_counts": input_counts,
             "output_title": "HTTP /v1/marts/* (data-marts service)",
+            "output_summary": (
+                "Live-проверка endpoint'ов data-marts: status code, размер "
+                "тела ответа. NDJSON streaming с cursor-pagination + ETag."),
             "output_counts": output_counts,
-            "samples": samples + [
-                {"title": "Recent committed etl_runs (top 10)", "rows": versions},
-            ],
+            "samples": samples_with_captions,
             "extras": [],
             "prev": prev_m,
             "next": next_m,
@@ -542,21 +645,45 @@ async def m4(request: Request) -> HTMLResponse:
     ]
 
     prev_m, next_m = _module_neighbours(4)
+    extras_with_caption = list(extras)
+    if extras_with_caption:
+        extras_with_caption[0] = {
+            **extras_with_caption[0],
+            "caption": (
+                "Распределение product×location пар по бакетам Stock Days. "
+                "<7 дней — критично (риск out-of-stock), >90 дней — overstock."),
+        }
     return templates.TemplateResponse(
         "module.html",
         {
             "request": request,
             "module": MODULES[4],
+            "description": _description_for("m4"),
             "title": "M4 KPI Calibration",
             "input_title": "marts.* (demand history + calc input + scorecard)",
+            "input_summary": (
+                "Cron 04:00 читает напрямую из marts.* (без HTTP) — "
+                "consistency snapshot гарантирована atomic flip M2."),
             "input_counts": input_counts,
             "output_title": "kpi.kpi_snapshots + kpi.kpi_calibrations",
+            "output_summary": (
+                "Считаются три KPI (OSA, OTIF, Stock Days) для каждой пары "
+                "product×location. Hierarchical калибровки применяются по "
+                "приоритету: pair → location → supplier → category → global."),
             "output_counts": output_counts,
             "samples": [
-                {"title": "10 critical KPI (lowest values)", "rows": critical},
-                {"title": "kpi_calibrations (top 10)", "rows": calibrations},
+                {"title": "10 critical KPI (lowest values)",
+                 "caption": (
+                     "Топ-10 product×location пар с самыми низкими значениями "
+                     "KPI — кандидаты на немедленное пополнение или внимание."),
+                 "rows": critical},
+                {"title": "kpi_calibrations (top 10)",
+                 "caption": (
+                     "10 активных калибровок: scope (global/category/...), "
+                     "kpi_name, target value. Перебивают расчётные значения."),
+                 "rows": calibrations},
             ],
-            "extras": extras,
+            "extras": extras_with_caption,
             "prev": prev_m,
             "next": next_m,
         },
@@ -603,21 +730,53 @@ async def m5(request: Request) -> HTMLResponse:
     ]
 
     prev_m, next_m = _module_neighbours(5)
+    draft_count = sum(int(r["n"]) for r in plans_by_status if r.get("status") == "draft")
+    extras_with_captions = [
+        {
+            **extras[0],
+            "caption": (
+                "Итоги по всем forecasts в forecast.forecasts: число строк, "
+                "уникальных пар (product, location), статистика forecast_qty. "
+                "Алгоритм: SMA30 × DOW × WOY на 60 дней вперёд."),
+        },
+        {
+            **extras[1],
+            "caption": (
+                "Последний forecast_run — status, started_at, finished_at, "
+                "сколько пар обработано."),
+        },
+    ]
     return templates.TemplateResponse(
         "module.html",
         {
             "request": request,
             "module": MODULES[5],
+            "description": _description_for("m5"),
             "title": "M5 Forecast Engine",
             "input_title": "marts.* + kpi.kpi_snapshots (через DB read)",
+            "input_summary": (
+                "Cron 05:00 читает напрямую из marts.* и kpi.* через DB role "
+                "(без HTTP — производительность важна на больших фан-аутах). "
+                "Forecaster использует историю продаж за 90 дней."),
             "input_counts": input_counts,
             "output_title": "forecast.* schema",
+            "output_summary": (
+                f"Прогнозы записаны в forecast.forecasts ({forecasts_count} "
+                f"строк), а replenishment_plans ({plans_count} планов, в т.ч. "
+                f"{draft_count} в status=draft) ждут одобрения admin'ом перед "
+                "конвертацией в Order Builder (M6)."),
             "output_counts": output_counts,
             "samples": [
-                {"title": "Top 10 forecasts by forecast_qty DESC", "rows": top_forecasts},
-                {"title": "Recent forecast_runs (top 5)", "rows": recent_runs},
+                {"title": "Top 10 forecasts by forecast_qty DESC",
+                 "caption": (
+                     "Топ-10 прогнозов с наибольшим forecast_qty за 60 дней — "
+                     "это пары product×location с самым высоким ожидаемым спросом."),
+                 "rows": top_forecasts},
+                {"title": "Recent forecast_runs (top 5)",
+                 "caption": "5 последних запусков forecast-джобы с длительностью и числом пар.",
+                 "rows": recent_runs},
             ],
-            "extras": extras,
+            "extras": extras_with_captions,
             "prev": prev_m,
             "next": next_m,
         },
@@ -655,14 +814,34 @@ async def m6(request: Request) -> HTMLResponse:
         {
             "request": request,
             "module": MODULES[6],
+            "description": _description_for("m6"),
             "title": "M6 Order Builder",
             "input_title": "forecast.replenishment_plans WHERE status='approved'",
+            "input_summary": (
+                f"Cron 06:00 подбирает approved-планы (всего одобрено: "
+                f"{approved} из {plans_total}). Только approved конвертируются "
+                "в полноценные purchase orders — draft и rejected пропускаются."),
             "input_counts": input_counts,
             "output_title": "orders.purchase_orders + orders.po_lines",
+            "output_summary": (
+                f"После последнего run: {po_total} purchase_orders, "
+                f"{lines_total} po_lines (одна на каждую позицию заказа). "
+                "PO numbers формата PO-YYYYMMDD-NNNNNN, delivery_date = "
+                "today + supplier.lead_time_days."),
             "output_counts": output_counts,
             "samples": [
-                {"title": "Recent purchase_orders (top 10)", "rows": recent_pos},
-                {"title": "Recent po_lines (top 10)", "rows": recent_lines},
+                {"title": "Recent purchase_orders (top 10)",
+                 "caption": (
+                     "10 последних созданных POs со статусом, supplier_id, "
+                     "total_qty, delivery_date. Status workflow: draft → "
+                     "ready_to_send → sent → confirmed_by_erp → received."),
+                 "rows": recent_pos},
+                {"title": "Recent po_lines (top 10)",
+                 "caption": (
+                     "10 последних строк заказов: product_id, qty, unit_price "
+                     "(резолвится через pricing waterfall — products → "
+                     "supplier.default → NULL)."),
+                 "rows": recent_lines},
             ],
             "extras": [],
             "prev": prev_m,
@@ -719,15 +898,37 @@ async def m7(request: Request) -> HTMLResponse:
         {
             "request": request,
             "module": MODULES[7],
+            "description": _description_for("m7"),
             "title": "M7 Channel Router",
             "input_title": "orders.purchase_orders WHERE status='ready_to_send'",
+            "input_summary": (
+                f"Cron 06:30 подбирает POs со status=ready_to_send "
+                f"({ready} штук готовы к отправке). Per-PO транзакция с "
+                "SELECT FOR UPDATE — конкурентность безопасна."),
             "input_counts": input_counts,
             "output_title": "channels.send_attempts + POST к mock-erp",
+            "output_summary": (
+                f"Всего {attempts_total} попыток отправки в журнале "
+                "send_attempts. Успешные (status=success) переводят PO в "
+                "sent; mock-erp принимает заказы через POST /api/v1/orders "
+                "и возвращает их через /orders/received."),
             "output_counts": output_counts,
             "samples": [
-                {"title": "Recent send_attempts (top 10)", "rows": recent_attempts},
-                {"title": "supplier_channel_config (top 10)", "rows": supplier_configs},
-                {"title": "mock-erp /api/v1/orders/received (top 5)", "rows": received_sample},
+                {"title": "Recent send_attempts (top 10)",
+                 "caption": (
+                     "10 последних попыток отправки: po_id, status "
+                     "(success/error), HTTP-код ответа ERP, длительность."),
+                 "rows": recent_attempts},
+                {"title": "supplier_channel_config (top 10)",
+                 "caption": (
+                     "Конфиги каналов отправки по supplier'ам: endpoint URL, "
+                     "тип авторизации (api_key / jwt / oauth2), формат body."),
+                 "rows": supplier_configs},
+                {"title": "mock-erp /api/v1/orders/received (top 5)",
+                 "caption": (
+                     "Последние 5 принятых заказов в mock-erp — то, что "
+                     "реально дошло до ERP клиента. Замыкает loop pipeline."),
+                 "rows": received_sample},
             ],
             "extras": [],
             "prev": prev_m,

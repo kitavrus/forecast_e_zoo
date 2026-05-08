@@ -3,9 +3,36 @@
 <h2>{{ module.emoji }} {{ title }}</h2>
 <p style="color: #6b7280;">{{ module.flow }}</p>
 
+{% if description %}
+<section class="module-description">
+    <h3 class="md-heading">📋 {{ description.title }} — что делает модуль</h3>
+    <div class="md-grid">
+        <div class="md-block">
+            <div class="md-label">🎯 Назначение</div>
+            <div class="md-body">{{ description.purpose }}</div>
+        </div>
+        <div class="md-block">
+            <div class="md-label">📥 Откуда берёт данные</div>
+            <div class="md-body"><strong>{{ description.input_from }}.</strong> {{ description.input_desc }}</div>
+        </div>
+        <div class="md-block">
+            <div class="md-label">⚙️ Что делает с данными</div>
+            <div class="md-body">{{ description.process }}</div>
+        </div>
+        <div class="md-block">
+            <div class="md-label">📤 Куда передаёт дальше</div>
+            <div class="md-body"><strong>{{ description.output_to }}.</strong> {{ description.output_desc }}</div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
 <div class="io-row">
     <div class="io-card input">
-        <h3>⬅️ Input — {{ input_title }}</h3>
+        <h3>📥 Откуда приходят данные (Input) — {{ input_title }}</h3>
+        {% if input_summary %}
+        <p class="io-summary">{{ input_summary }}</p>
+        {% endif %}
         <table class="kv">
             <thead><tr><th>Источник</th><th>Значение</th></tr></thead>
             <tbody>
@@ -17,7 +44,10 @@
         </table>
     </div>
     <div class="io-card output">
-        <h3>Output — {{ output_title }} ➡️</h3>
+        <h3>📤 Куда уходят данные (Output) — {{ output_title }}</h3>
+        {% if output_summary %}
+        <p class="io-summary">{{ output_summary }}</p>
+        {% endif %}
         <table class="kv">
             <thead><tr><th>Цель</th><th>Значение</th></tr></thead>
             <tbody>
@@ -33,6 +63,9 @@
 {% for extra in extras %}
 <div class="card" style="margin-top: 16px;">
     <h3>{{ extra.title }}</h3>
+    {% if extra.caption %}
+    <p class="caption">{{ extra.caption }}</p>
+    {% endif %}
     {% if extra.pre %}
     <pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.4;margin:0;">{{ extra.pre }}</pre>
     {% else %}
@@ -50,6 +83,9 @@
 {% for sample in samples %}
 <div class="card" style="margin-top: 16px;">
     <h3>{{ sample.title }}</h3>
+    {% if sample.caption %}
+    <p class="caption">{{ sample.caption }}</p>
+    {% endif %}
     {% if sample.rows and sample.rows|length > 0 %}
     <div style="overflow-x: auto;">
         <table>
@@ -76,6 +112,13 @@
     {% endif %}
 </div>
 {% endfor %}
+
+{% if description and description.next_step %}
+<div class="card next-step-card" style="margin-top: 16px;">
+    <h3>➡️ Следующий шаг</h3>
+    <p>{{ description.next_step }}</p>
+</div>
+{% endif %}
 
 <footer>
     <div>{% if prev %}<a href="/{{ prev.slug }}">← M{{ prev.n }} {{ prev.name }}</a>{% endif %}</div>

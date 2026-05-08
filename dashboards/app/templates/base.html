@@ -130,6 +130,91 @@
             background: #e5e7eb;
             color: #374151;
         }
+        /* Module description block (на /m{N} страницах) */
+        .module-description {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px 24px;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid #6366f1;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .module-description .md-heading {
+            margin: 0 0 16px 0;
+            font-size: 17px;
+            color: #1f2937;
+        }
+        .module-description .md-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 16px;
+        }
+        .module-description .md-block {
+            background: #f9fafb;
+            border-radius: 6px;
+            padding: 12px 14px;
+        }
+        .module-description .md-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #4f46e5;
+            margin-bottom: 6px;
+        }
+        .module-description .md-body {
+            font-size: 14px;
+            color: #1f2937;
+            line-height: 1.55;
+        }
+        /* Pipeline overview block (на index-странице) */
+        .pipeline-overview {
+            background: linear-gradient(135deg, #eef2ff 0%, #f0fdf4 100%);
+            border: 1px solid #c7d2fe;
+            border-radius: 8px;
+            padding: 18px 22px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #1f2937;
+        }
+        .pipeline-overview strong { color: #4338ca; }
+        /* Caption над таблицами */
+        .caption {
+            color: #6b7280;
+            font-size: 13px;
+            margin: 4px 0 10px;
+            font-style: italic;
+        }
+        /* Короткое summary под заголовком input/output card */
+        .io-summary {
+            color: #4b5563;
+            font-size: 13px;
+            margin: 6px 0 12px;
+            padding: 8px 10px;
+            background: #f9fafb;
+            border-radius: 4px;
+            line-height: 1.5;
+        }
+        /* Card для блока "Следующий шаг" */
+        .next-step-card {
+            border-left: 4px solid #10b981;
+            background: #f0fdf4;
+        }
+        .next-step-card p {
+            margin: 0;
+            font-size: 14px;
+            color: #065f46;
+        }
+        /* Описание под названием карточки на index */
+        .card-desc {
+            font-size: 13px;
+            color: #4b5563;
+            min-height: 52px;
+            line-height: 1.5;
+            margin-top: 6px;
+        }
     </style>
 </head>
 <body>
