@@ -130,6 +130,15 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 	orderRuleH := handler.NewOrderRuleHandler(repo, snapSvc)
 	supplySpecH := handler.NewSupplySpecHandler(repo, snapSvc)
 	locationStockH := handler.NewLocationStockSnapshotHandler(repo, snapSvc)
+	// Phase 13 — 8 missing entity handlers.
+	productBarcodesH := handler.NewProductBarcodesHandler(repo, snapSvc)
+	promoH := handler.NewPromoHandler(repo, snapSvc)
+	supplyPlanH := handler.NewSupplyPlanHandler(repo, snapSvc)
+	storeAssortmentH := handler.NewStoreAssortmentHandler(repo, snapSvc)
+	lifecycleEventsH := handler.NewLifecycleEventsHandler(repo, snapSvc)
+	masterChangeLogH := handler.NewMasterChangeLogHandler(repo, snapSvc)
+	stockMovementH := handler.NewStockMovementHandler(repo, snapSvc)
+	supplierStockH := handler.NewSupplierStockSnapshotHandler(repo, snapSvc)
 	var exportsH *handler.ExportsHandler
 	if exportsSvc != nil {
 		exportsH = handler.NewExportsHandler(exportsSvc)
@@ -171,6 +180,14 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		OrderRuleHandler:             orderRuleH,
 		SupplySpecHandler:            supplySpecH,
 		LocationStockSnapshotHandler: locationStockH,
+		ProductBarcodesHandler:       productBarcodesH,
+		PromoHandler:                 promoH,
+		SupplyPlanHandler:            supplyPlanH,
+		StoreAssortmentHandler:       storeAssortmentH,
+		LifecycleEventsHandler:       lifecycleEventsH,
+		MasterChangeLogHandler:       masterChangeLogH,
+		StockMovementHandler:         stockMovementH,
+		SupplierStockSnapshotHandler: supplierStockH,
 		ExportsHandler:               exportsH,
 		AdminLoadsHandler:            adminH,
 		AuditMiddleware:              auditWriter.Middleware(),

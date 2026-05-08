@@ -33,6 +33,16 @@ type LoaderAPI interface {
 	UpsertLocationStockSnapshot(ctx context.Context, tx pgx.Tx, row LocationStockSnapshotRow, loadID uuid.UUID) error
 	InsertReceiptLineBatch(ctx context.Context, tx pgx.Tx, batch []ReceiptLineRow, loadID uuid.UUID) error
 
+	// Phase 13 — 8 missing entity loaders.
+	UpsertProductBarcode(ctx context.Context, tx pgx.Tx, row ProductBarcodeRow, loadID uuid.UUID) error
+	UpsertPromo(ctx context.Context, tx pgx.Tx, row PromoRow, loadID uuid.UUID) error
+	UpsertSupplyPlan(ctx context.Context, tx pgx.Tx, row SupplyPlanRow, loadID uuid.UUID) error
+	UpsertStoreAssortment(ctx context.Context, tx pgx.Tx, row StoreAssortmentRow, loadID uuid.UUID) error
+	InsertLifecycleEventBatch(ctx context.Context, tx pgx.Tx, batch []LifecycleEventRow, loadID uuid.UUID) error
+	InsertMasterChangeLogBatch(ctx context.Context, tx pgx.Tx, batch []MasterChangeLogRow, loadID uuid.UUID) error
+	InsertStockMovementBatch(ctx context.Context, tx pgx.Tx, batch []StockMovementRow, loadID uuid.UUID) error
+	InsertSupplierStockSnapshotBatch(ctx context.Context, tx pgx.Tx, batch []SupplierStockSnapshotRow, loadID uuid.UUID) error
+
 	BeginTx(ctx context.Context) (pgx.Tx, error)
 }
 

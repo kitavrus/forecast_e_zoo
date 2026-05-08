@@ -49,6 +49,19 @@ var expectedQueries = []string{
 	"audit_access_select",
 	// partitions
 	"partitions_create_month",
+	// upserts (loader phase 13: 8 missing entities)
+	"upsert_product_barcodes",
+	"upsert_promo",
+	"upsert_supply_plan",
+	"upsert_store_assortment",
+	"upsert_order_rule",
+	"upsert_supply_spec",
+	"upsert_location_stock_snapshot",
+	// append-only inserts
+	"insert_master_change_log",
+	"insert_store_assortment_lifecycle_events",
+	"insert_stock_movement",
+	"insert_supplier_stock_snapshot",
 }
 
 func TestEmbed_AllExpectedFilesPresent(t *testing.T) {

@@ -252,5 +252,50 @@ func (m *mockRepo) UpsertLocationStockSnapshot(_ context.Context, _ pgx.Tx, _ re
 	return nil
 }
 
+// Phase 13 — 8 missing entity loaders. Минимальные mock-реализации
+// (тесты loader-pipeline проверяют только products/receipt_line —
+// прочие entity по умолчанию пустые в reader-mock).
+
+func (m *mockRepo) UpsertProductBarcode(_ context.Context, _ pgx.Tx, _ repository.ProductBarcodeRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) UpsertPromo(_ context.Context, _ pgx.Tx, _ repository.PromoRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) UpsertSupplyPlan(_ context.Context, _ pgx.Tx, _ repository.SupplyPlanRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) UpsertStoreAssortment(_ context.Context, _ pgx.Tx, _ repository.StoreAssortmentRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) InsertLifecycleEventBatch(_ context.Context, _ pgx.Tx, _ []repository.LifecycleEventRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) InsertMasterChangeLogBatch(_ context.Context, _ pgx.Tx, _ []repository.MasterChangeLogRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) InsertStockMovementBatch(_ context.Context, _ pgx.Tx, _ []repository.StockMovementRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+func (m *mockRepo) InsertSupplierStockSnapshotBatch(_ context.Context, _ pgx.Tx, _ []repository.SupplierStockSnapshotRow, _ uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+
 // _ used in TestLoader_FlipFailure_MarksFailed to construct typed errors.
 var _ = errors.New

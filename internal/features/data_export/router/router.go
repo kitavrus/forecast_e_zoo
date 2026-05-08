@@ -25,10 +25,20 @@ type Deps struct {
 	AdminLoadsHandler            *handler.AdminLoadsHandler
 	AuditMiddleware              fiber.Handler
 
+	// Phase 13 — 8 missing entity handlers (полный 16/16 ingest).
+	ProductBarcodesHandler        *handler.ProductBarcodesHandler
+	PromoHandler                  *handler.PromoHandler
+	SupplyPlanHandler             *handler.SupplyPlanHandler
+	StoreAssortmentHandler        *handler.StoreAssortmentHandler
+	LifecycleEventsHandler        *handler.LifecycleEventsHandler
+	MasterChangeLogHandler        *handler.MasterChangeLogHandler
+	StockMovementHandler          *handler.StockMovementHandler
+	SupplierStockSnapshotHandler  *handler.SupplierStockSnapshotHandler
+
 	// MetricsHandler — Prometheus /metrics. Если nil, маршрут не регистрируется.
 	MetricsHandler fiber.Handler
 
-	// NotImplemented — placeholder для прочих 14 entity (Phase 13).
+	// NotImplemented — placeholder для оставшихся entity (если есть).
 	NotImplemented handler.NotImplementedHandlers
 }
 
@@ -60,7 +70,11 @@ func Register(app *fiber.App, deps Deps) {
 	if deps.ProductsHandler != nil {
 		v1.Get("/products", deps.ProductsHandler.Get, readRoles)
 	}
-	v1.Get("/product_barcodes", deps.NotImplemented.ProductBarcodes(), readRoles)
+	if deps.ProductBarcodesHandler != nil {
+		v1.Get("/product_barcodes", deps.ProductBarcodesHandler.Get, readRoles)
+	} else {
+		v1.Get("/product_barcodes", deps.NotImplemented.ProductBarcodes(), readRoles)
+	}
 	if deps.CategoryHandler != nil {
 		v1.Get("/category", deps.CategoryHandler.Get, readRoles)
 	} else {
@@ -76,21 +90,41 @@ func Register(app *fiber.App, deps Deps) {
 	} else {
 		v1.Get("/supplier", deps.NotImplemented.Supplier(), readRoles)
 	}
-	v1.Get("/store_assortment", deps.NotImplemented.StoreAssortment(), readRoles)
-	v1.Get("/store_assortment/lifecycle_events", deps.NotImplemented.StoreAssortmentLifecycle(), readRoles)
-	v1.Get("/master_change_log", deps.NotImplemented.MasterChangeLog(), readRoles)
+	if deps.StoreAssortmentHandler != nil {
+		v1.Get("/store_assortment", deps.StoreAssortmentHandler.Get, readRoles)
+	} else {
+		v1.Get("/store_assortment", deps.NotImplemented.StoreAssortment(), readRoles)
+	}
+	if deps.LifecycleEventsHandler != nil {
+		v1.Get("/store_assortment/lifecycle_events", deps.LifecycleEventsHandler.Get, readRoles)
+	} else {
+		v1.Get("/store_assortment/lifecycle_events", deps.NotImplemented.StoreAssortmentLifecycle(), readRoles)
+	}
+	if deps.MasterChangeLogHandler != nil {
+		v1.Get("/master_change_log", deps.MasterChangeLogHandler.Get, readRoles)
+	} else {
+		v1.Get("/master_change_log", deps.NotImplemented.MasterChangeLog(), readRoles)
+	}
 	if deps.SupplySpecHandler != nil {
 		v1.Get("/supply_spec", deps.SupplySpecHandler.Get, readRoles)
 	} else {
 		v1.Get("/supply_spec", deps.NotImplemented.SupplySpec(), readRoles)
 	}
-	v1.Get("/promo", deps.NotImplemented.Promo(), readRoles)
+	if deps.PromoHandler != nil {
+		v1.Get("/promo", deps.PromoHandler.Get, readRoles)
+	} else {
+		v1.Get("/promo", deps.NotImplemented.Promo(), readRoles)
+	}
 	if deps.OrderRuleHandler != nil {
 		v1.Get("/order_rule", deps.OrderRuleHandler.Get, readRoles)
 	} else {
 		v1.Get("/order_rule", deps.NotImplemented.OrderRule(), readRoles)
 	}
-	v1.Get("/supply_plan", deps.NotImplemented.SupplyPlan(), readRoles)
+	if deps.SupplyPlanHandler != nil {
+		v1.Get("/supply_plan", deps.SupplyPlanHandler.Get, readRoles)
+	} else {
+		v1.Get("/supply_plan", deps.NotImplemented.SupplyPlan(), readRoles)
+	}
 
 	// Facts.
 	if deps.ReceiptLineHandler != nil {
@@ -101,8 +135,16 @@ func Register(app *fiber.App, deps Deps) {
 	} else {
 		v1.Get("/location_stock_snapshot", deps.NotImplemented.LocationStockSnapshot(), readRoles)
 	}
-	v1.Get("/stock_movement", deps.NotImplemented.StockMovement(), readRoles)
-	v1.Get("/supplier_stock_snapshot", deps.NotImplemented.SupplierStockSnapshot(), readRoles)
+	if deps.StockMovementHandler != nil {
+		v1.Get("/stock_movement", deps.StockMovementHandler.Get, readRoles)
+	} else {
+		v1.Get("/stock_movement", deps.NotImplemented.StockMovement(), readRoles)
+	}
+	if deps.SupplierStockSnapshotHandler != nil {
+		v1.Get("/supplier_stock_snapshot", deps.SupplierStockSnapshotHandler.Get, readRoles)
+	} else {
+		v1.Get("/supplier_stock_snapshot", deps.NotImplemented.SupplierStockSnapshot(), readRoles)
+	}
 
 	// Exports.
 	if deps.ExportsHandler != nil {

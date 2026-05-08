@@ -232,6 +232,32 @@ func (l *Loader) runPipeline(ctx context.Context, loadID uuid.UUID, progress map
 		return err
 	}
 
+	// --- 2.2 Phase 13: оставшиеся master ---
+	// product_barcodes — FK на products.
+	if err := l.loadProductBarcodes(ctx, loadID, progress["product_barcodes"], state); err != nil {
+		return err
+	}
+	// promo — FK на location + products.
+	if err := l.loadPromo(ctx, loadID, progress["promo"], state); err != nil {
+		return err
+	}
+	// supply_plan — FK на location + products + supplier.
+	if err := l.loadSupplyPlan(ctx, loadID, progress["supply_plan"], state); err != nil {
+		return err
+	}
+	// store_assortment — FK на location + products.
+	if err := l.loadStoreAssortment(ctx, loadID, progress["store_assortment"], state); err != nil {
+		return err
+	}
+	// store_assortment_lifecycle_events — FK на location + products. Append-only.
+	if err := l.loadLifecycleEvents(ctx, loadID, progress["store_assortment_lifecycle_events"], state); err != nil {
+		return err
+	}
+	// master_change_log — append-only журнал, ссылок на конкретные entities нет (entity_pk JSON).
+	if err := l.loadMasterChangeLog(ctx, loadID, progress["master_change_log"], state); err != nil {
+		return err
+	}
+
 	// --- 3. Facts (после всех master) ---
 	// receipt_line ссылается на products + location.
 	if err := l.loadReceiptLine(ctx, loadID, progress["receipt_line"], state); err != nil {
@@ -241,7 +267,12 @@ func (l *Loader) runPipeline(ctx context.Context, loadID uuid.UUID, progress map
 	if err := l.loadLocationStockSnapshot(ctx, loadID, progress["location_stock_snapshot"], state); err != nil {
 		return err
 	}
-	// supplier_stock_snapshot — optional: если ERP вернул [] — не считаем ошибкой.
+	// stock_movement ссылается на products + location.
+	if err := l.loadStockMovement(ctx, loadID, progress["stock_movement"], state); err != nil {
+		return err
+	}
+	// supplier_stock_snapshot — теперь real INSERT (FK на supplier через app-level
+	// проверку; в схеме partition table FK не поддерживает).
 	if err := l.loadSupplierStockSnapshot(ctx, loadID, progress["supplier_stock_snapshot"], state); err != nil {
 		return err
 	}
@@ -381,8 +412,10 @@ func (l *Loader) loadReceiptLine(ctx context.Context, loadID uuid.UUID, p *Entit
 	return flush()
 }
 
-// loadSupplierStockSnapshot — optional. Пустой ответ — OK, не валим load.
-func (l *Loader) loadSupplierStockSnapshot(ctx context.Context, _ uuid.UUID, p *EntityProgress, _ *validation.State) error {
+// loadSupplierStockSnapshot — fact (партиционированный по event_date),
+// зависит от supplier (app-level — partition tables не поддерживают FK).
+// Оставлен tolerant: если ERP недоступен, лог и пропуск (optional).
+func (l *Loader) loadSupplierStockSnapshot(ctx context.Context, loadID uuid.UUID, p *EntityProgress, state *validation.State) error {
 	it, err := l.reader.ReadSupplierStockSnapshot(ctx, l.dateFrom, l.dateTo)
 	if err != nil {
 		// Optional entity — лог, но не fail.
@@ -390,10 +423,61 @@ func (l *Loader) loadSupplierStockSnapshot(ctx context.Context, _ uuid.UUID, p *
 		return nil
 	}
 	defer func() { _ = it.Close() }()
-	for it.Next(ctx) {
-		p.LinesTotal++
+
+	const batchSize = 1000
+	batch := make([]repository.SupplierStockSnapshotRow, 0, batchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		tx, err := l.repo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		if err := l.repo.InsertSupplierStockSnapshotBatch(ctx, tx, batch, loadID); err != nil {
+			_ = tx.Rollback(ctx)
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
 	}
-	return nil
+
+	for it.Next(ctx) {
+		e := it.Item()
+		p.LinesTotal++
+		payload := map[string]any{"qty_available": e.QtyAvailable, "event_date": e.EventDate}
+		violations := l.engine.Check("supplier_stock_snapshot", payload, state)
+		if hasCritical(violations) {
+			p.LinesFailed++
+			pl, _ := json.Marshal(e)
+			ev, _ := json.Marshal(violations)
+			_ = l.repo.InsertReject(ctx, repository.RejectInput{
+				LoadID: loadID, Entity: "supplier_stock_snapshot", Severity: "error",
+				Payload: pl, Errors: ev,
+			})
+			continue
+		}
+		batch = append(batch, repository.SupplierStockSnapshotRow{
+			EventDate:    e.EventDate,
+			SupplierID:   e.SupplierID,
+			ProductID:    e.ProductID,
+			QtyAvailable: e.QtyAvailable,
+			AsOf:         e.AsOf,
+		})
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := it.Err(); err != nil {
+		return errorspkg.ErrERPUnavailable.Wrap(err)
+	}
+	return flush()
 }
 
 // loadGeneric — реальный UPSERT master-сущностей без сложной логики (category,
