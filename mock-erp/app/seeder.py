@@ -1,20 +1,30 @@
 """Faker-based deterministic seeder for mock-erp.
 
-Scale (defaults match the user's "Large" plan, but at SQLite-friendly volumes):
-    SEED_PRODUCTS  = 1000   products
-    SEED_LOCATIONS = 30     locations (mix of DC + STORE)
-    SEED_SUPPLIERS = 50     suppliers
-    SEED_DAYS      = 365    days of history
+Realistic E2E test profile (defaults):
+    SEED_PRODUCTS  = 200    products
+    SEED_LOCATIONS = 10     locations (mix of DC + STORE)
+    SEED_SUPPLIERS = 20     suppliers
+    SEED_DAYS      = 180    days of history
 
-Resulting row counts at defaults (≈ figures):
-    receipt_line               ~ 220 000   (30 stores × 365d × ~20 tx/d)
-    location_stock_snapshot    ~  31 000   (1000p × 30loc × ~1.04 weekly)*
-    stock_movement             ~ 110 000   (~10 mov / loc / day)
-    supplier_stock_snapshot    ~   2 600   (50 suppliers × ~52 weeks)
-    *to keep SQLite happy we sample products per location.
+Tuning knobs (additive — control demand density + stock pressure to ensure
+forecast generates non-empty replenishment_plans):
+    SEED_TRANSACTIONS_PER_PAIR_PER_DAY  = 5     mean Poisson lambda for receipts/day
+    SEED_INITIAL_STOCK_DAYS_OF_DEMAND   = 14    initial stock = demand × N
+    SEED_ORDER_RULE_COVERAGE_PCT        = 100   % of locations with order_rule
+    SEED_SUPPLY_SPEC_COVERAGE_PCT       = 100   % of products with ≥1 supply_spec
+    SEED_LEAD_TIME_MIN_DAYS             = 7     supply_spec.lead_time_days lower bound
+    SEED_LEAD_TIME_MAX_DAYS             = 21    supply_spec.lead_time_days upper bound
+    SEED_DAILY_DEMAND_MIN               = 1     base daily demand per pair lower
+    SEED_DAILY_DEMAND_MAX               = 20    base daily demand per pair upper
+
+Resulting row counts at default realistic profile (≈):
+    receipt_line               ~ 1.8M    (200p × 9 stores × 180d × 5 tx/d, Poisson)
+    location_stock_snapshot    ~ 41 760  (200p × 10loc × 26 weeks × decay)
+    supply_spec                ~ 200     (100% products × 1 supplier each)
+    order_rule                 ~ 10      (100% locations)
 
 Smoke run (SEED_PRODUCTS=10 SEED_LOCATIONS=2 SEED_DAYS=7 SEED_SUPPLIERS=3):
-    products: 10, barcodes: ~20, supply_spec: ~20, supply_plan ≤ 30 etc.
+    keeps everything intact for fast CI smoke.
 """
 from __future__ import annotations
 
@@ -109,10 +119,22 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-SEED_PRODUCTS = _env_int("SEED_PRODUCTS", 1000)
-SEED_LOCATIONS = _env_int("SEED_LOCATIONS", 30)
-SEED_SUPPLIERS = _env_int("SEED_SUPPLIERS", 50)
-SEED_DAYS = _env_int("SEED_DAYS", 365)
+# Scale knobs (compatible with previous defaults at 1000/30/365/50, but realistic
+# E2E profile recommends 200/10/20/180).
+SEED_PRODUCTS = _env_int("SEED_PRODUCTS", 200)
+SEED_LOCATIONS = _env_int("SEED_LOCATIONS", 10)
+SEED_SUPPLIERS = _env_int("SEED_SUPPLIERS", 20)
+SEED_DAYS = _env_int("SEED_DAYS", 180)
+
+# Tuning knobs.
+SEED_TRANSACTIONS_PER_PAIR_PER_DAY = _env_int("SEED_TRANSACTIONS_PER_PAIR_PER_DAY", 5)
+SEED_INITIAL_STOCK_DAYS_OF_DEMAND = _env_int("SEED_INITIAL_STOCK_DAYS_OF_DEMAND", 14)
+SEED_ORDER_RULE_COVERAGE_PCT = _env_int("SEED_ORDER_RULE_COVERAGE_PCT", 100)
+SEED_SUPPLY_SPEC_COVERAGE_PCT = _env_int("SEED_SUPPLY_SPEC_COVERAGE_PCT", 100)
+SEED_LEAD_TIME_MIN_DAYS = _env_int("SEED_LEAD_TIME_MIN_DAYS", 7)
+SEED_LEAD_TIME_MAX_DAYS = _env_int("SEED_LEAD_TIME_MAX_DAYS", 21)
+SEED_DAILY_DEMAND_MIN = _env_int("SEED_DAILY_DEMAND_MIN", 1)
+SEED_DAILY_DEMAND_MAX = _env_int("SEED_DAILY_DEMAND_MAX", 20)
 
 
 # Reference time = "now" anchor. Use a fixed point so re-runs are deterministic.
@@ -252,18 +274,31 @@ def seed_products(
 
 def seed_supply_spec(
     session: Session, products: list[Product], suppliers: list[Supplier]
-) -> list[SupplySpec]:
+) -> tuple[list[SupplySpec], dict[str, str]]:
+    """Generate supply_spec for SUPPLY_SPEC_COVERAGE_PCT % of products.
+
+    Returns (rows, primary_supplier_per_product). The primary supplier mapping
+    is used by other generators so that every product has a canonical supplier
+    (needed to keep mart_calculation_input.supplier_id non-NULL via the
+    supplier_fallback CTE in ETL).
+    """
     rows: list[SupplySpec] = []
-    for p in products:
-        # 1–2 suppliers per product
+    primary: dict[str, str] = {}
+    coverage = max(0, min(100, SEED_SUPPLY_SPEC_COVERAGE_PCT))
+    n_covered = (len(products) * coverage) // 100
+    covered = random.sample(products, k=n_covered) if n_covered > 0 else []
+    for p in covered:
+        # 1–2 suppliers per product (primary + optional secondary).
         chosen = random.sample(suppliers, k=min(len(suppliers), random.randint(1, 2)))
+        primary[p.id] = chosen[0].id
         for s in chosen:
+            lead_time = random.randint(SEED_LEAD_TIME_MIN_DAYS, SEED_LEAD_TIME_MAX_DAYS)
             rows.append(
                 SupplySpec(
                     product_id=p.id,
                     supplier_id=s.id,
                     pack_qty=random.choice([6, 12, 24]),
-                    lead_time_days=random.choice([3, 5, 7, 10, 14]),
+                    lead_time_days=lead_time,
                     min_order_qty=random.choice([12, 24, 48, 96]),
                     multiple=random.choice([6, 12, 24]),
                     valid_from=ANCHOR - timedelta(days=120),
@@ -273,8 +308,12 @@ def seed_supply_spec(
     for i in range(0, len(rows), BATCH):
         session.add_all(rows[i : i + BATCH])
         session.commit()
-    print(f"supply_spec: {len(rows)}", flush=True)
-    return rows
+    print(
+        f"supply_spec: {len(rows)} "
+        f"({coverage}% coverage → {n_covered}/{len(products)} products)",
+        flush=True,
+    )
+    return rows, primary
 
 
 def seed_promo(
@@ -309,8 +348,12 @@ def seed_promo(
 
 
 def seed_order_rule(session: Session, locations: list[Location]) -> int:
+    """Order rules per location. Coverage in % via SEED_ORDER_RULE_COVERAGE_PCT."""
+    coverage = max(0, min(100, SEED_ORDER_RULE_COVERAGE_PCT))
+    n_covered = (len(locations) * coverage) // 100
+    chosen_locs = random.sample(locations, k=n_covered) if n_covered > 0 else []
     rows: list[OrderRule] = []
-    for i, loc in enumerate(locations):
+    for i, loc in enumerate(chosen_locs):
         rows.append(
             OrderRule(
                 id=f"RULE-{i + 1:04d}",
@@ -322,7 +365,11 @@ def seed_order_rule(session: Session, locations: list[Location]) -> int:
         )
     session.add_all(rows)
     session.commit()
-    print(f"order_rule: {len(rows)}", flush=True)
+    print(
+        f"order_rule: {len(rows)} "
+        f"({coverage}% coverage → {n_covered}/{len(locations)} locations)",
+        flush=True,
+    )
     return len(rows)
 
 
@@ -426,10 +473,38 @@ def seed_master_change_log(session: Session, products: list[Product]) -> int:
     return len(rows)
 
 
+def _build_demand_map(
+    products: list[Product], locations: list[Location]
+) -> dict[tuple[str, str], int]:
+    """Per (product_id, location_id) base daily demand sample.
+
+    Each pair gets a fixed lambda in [SEED_DAILY_DEMAND_MIN, SEED_DAILY_DEMAND_MAX].
+    Used both to drive Poisson tx_count in receipt_line generation and to seed
+    initial location_stock_snapshot at `lambda × SEED_INITIAL_STOCK_DAYS_OF_DEMAND`.
+    """
+    demand: dict[tuple[str, str], int] = {}
+    stores = [loc for loc in locations if loc.type == "STORE"]
+    for p in products:
+        for loc in stores:
+            demand[(p.id, loc.id)] = random.randint(
+                SEED_DAILY_DEMAND_MIN, SEED_DAILY_DEMAND_MAX
+            )
+    return demand
+
+
 def seed_receipt_lines(
-    session: Session, products: list[Product], locations: list[Location]
+    session: Session,
+    products: list[Product],
+    locations: list[Location],
+    demand_map: dict[tuple[str, str], int],
 ) -> int:
-    """Per-day, per-store receipts. ~20 transactions/day/store, 1–4 lines each."""
+    """Per-day, per-(product, store) receipts.
+
+    Number of transactions per pair per day ~ Poisson(lambda) where lambda is
+    base_daily_demand × (SEED_TRANSACTIONS_PER_PAIR_PER_DAY / 5). At default
+    SEED_TRANSACTIONS_PER_PAIR_PER_DAY=5 the rate equals base_daily_demand
+    (one receipt = one unit sold, qty=1 keeps math clean).
+    """
     stores = [loc for loc in locations if loc.type == "STORE"]
     if not stores:
         return 0
@@ -439,26 +514,37 @@ def seed_receipt_lines(
     products_active = [p for p in products if p.is_active]
     if not products_active:
         products_active = products
+
+    rate_factor = SEED_TRANSACTIONS_PER_PAIR_PER_DAY / 5.0
+    receipt_seq = 0
     for d in range(SEED_DAYS):
         day = ANCHOR - timedelta(days=SEED_DAYS - 1 - d)
         for store in stores:
-            tx_count = random.randint(15, 25)
-            for tx in range(tx_count):
-                receipt_id = f"R-{day.strftime('%Y%m%d')}-{store.id}-{tx:04d}"
-                event_time = day.replace(
-                    hour=random.randint(9, 21),
-                    minute=random.randint(0, 59),
+            for p in products_active:
+                lam = demand_map.get((p.id, store.id), 0) * rate_factor
+                if lam <= 0:
+                    continue
+                # Sample tx_count from Poisson — using random.gauss as cheap
+                # approximation: int(max(0, gauss(lam, sqrt(lam)))). Acceptable
+                # for synthetic data; full numpy avoidance keeps Docker layer thin.
+                tx_count = max(
+                    0,
+                    int(round(random.gauss(lam, max(0.5, lam ** 0.5)))),
                 )
-                line_count = random.randint(1, 4)
-                for _ in range(line_count):
-                    p = random.choice(products_active)
+                for tx in range(tx_count):
+                    receipt_seq += 1
+                    receipt_id = f"R-{day.strftime('%Y%m%d')}-{store.id}-{receipt_seq:06d}"
+                    event_time = day.replace(
+                        hour=random.randint(9, 21),
+                        minute=random.randint(0, 59),
+                    )
                     base_price = round(20.0 + random.random() * 1500.0, 2)
                     buf.append(
                         ReceiptLine(
                             receipt_id=receipt_id,
                             location_id=store.id,
                             product_id=p.id,
-                            qty=random.randint(1, 3),
+                            qty=1,
                             price=base_price,
                             event_time=event_time,
                             event_date=day,
@@ -531,39 +617,65 @@ def seed_stock_movements(
 
 
 def seed_location_stock_snapshot(
-    session: Session, products: list[Product], locations: list[Location]
+    session: Session,
+    products: list[Product],
+    locations: list[Location],
+    demand_map: dict[tuple[str, str], int],
 ) -> int:
-    """Weekly snapshots, sampled subset of products per location to keep volume sane."""
+    """Latest snapshot = base_daily_demand × INITIAL_STOCK_DAYS_OF_DEMAND.
+
+    Generates only one snapshot per (product, location) at ANCHOR (latest as_of).
+    The forecast pipeline reads the latest LocationStockSnapshot to compute
+    on_hand → low stock relative to demand triggers replenishment_plans.
+    """
+    stores = [loc for loc in locations if loc.type == "STORE"]
+    dcs = [loc for loc in locations if loc.type == "DC"]
     total = 0
     BATCH = 5000
     buf: list[LocationStockSnapshot] = []
-    sample_size = min(len(products), max(50, SEED_PRODUCTS // 3))
-    week_count = max(1, SEED_DAYS // 7)
-    for w in range(week_count):
-        day = ANCHOR - timedelta(days=(week_count - 1 - w) * 7)
-        for loc in locations:
-            sample = random.sample(products, k=sample_size)
-            for p in sample:
-                buf.append(
-                    LocationStockSnapshot(
-                        event_date=day,
-                        location_id=loc.id,
-                        product_id=p.id,
-                        qty_on_hand=random.randint(0, 200),
-                        qty_reserved=random.randint(0, 10),
-                        as_of=day.replace(hour=3),
-                    )
+
+    # Stores: cover ALL products with demand-driven stock (low on purpose).
+    for p in products:
+        for loc in stores:
+            base = demand_map.get((p.id, loc.id), 0)
+            qty = base * SEED_INITIAL_STOCK_DAYS_OF_DEMAND
+            buf.append(
+                LocationStockSnapshot(
+                    event_date=ANCHOR,
+                    location_id=loc.id,
+                    product_id=p.id,
+                    qty_on_hand=qty,
+                    qty_reserved=0,
+                    as_of=ANCHOR.replace(hour=3),
                 )
-                total += 1
-                if len(buf) >= BATCH:
-                    session.add_all(buf)
-                    session.commit()
-                    buf = []
-        if (w + 1) % 8 == 0:
-            print(
-                f"  location_stock_snapshot progress: week {w + 1}/{week_count}, total={total}",
-                flush=True,
             )
+            total += 1
+            if len(buf) >= BATCH:
+                session.add_all(buf)
+                session.commit()
+                buf = []
+
+    # DCs: random buffer stock for a random subset of products (legacy behaviour).
+    sample_size = min(len(products), max(50, SEED_PRODUCTS // 3))
+    for loc in dcs:
+        sample = random.sample(products, k=sample_size)
+        for p in sample:
+            buf.append(
+                LocationStockSnapshot(
+                    event_date=ANCHOR,
+                    location_id=loc.id,
+                    product_id=p.id,
+                    qty_on_hand=random.randint(50, 500),
+                    qty_reserved=random.randint(0, 10),
+                    as_of=ANCHOR.replace(hour=3),
+                )
+            )
+            total += 1
+            if len(buf) >= BATCH:
+                session.add_all(buf)
+                session.commit()
+                buf = []
+
     if buf:
         session.add_all(buf)
         session.commit()
@@ -608,8 +720,19 @@ def seed_supplier_stock_snapshot(
 
 def main() -> None:
     print(
-        f"mock-erp seeder: products={SEED_PRODUCTS}, locations={SEED_LOCATIONS}, "
+        "mock-erp seeder: "
+        f"products={SEED_PRODUCTS}, locations={SEED_LOCATIONS}, "
         f"suppliers={SEED_SUPPLIERS}, days={SEED_DAYS}",
+        flush=True,
+    )
+    print(
+        "  tuning: "
+        f"tx/pair/day={SEED_TRANSACTIONS_PER_PAIR_PER_DAY}, "
+        f"init_stock_days={SEED_INITIAL_STOCK_DAYS_OF_DEMAND}, "
+        f"order_rule_pct={SEED_ORDER_RULE_COVERAGE_PCT}, "
+        f"supply_spec_pct={SEED_SUPPLY_SPEC_COVERAGE_PCT}, "
+        f"lead_time={SEED_LEAD_TIME_MIN_DAYS}-{SEED_LEAD_TIME_MAX_DAYS}d, "
+        f"demand={SEED_DAILY_DEMAND_MIN}-{SEED_DAILY_DEMAND_MAX}/day",
         flush=True,
     )
     init_db()
@@ -625,8 +748,9 @@ def main() -> None:
         seed_supply_plan(session, products, suppliers, locations)
         seed_store_assortment(session, products, locations)
         seed_master_change_log(session, products)
-        seed_receipt_lines(session, products, locations)
-        seed_location_stock_snapshot(session, products, locations)
+        demand_map = _build_demand_map(products, locations)
+        seed_receipt_lines(session, products, locations, demand_map)
+        seed_location_stock_snapshot(session, products, locations, demand_map)
         seed_stock_movements(session, products, locations)
         seed_supplier_stock_snapshot(session, products, suppliers)
     print("seeder: done", flush=True)
