@@ -13,7 +13,7 @@
         migrate-up-channels  migrate-down-channels \
         migrate-create \
         test-integration-etl test-integration-kpi \
-        e2e-up e2e-down seed-channel-configs
+        e2e-up e2e-down e2e-full seed-channel-configs
 
 # --- Сборка ---
 
@@ -187,6 +187,35 @@ e2e-up:
 
 e2e-down:
 	docker compose down -v
+
+# Полный прогон pipeline: cleanup → up → seed → E2E test → отчёт
+# Делает ВСЁ: создаёт тестовые данные в mock-erp (1000 products / 30 locations / 365 days / 50 suppliers
+# по умолчанию из .env), прогоняет через 7 микросервисов, отправляет PO обратно в mock-erp.
+# Длительность: ~1-3 мин на small scale (10/2/7/3), ~5-15 мин на realistic (100/5/90/15), ~30+ мин на full (1000/30/365/50).
+# Override scale через env vars: SEED_PRODUCTS=100 SEED_LOCATIONS=5 SEED_DAYS=90 SEED_SUPPLIERS=15 make e2e-full
+e2e-full:
+	@echo "==> [1/4] Cleanup previous state (docker compose down -v)..."
+	@docker compose down -v 2>&1 | tail -3 || true
+	@echo "==> [2/4] Bringing up stack with mock-erp seed (это займёт время — мок-ERP сидит данные)..."
+	@$(MAKE) e2e-up
+	@echo "==> [3/4] Running E2E pipeline test (8 stages: source-adapter → ETL → KPI → forecast → orders → channel-router → mock-erp received)..."
+	@bash tests/e2e/run.sh --skip-up
+	@echo ""
+	@echo "============================================================"
+	@echo "✅ E2E pipeline complete!"
+	@echo ""
+	@echo "  📊 Live dashboards:  http://localhost:8091/"
+	@echo "     • /m0 — Mock ERP (source data, received POs)"
+	@echo "     • /m1 — Source Adapter (public.* tables)"
+	@echo "     • /m2 — ETL (marts.*)"
+	@echo "     • /m3 — Data Marts API"
+	@echo "     • /m4 — KPI (OSA, OTIF, Stock Days)"
+	@echo "     • /m5 — Forecast (forecasts + replenishment_plans)"
+	@echo "     • /m6 — Order Builder (purchase_orders)"
+	@echo "     • /m7 — Channel Router (send_attempts)"
+	@echo ""
+	@echo "  🛑 To stop & cleanup:  make e2e-down"
+	@echo "============================================================"
 
 # Применяет seed_channel_configs.sql внутрь контейнера postgres.
 seed-channel-configs:
