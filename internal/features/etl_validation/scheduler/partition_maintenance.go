@@ -12,10 +12,20 @@ import (
 	"github.com/Kitavrus/e_zoo/internal/features/etl_validation/constants"
 )
 
-// PartitionMaintainer обеспечивает наличие партиций для текущего и следующего месяца.
+// PartitionMaintainer обеспечивает наличие партиций для исторического окна
+// (last factsHistoryDays месяцев) и следующего месяца — синхронно с windows
+// ETL extractor (см. service/staging.go::factsHistoryDays = 365) и
+// source-adapter pull (см. internal/config.LoadFactsWindowDays).
 type PartitionMaintainer interface {
 	EnsureNextMonth(ctx context.Context) error
 }
+
+// historyMonthsBack — глубина исторического окна партиций (12 месяцев).
+// Совпадает с factsHistoryDays / LoadFactsWindowDays (≈365 дней).
+// Без этого партиции покрывают только current+next month, и upsert
+// в mart_demand_history падает с "no partition of relation found"
+// для исторических event_date (баг 2026-05-08).
+const historyMonthsBack = 12
 
 // partitionMaintainer реализует DDL CREATE TABLE IF NOT EXISTS PARTITION OF.
 type partitionMaintainer struct {
@@ -34,13 +44,15 @@ func NewPartitionMaintainer(pool *pgxpool.Pool) PartitionMaintainer {
 	}
 }
 
-// EnsureNextMonth создаёт партиции для текущего и следующего месяца, если их нет.
+// EnsureNextMonth создаёт партиции для исторического окна (last
+// historyMonthsBack месяцев) + текущего + следующего месяца, если их нет.
 //
 // Имена партиций — `<base>_<YYYY>_<MM>`, диапазон — [first day, first day next month).
+// Идемпотентно (CREATE TABLE IF NOT EXISTS).
 func (m *partitionMaintainer) EnsureNextMonth(ctx context.Context) error {
 	now := m.now()
 	for _, base := range m.tables {
-		for monthShift := 0; monthShift <= 1; monthShift++ {
+		for monthShift := -historyMonthsBack; monthShift <= 1; monthShift++ {
 			start := time.Date(now.Year(), now.Month()+time.Month(monthShift), 1, 0, 0, 0, 0, time.UTC)
 			end := start.AddDate(0, 1, 0)
 			suffix := fmt.Sprintf("%04d_%02d", start.Year(), int(start.Month()))

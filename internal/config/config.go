@@ -92,6 +92,13 @@ type Config struct {
 	// Stale load recovery (Q-015 / ADR-015)
 	StaleLoadTimeout time.Duration `envconfig:"SOURCE_ADAPTER_STALE_LOAD_TIMEOUT" default:"1h"`
 
+	// Loader facts window (см. loader.NewLoader). По умолчанию 365 дней —
+	// обеспечивает покрытие истории, нужное KPI/Forecast/Order Builder.
+	// Раньше был хардкод 7 дней — баг: при свежем seed mock-erp 90 дней
+	// данных оставалось пересечение всего 7 дней с window'ом, поэтому
+	// receipt_line/stock_movement приезжали почти пустыми.
+	LoadFactsWindowDays int `envconfig:"LOAD_FACTS_WINDOW_DAYS" default:"365"`
+
 	// Misc
 	AppEnv         string `envconfig:"APP_ENV" default:"dev"`
 	PrometheusPath string `envconfig:"PROMETHEUS_PATH" default:"/metrics"`

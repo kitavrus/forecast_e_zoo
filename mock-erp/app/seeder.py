@@ -497,6 +497,15 @@ def seed_days(conn: psycopg.Connection, count: int) -> dict[str, Any]:
     Updates seeder_state.current_date += count.
     Uses COPY FROM for receipt_line / stock_movement / location_stock_snapshot /
     supplier_stock_snapshot.
+
+    Past-only invariant: event_date НИКОГДА не уходит в будущее относительно
+    today. Если запрошенный count выходит за today (cur_date + count - 1 >
+    today), он усекается до оставшегося past-окна. Гарантирует пересечение
+    с source-adapter pull window [today-LOAD_FACTS_WINDOW_DAYS, today] и
+    ETL extractor window [today-365, today] — иначе ETL/marts получают 0
+    строк (баг 2026-05-08: events в будущем → ETL партиции
+    mart_demand_history покрывают только current+next month, INSERT падал
+    с "no partition of relation found").
     """
     if count <= 0:
         raise ValueError("count must be > 0")
@@ -511,6 +520,27 @@ def seed_days(conn: psycopg.Connection, count: int) -> dict[str, Any]:
             raise RuntimeError("master not seeded yet — call /admin/seed/initial first")
         cur_date: datetime = row[1]
         days_done: int = row[2]
+
+    # Cap count so event_date stays in the past: cur_date + count - 1 <= today.
+    # cur_date поступает из psycopg как tz-aware (TIMESTAMPTZ); приводим к
+    # naive UTC midnight, чтобы дальнейшая арифметика timedelta совпадала с
+    # _today() (тоже naive UTC midnight) и не порождала tz-mismatch.
+    if cur_date.tzinfo is not None:
+        cur_date = cur_date.astimezone(timezone.utc).replace(tzinfo=None)
+    cur_date = datetime(cur_date.year, cur_date.month, cur_date.day)
+    today = _today()
+    max_count = max(0, (today - cur_date).days + 1)
+    if max_count == 0:
+        raise RuntimeError(
+            f"seed_days: current_seed_date={cur_date.date()} already at/after today "
+            f"({today.date()}); call /admin/seed/reset to wipe + re-seed"
+        )
+    if count > max_count:
+        log.info(
+            "seed_days: requested count=%d clamped to %d (past-only window invariant)",
+            count, max_count,
+        )
+        count = max_count
 
     products, locations, suppliers, demand_map = _load_master(conn)
     products_active = [p for p in products if p["is_active"]] or products

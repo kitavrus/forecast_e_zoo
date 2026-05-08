@@ -118,6 +118,14 @@ func New(ctx context.Context, cfg *etlconfig.Config, log *slog.Logger) (*App, er
 
 	// Scheduler.
 	maint := scheduler.NewPartitionMaintainer(deps.Pool)
+	// Eager maintain on startup: иначе manual POST /admin/etl-runs до первого
+	// cron tick падает с "no partition of relation found", если события
+	// приходят из исторического окна (e2e seed today-90..today). Cron tick
+	// (30 2 * * *) в обычной эксплуатации покроет этот edge case, но e2e
+	// и dev-перезапуски не ждут тика. Fail-soft: лог и продолжаем.
+	if merr := maint.EnsureNextMonth(ctx); merr != nil {
+		log.Warn("etlapp: partition maintenance on startup failed", "err", merr)
+	}
 	sch, err := scheduler.New(pipeline, maint, metricsRecorder, log, scheduler.Config{
 		CronExpr: cfg.CronSchedule,
 		Timezone: cfg.CronTimezone,

@@ -90,7 +90,16 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 
 	var ldr *loader.Loader
 	if r := buildSourceReader(cfg, log); r != nil {
-		ldr = loader.NewLoader(r, repo, engine, loader.Options{Logger: log})
+		// Окно facts: [today - LoadFactsWindowDays, today]. Default 365 дней
+		// (см. config.go) — нужно KPI/Forecast и закрывает свежий seed mock-erp.
+		now := time.Now().UTC()
+		dateTo := now
+		dateFrom := dateTo.AddDate(0, 0, -cfg.LoadFactsWindowDays)
+		ldr = loader.NewLoader(r, repo, engine, loader.Options{
+			Logger:   log,
+			DateFrom: dateFrom,
+			DateTo:   dateTo,
+		})
 	}
 
 	var sch *scheduler.Scheduler
