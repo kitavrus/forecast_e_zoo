@@ -196,9 +196,9 @@ e2e-down:
 e2e-full:
 	@echo "==> [1/4] Cleanup previous state (docker compose down -v)..."
 	@docker compose down -v 2>&1 | tail -3 || true
-	@echo "==> [2/4] Bringing up stack with mock-erp seed (это займёт время — мок-ERP сидит данные)..."
+	@echo "==> [2/4] Bringing up stack (mock-erp стартует пустым — данные сидятся в run.sh через on-demand API)..."
 	@$(MAKE) e2e-up
-	@echo "==> [3/4] Running E2E pipeline test (8 stages: source-adapter → ETL → KPI → forecast → orders → channel-router → mock-erp received)..."
+	@echo "==> [3/4] Running E2E pipeline test (seed + 8 stages: source-adapter → ETL → KPI → forecast → orders → channel-router → mock-erp received)..."
 	@bash tests/e2e/run.sh --skip-up
 	@echo ""
 	@echo "============================================================"

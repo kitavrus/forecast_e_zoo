@@ -142,6 +142,24 @@ ADMIN_JWT=$(go run ./tests/e2e/cmd/jwtgen \
 [[ -n "$ADMIN_JWT" ]] || log_fail "failed to generate JWT"
 log_ok "Step 0.5: JWT generated (issuer=admin-cli)"
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Step 0.6: seed mock-erp (on-demand seeder API)
+# Master bootstrap (idempotent) + N days of facts. SEED_DAYS из env (по умолчанию 90).
+# ──────────────────────────────────────────────────────────────────────────────
+SEED_DAYS_RUN="${SEED_DAYS:-90}"
+ERP_API_KEY_RUN="${MOCK_ERP_API_KEY:-test-api-key}"
+log_info "Step 0.6: mock-erp seed (initial + $SEED_DAYS_RUN days)"
+
+INITIAL_RESP=$(curl -fsS -X POST -H "X-API-Key: $ERP_API_KEY_RUN" \
+  "$MOCK_ERP/admin/seed/initial" || true)
+[[ -n "$INITIAL_RESP" ]] || log_fail "Step 0.6: seed/initial failed"
+log_ok "Step 0.6a: initial seed done — $(echo "$INITIAL_RESP" | jq -r '"products in master: ok, snapshots=" + (.total_stock_snapshots|tostring)')"
+
+DAYS_RESP=$(curl -fsS -X POST --max-time 1800 -H "X-API-Key: $ERP_API_KEY_RUN" \
+  "$MOCK_ERP/admin/seed/days?count=$SEED_DAYS_RUN" || true)
+[[ -n "$DAYS_RESP" ]] || log_fail "Step 0.6: seed/days?count=$SEED_DAYS_RUN failed"
+log_ok "Step 0.6b: $(echo "$DAYS_RESP" | jq -r '"days=" + (.days|tostring) + " receipts=" + (.receipts_added|tostring) + " movements=" + (.movements_added|tostring)')"
+
 PIPELINE_START=$(date +%s)
 
 # ──────────────────────────────────────────────────────────────────────────────
