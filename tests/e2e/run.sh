@@ -13,9 +13,17 @@
 # Требования: docker, jq, curl, go (для tests/e2e/cmd/jwtgen).
 set -euo pipefail
 
-# Подгружаем .env чтобы SEED_DAYS и др. совпадали с docker-compose mock-erp.
-[ -f .env ] && set -a && source .env && set +a
 
+# Подгружаем .env чтобы SEED_DAYS и др. совпадали с docker-compose mock-erp.
+# (Используем grep вместо source чтобы не споткнуться о комментарии .env.)
+if [ -f .env ]; then
+  while IFS='=' read -r key val; do
+    [ -z "$key" ] && continue
+    val="${val%%[[:space:]]\#*}"
+    val="${val%[[:space:]]}"
+    export "$key=$val"
+  done < <(grep -E '^[A-Z_][A-Z0-9_]*=' .env)
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT_DIR"
