@@ -1,0 +1,28 @@
+<details class="entity-spec">
+    <summary>📋 <code>{{ entity.name }}</code> — {{ entity.title.split('—', 1)[1].strip() if '—' in entity.title else entity.title }} ({{ entity.fields|length }} полей)</summary>
+    {% if entity.description %}
+    <p class="entity-spec-desc">{{ entity.description }}</p>
+    {% endif %}
+    <table class="entity-fields-table">
+        <thead>
+            <tr>
+                <th>Поле</th>
+                <th>Тип</th>
+                <th>Диапазон / формат</th>
+                <th>Пример</th>
+                <th>Назначение</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in entity.fields %}
+            <tr>
+                <td><code>{{ f.name }}</code></td>
+                <td><code>{{ f.type }}</code></td>
+                <td>{{ f.range }}</td>
+                <td><code>{{ f.example }}</code></td>
+                <td>{{ f.purpose }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</details>

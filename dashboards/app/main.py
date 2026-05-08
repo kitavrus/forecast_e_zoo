@@ -17,6 +17,7 @@ from pydantic_settings import BaseSettings
 
 from app import db, queries
 from app.descriptions import MODULE_DESCRIPTIONS, PIPELINE_OVERVIEW
+from app.field_specs import get_module_spec
 from app.mock_erp_client import MockErpClient
 
 logger = logging.getLogger("dashboards")
@@ -349,6 +350,7 @@ async def m0(request: Request) -> HTMLResponse:
             "output_counts": output_counts,
             "samples": samples,
             "extras": extras,
+            "field_specs": get_module_spec("m0"),
             "prev": prev_m,
             "next": next_m,
         },
@@ -453,6 +455,7 @@ async def m1(request: Request) -> HTMLResponse:
                  "caption": "Текущий snapshot_pointer — current_load_id, на который смотрят downstream-консумеры (M2).",
                  "kv": _kv_from_row(pointer)},
             ],
+            "field_specs": get_module_spec("m1"),
             "prev": prev_m,
             "next": next_m,
         },
@@ -519,6 +522,7 @@ async def m2(request: Request) -> HTMLResponse:
                  "caption": "Последний run M2 — status, source_load_id (который снимок M1 он читал), длительность.",
                  "kv": _kv_from_row(latest_run)},
             ],
+            "field_specs": get_module_spec("m2"),
             "prev": prev_m,
             "next": next_m,
         },
@@ -605,6 +609,7 @@ async def m3(request: Request) -> HTMLResponse:
             "output_counts": output_counts,
             "samples": samples_with_captions,
             "extras": [],
+            "field_specs": get_module_spec("m3"),
             "prev": prev_m,
             "next": next_m,
         },
@@ -685,6 +690,7 @@ async def m4(request: Request) -> HTMLResponse:
                  "rows": calibrations},
             ],
             "extras": extras_with_caption,
+            "field_specs": get_module_spec("m4"),
             "prev": prev_m,
             "next": next_m,
         },
@@ -778,6 +784,7 @@ async def m5(request: Request) -> HTMLResponse:
                  "rows": recent_runs},
             ],
             "extras": extras_with_captions,
+            "field_specs": get_module_spec("m5"),
             "prev": prev_m,
             "next": next_m,
         },
@@ -845,6 +852,7 @@ async def m6(request: Request) -> HTMLResponse:
                  "rows": recent_lines},
             ],
             "extras": [],
+            "field_specs": get_module_spec("m6"),
             "prev": prev_m,
             "next": next_m,
         },
@@ -932,6 +940,7 @@ async def m7(request: Request) -> HTMLResponse:
                  "rows": received_sample},
             ],
             "extras": [],
+            "field_specs": get_module_spec("m7"),
             "prev": prev_m,
             "next": next_m,
         },

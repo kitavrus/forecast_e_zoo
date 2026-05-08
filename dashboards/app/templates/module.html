@@ -42,6 +42,25 @@
             {% if not input_counts %}<tr><td colspan="2" class="empty">no data</td></tr>{% endif %}
             </tbody>
         </table>
+
+        {% if field_specs and (field_specs.input_full or field_specs.input_compact) %}
+        <div class="field-specs-section">
+            <div class="field-specs-heading">📋 Структура входных данных</div>
+            {% for entity in field_specs.input_full %}
+            {% include "partials/_entity_spec.html" %}
+            {% endfor %}
+            {% if field_specs.input_compact %}
+            <details class="entity-spec entity-spec-compact">
+                <summary><strong>Остальные сущности</strong> ({{ field_specs.input_compact|length }})</summary>
+                <ul class="entity-compact-list">
+                    {% for name, desc in field_specs.input_compact %}
+                    <li><code>{{ name }}</code> — {{ desc }}</li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
     <div class="io-card output">
         <h3>📤 Куда уходят данные (Output) — {{ output_title }}</h3>
@@ -57,6 +76,25 @@
             {% if not output_counts %}<tr><td colspan="2" class="empty">no data</td></tr>{% endif %}
             </tbody>
         </table>
+
+        {% if field_specs and (field_specs.output_full or field_specs.output_compact) %}
+        <div class="field-specs-section">
+            <div class="field-specs-heading">📋 Структура выходных данных</div>
+            {% for entity in field_specs.output_full %}
+            {% include "partials/_entity_spec.html" %}
+            {% endfor %}
+            {% if field_specs.output_compact %}
+            <details class="entity-spec entity-spec-compact">
+                <summary><strong>Остальные сущности</strong> ({{ field_specs.output_compact|length }})</summary>
+                <ul class="entity-compact-list">
+                    {% for name, desc in field_specs.output_compact %}
+                    <li><code>{{ name }}</code> — {{ desc }}</li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
 
