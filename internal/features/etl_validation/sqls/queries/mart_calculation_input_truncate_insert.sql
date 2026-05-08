@@ -13,8 +13,43 @@ INSERT INTO marts.mart_calculation_input (
     etl_run_id, source_load_id
 )
 WITH stock AS (
-    SELECT product_id, location_id, qty_on_hand AS on_hand, qty_in_transit AS in_transit
+    -- Dedup на стороне stock: source-adapter /v1/location_stock_snapshot отдаёт
+    -- snapshot-историю (после pagination fix — все исторические события), поэтому
+    -- одна пара (product_id, location_id) приходит несколько раз. PK
+    -- mart_calculation_input — (product_id, location_id), поэтому берём ОДНУ
+    -- строку детерминистично: предпочитаем самый высокий qty_on_hand
+    -- (proxy для последнего достоверного snapshot'а), при равенстве — больший
+    -- in_transit.
+    SELECT DISTINCT ON (product_id, location_id)
+           product_id,
+           location_id,
+           qty_on_hand    AS on_hand,
+           qty_in_transit AS in_transit
     FROM   pg_temp.stg_stock_on_hand
+    ORDER  BY product_id, location_id,
+              qty_on_hand DESC NULLS LAST,
+              qty_in_transit DESC NULLS LAST
+),
+-- supply_spec_dedup: одна строка на пару (product_id, location_id) с
+-- детерминистичным выбором поставщика. Приоритет — наименьший lead_time_days
+-- (самый быстрый поставщик), при равенстве — MIN(supplier_id) для стабильного
+-- порядка. Используется и в rule_priority (для prio=2), и в supplier_fallback
+-- (для случая, когда order_rule выигрывает по prio=1, но не отдаёт supplier).
+supply_spec_dedup AS (
+    SELECT DISTINCT ON (product_id, location_id)
+           supplier_id,
+           product_id,
+           COALESCE(location_id, '') AS location_id,
+           lead_time_days,
+           min_qty,
+           max_qty,
+           safety_stock
+    FROM   pg_temp.stg_supply_spec
+    WHERE  COALESCE(is_active, true)
+    ORDER  BY product_id,
+              COALESCE(location_id, ''),
+              lead_time_days ASC NULLS LAST,
+              supplier_id ASC
 ),
 rule_priority AS (
     -- order_rule имеет приоритет prio=1 (ADR-024).
@@ -33,39 +68,35 @@ rule_priority AS (
     FROM   pg_temp.stg_order_rule
     WHERE  COALESCE(is_active, true)
     UNION ALL
-    -- stg_supply_spec — composite-PK (supplier_id, product_id, location_id);
+    -- supply_spec_dedup гарантирует ОДНУ строку на (product_id, location_id);
     -- собираем синтетический rule_id для applicable_rule_id из триплета.
     SELECT product_id,
-           COALESCE(location_id, '')                                    AS location_id,
-           supplier_id || ':' || product_id || ':' ||
-               COALESCE(location_id, '')                                AS rule_id,
-           'supply_spec'::text                                          AS rule_kind,
-           NULL::text                                                   AS formula,
+           location_id,
+           supplier_id || ':' || product_id || ':' || location_id AS rule_id,
+           'supply_spec'::text                                    AS rule_kind,
+           NULL::text                                             AS formula,
            min_qty, max_qty, safety_stock,
-           NULL::int                                                    AS forecast_horizon_days,
-           NULL::numeric                                                AS daily_demand,
+           NULL::int                                              AS forecast_horizon_days,
+           NULL::numeric                                          AS daily_demand,
            supplier_id, lead_time_days,
            2 AS prio
-    FROM   pg_temp.stg_supply_spec
-    WHERE  COALESCE(is_active, true)
+    FROM   supply_spec_dedup
 ),
 chosen AS (
     SELECT DISTINCT ON (product_id, location_id) *
     FROM   rule_priority
     ORDER  BY product_id, location_id, prio
 ),
--- supplier_fallback берёт первый supply_spec (по supplier_id) для каждого
--- (product_id, location_id) — нужен, когда order_rule выигрывает приоритет, но
--- не отдаёт supplier_id/lead_time_days. Без этого fallback'а forecast не может
--- построить replenishment_plans (требуется supplier_id для сборки PO).
+-- supplier_fallback нужен, когда order_rule выигрывает приоритет, но не отдаёт
+-- supplier_id/lead_time_days. Без этого fallback'а forecast не может построить
+-- replenishment_plans (требуется supplier_id для сборки PO). Берём из
+-- уже дедуплицированного supply_spec_dedup.
 supplier_fallback AS (
-    SELECT DISTINCT ON (product_id, location_id)
-           product_id, location_id, supplier_id, lead_time_days,
-           min_qty AS ss_min_qty, max_qty AS ss_max_qty,
-           safety_stock AS ss_safety_stock
-    FROM   pg_temp.stg_supply_spec
-    WHERE  COALESCE(is_active, true)
-    ORDER  BY product_id, location_id, supplier_id
+    SELECT product_id, location_id, supplier_id, lead_time_days,
+           min_qty       AS ss_min_qty,
+           max_qty       AS ss_max_qty,
+           safety_stock  AS ss_safety_stock
+    FROM   supply_spec_dedup
 )
 SELECT s.product_id,
        s.location_id,
