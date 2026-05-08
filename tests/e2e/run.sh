@@ -89,7 +89,7 @@ CHANNELS="http://localhost:8087"
 MOCK_ERP="http://localhost:8090"
 
 POLL_INTERVAL_SEC=5
-POLL_TIMEOUT_SEC=600  # 10 min per stage
+POLL_TIMEOUT_SEC=1800  # 30 min per stage (large data: 3M+ receipt_line, ETL runs 10-15 min)
 
 # psql exec helper. -t -A → пустая строка → берём count.
 # stderr оставляем включённым — иначе ошибки SQL будут молчаливо проглочены.
