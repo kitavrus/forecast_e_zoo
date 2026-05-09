@@ -36,9 +36,9 @@
         <table class="kv kv-3col">
             <thead><tr><th>Источник</th><th>Значение</th><th>Описание</th></tr></thead>
             <tbody>
-            {% for label, value, desc_html, anchor in input_counts %}
+            {% for label, value, desc_html, anchor, entity_url in input_counts %}
                 <tr{% if anchor %} id="{{ anchor }}"{% endif %}>
-                    <td><code>{{ label }}</code></td>
+                    <td>{% if entity_url %}<a class="entity-row-link" href="{{ entity_url }}"><code>{{ label }}</code></a>{% else %}<code>{{ label }}</code>{% endif %}</td>
                     <td class="kv-value">{{ value }}</td>
                     <td class="kv-desc">{{ desc_html | safe }}</td>
                 </tr>
@@ -74,9 +74,9 @@
         <table class="kv kv-3col">
             <thead><tr><th>Цель</th><th>Значение</th><th>Описание</th></tr></thead>
             <tbody>
-            {% for label, value, desc_html, anchor in output_counts %}
+            {% for label, value, desc_html, anchor, entity_url in output_counts %}
                 <tr{% if anchor %} id="{{ anchor }}"{% endif %}>
-                    <td><code>{{ label }}</code></td>
+                    <td>{% if entity_url %}<a class="entity-row-link" href="{{ entity_url }}"><code>{{ label }}</code></a>{% else %}<code>{{ label }}</code>{% endif %}</td>
                     <td class="kv-value">{{ value }}</td>
                     <td class="kv-desc">{{ desc_html | safe }}</td>
                 </tr>
@@ -117,8 +117,12 @@
     {% else %}
     <table class="kv">
         <tbody>
-        {% for k, v in extra.kv %}
-            <tr><td>{{ k }}</td><td style="white-space: pre-wrap; font-family: monospace;">{{ v }}</td></tr>
+        {% for item in extra.kv %}
+            {% set url = item[2] if item|length > 2 else None %}
+            <tr>
+                <td>{% if url %}<a class="entity-row-link" href="{{ url }}"><code>{{ item[0] }}</code></a>{% else %}{{ item[0] }}{% endif %}</td>
+                <td style="white-space: pre-wrap; font-family: monospace;">{{ item[1] }}</td>
+            </tr>
         {% endfor %}
         </tbody>
     </table>
@@ -128,13 +132,21 @@
 
 {% for sample in samples %}
 <div class="card" style="margin-top: 16px;">
-    <h3>{{ sample.title }}</h3>
+    <div class="sample-head">
+        <h3>{{ sample.title }}</h3>
+        {% if sample.entity_key %}
+        <a class="entity-open-link"
+           href="/entity/{{ sample.entity_key[0] }}/{{ sample.entity_key[1] }}">
+            Открыть полный список с поиском →
+        </a>
+        {% endif %}
+    </div>
     {% if sample.caption %}
     <p class="caption">{{ sample.caption }}</p>
     {% endif %}
     {% if sample.rows and sample.rows|length > 0 %}
     <div style="overflow-x: auto;">
-        <table>
+        <table class="sample-table">
             <thead>
                 <tr>
                 {% for key in sample.rows[0].keys() %}
@@ -144,9 +156,17 @@
             </thead>
             <tbody>
             {% for row in sample.rows %}
-                <tr>
+                {% set row_url = sample.row_urls[loop.index0] if sample.row_urls and sample.row_urls|length > loop.index0 else None %}
+                {% set cell_map = sample.cell_urls[loop.index0] if sample.cell_urls and sample.cell_urls|length > loop.index0 else {} %}
+                <tr {% if row_url %}class="clickable" onclick="window.location='{{ row_url }}'"{% endif %}>
                 {% for key in sample.rows[0].keys() %}
-                    <td title="{{ row[key] }}">{{ row[key] if row[key] is not none else '—' }}</td>
+                    <td title="{{ row[key] }}">{% if row[key] is none -%}
+                        —
+                    {%- elif cell_map.get(key) -%}
+                        <a class="cell-link" href="{{ cell_map[key] }}" onclick="event.stopPropagation()">{{ row[key] }}</a>
+                    {%- else -%}
+                        {{ row[key] }}
+                    {%- endif %}</td>
                 {% endfor %}
                 </tr>
             {% endfor %}

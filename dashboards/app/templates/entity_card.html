@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="entity-breadcrumb">
+    <a href="/">Index</a>
+    <span class="sep">›</span>
+    <a href="/entity">Все сущности</a>
+    <span class="sep">›</span>
+    <a href="/entity/{{ entity.schema }}/{{ entity.table }}">{{ entity.friendly_name }}</a>
+    <span class="sep">›</span>
+    <span class="current">{{ pk_values | join(' / ') }}</span>
+</div>
+
+<h2>{{ entity.friendly_name }}
+    <span class="entity-tag"><code>{{ entity.schema }}.{{ entity.table }}</code></span>
+</h2>
+<p class="caption">
+    PK ({{ entity.pk | join(', ') }}): <code>{{ pk_values | join(' / ') }}</code>
+</p>
+
+<div class="card">
+    <table class="kv entity-card-kv">
+        <tbody>
+        {%- for k, v in row.items() %}
+            <tr>
+                <td>{{ k }}{% if k in entity.pk %} <span class="badge">PK</span>{% endif %}</td>
+                <td>{% if v is none -%}
+                    <span class="empty-inline">—</span>
+                    {%- elif v is mapping or v is sequence and v is not string -%}
+                    <pre class="json-block">{{ v | tojson(indent=2) }}</pre>
+                    {%- else -%}
+                    {{ v }}{% if k in fk_links %} <a class="fk-link" href="{{ fk_links[k] }}">→ открыть</a>{% endif %}
+                    {%- endif %}</td>
+            </tr>
+        {%- endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="pager" style="margin-top: 16px;">
+    <a class="pager-btn" href="/entity/{{ entity.schema }}/{{ entity.table }}">← К списку</a>
+</div>
+{% endblock %}

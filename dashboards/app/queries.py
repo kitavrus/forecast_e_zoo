@@ -95,13 +95,13 @@ M1_QUERIES = {
         WHERE id = 1
     """,
     "recent_products": """
-        SELECT id, sku, name, unit, is_active, updated_at
+        SELECT id, sku, name, category_id, unit, is_active, updated_at
         FROM products
         ORDER BY updated_at DESC NULLS LAST
         LIMIT 10
     """,
     "recent_receipts": """
-        SELECT receipt_id, product_id, location_id, qty, price, event_time
+        SELECT id, event_date, receipt_id, product_id, location_id, qty, price, event_time
         FROM receipt_line
         ORDER BY event_time DESC NULLS LAST
         LIMIT 10
@@ -155,7 +155,7 @@ M2_QUERIES = {
 
 M3_QUERIES = {
     "marts_versions": """
-        SELECT id AS run_id, status, target_mart, kind,
+        SELECT id, status, target_mart, kind,
                started_at, committed_at, lines_total
         FROM marts.etl_runs
         WHERE status = 'committed'
@@ -178,7 +178,7 @@ M4_QUERIES = {
     "calibrations_count": "SELECT COUNT(*) AS n FROM kpi.kpi_calibrations",
     "snapshots_count": "SELECT COUNT(*) AS n FROM kpi.kpi_snapshots",
     "critical_low": """
-        SELECT as_of_date, kpi_name, scope_type, scope_id, value
+        SELECT id, as_of_date, kpi_name, scope_type, scope_id, value
         FROM kpi.kpi_snapshots
         ORDER BY value ASC NULLS LAST
         LIMIT 10
@@ -193,7 +193,7 @@ M4_QUERIES = {
         WHERE kpi_name = 'stock_days'
     """,
     "calibrations": """
-        SELECT kpi_name, scope_type, scope_id, params, updated_at
+        SELECT id, kpi_name, scope_type, scope_id, params, updated_at
         FROM kpi.kpi_calibrations
         ORDER BY kpi_name, scope_type
         LIMIT 10
@@ -212,7 +212,7 @@ M5_QUERIES = {
         FROM forecast.forecasts
     """,
     "top_forecasts": """
-        SELECT product_id, location_id, forecast_date, forecast_qty,
+        SELECT run_id, product_id, location_id, forecast_date, forecast_qty,
                lower_bound, upper_bound, model_name
         FROM forecast.forecasts
         ORDER BY forecast_qty DESC NULLS LAST
@@ -259,7 +259,7 @@ M6_QUERIES = {
     "po_count": "SELECT COUNT(*) AS n FROM orders.purchase_orders",
     "po_lines_count": "SELECT COUNT(*) AS n FROM orders.po_lines",
     "recent_pos": """
-        SELECT po_number, plan_id, supplier_id, location_id, status,
+        SELECT id, po_number, plan_id, supplier_id, location_id, status,
                total_qty, total_amount, currency, created_at
         FROM orders.purchase_orders
         ORDER BY created_at DESC

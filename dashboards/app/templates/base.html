@@ -475,6 +475,229 @@
             max-height: 300px;
             overflow-y: auto;
         }
+        /* Entity browser (страницы /entity/*) */
+        .entity-breadcrumb {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        .entity-breadcrumb a { color: #4f46e5; text-decoration: none; }
+        .entity-breadcrumb a:hover { text-decoration: underline; }
+        .entity-breadcrumb .sep { margin: 0 6px; color: #9ca3af; }
+        .entity-breadcrumb .current { color: #1f2937; font-weight: 500; }
+        .entity-tag {
+            font-size: 13px;
+            font-weight: 400;
+            margin-left: 8px;
+            color: #6b7280;
+        }
+        .entity-tag code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #4338ca;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+        }
+        .entity-search {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin: 12px 0;
+        }
+        .entity-search input[type="text"] {
+            flex: 1;
+            max-width: 520px;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #fff;
+            color: #1f2937;
+        }
+        .entity-search input[type="text"]:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+        }
+        .entity-search button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #4f46e5;
+            background: #4f46e5;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .entity-search button:hover { background: #4338ca; }
+        .entity-clear {
+            color: #6b7280;
+            font-size: 13px;
+            text-decoration: none;
+        }
+        .entity-clear:hover { color: #1f2937; text-decoration: underline; }
+        .entity-meta {
+            font-size: 13px;
+            color: #4b5563;
+            margin: 8px 0 4px;
+        }
+        .entity-meta strong { color: #1f2937; }
+        .entity-table tr.clickable, .sample-table tr.clickable { cursor: pointer; }
+        .entity-table tr.clickable:hover, .sample-table tr.clickable:hover { background: #eef2ff; }
+        .entity-table tr.clickable:hover td, .sample-table tr.clickable:hover td { color: #1f2937; }
+        /* Cell-level FK link inside sample-table cells */
+        .sample-table .cell-link {
+            color: #4338ca;
+            text-decoration: none;
+            border-bottom: 1px dashed rgba(67, 56, 202, 0.4);
+            padding: 0 1px;
+        }
+        .sample-table .cell-link:hover {
+            color: #312e81;
+            border-bottom-color: #4338ca;
+            background: rgba(199, 210, 254, 0.45);
+            border-radius: 2px;
+        }
+        .pager {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 16px 0 8px;
+        }
+        .pager-btn {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            background: #fff;
+            color: #1f2937;
+            text-decoration: none;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .pager-btn:hover:not(.disabled) {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+        }
+        .pager-btn.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .pager-state {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .entity-card-kv { table-layout: fixed; }
+        .entity-card-kv td {
+            padding: 4px 10px;
+            vertical-align: top;
+            white-space: normal;
+            max-width: none;
+            overflow: visible;
+            text-overflow: clip;
+        }
+        .entity-card-kv td:first-child {
+            width: 24%;
+            color: #1f2937;
+            font-weight: 500;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12.5px;
+        }
+        .entity-card-kv td:last-child {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 13px;
+            word-break: break-word;
+        }
+        .entity-card-kv .empty-inline { color: #9ca3af; font-style: italic; }
+        .entity-card-kv .json-block {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 10px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.4;
+            margin: 0;
+            max-height: 280px;
+            overflow: auto;
+        }
+        .entity-card-kv .fk-link {
+            margin-left: 8px;
+            font-size: 12px;
+            color: #4f46e5;
+            text-decoration: none;
+        }
+        .entity-card-kv .fk-link:hover { text-decoration: underline; }
+        .entity-grid-list {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+        }
+        .entity-grid-list li {
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .entity-grid-list li:last-child { border-bottom: none; }
+        .entity-grid-list a {
+            color: #4f46e5;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .entity-grid-list a:hover { text-decoration: underline; }
+        .entity-grid-list code {
+            background: #f3f4f6;
+            padding: 1px 6px;
+            border-radius: 3px;
+            color: #4b5563;
+            font-size: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        /* Sample-таблицы (на /m{N}) — ссылка «Открыть полный список →» */
+        .sample-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .sample-head h3 { margin: 0; }
+        .entity-open-link {
+            color: #4f46e5;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .entity-open-link:hover { text-decoration: underline; }
+        /* Линковка строк input/output на странице модулей в /entity/* */
+        .kv.kv-3col .entity-row-link {
+            text-decoration: none;
+            color: inherit;
+            display: inline-block;
+        }
+        .kv.kv-3col .entity-row-link code {
+            background: #eef2ff;
+            color: #4338ca;
+            border: 1px solid #c7d2fe;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .kv.kv-3col .entity-row-link:hover code {
+            background: #c7d2fe;
+            border-color: #4f46e5;
+        }
+        .kv.kv-3col .entity-row-link::after {
+            content: " ↗";
+            font-family: inherit;
+            color: #4f46e5;
+            font-size: 11px;
+            margin-left: 2px;
+            opacity: 0.6;
+        }
+        .kv.kv-3col .entity-row-link:hover::after { opacity: 1; }
     </style>
 </head>
 <body>
@@ -490,6 +713,7 @@
         <a href="/m5">M5</a>
         <a href="/m6">M6</a>
         <a href="/m7">M7</a>
+        <a href="/entity">📋 Все сущности</a>
     </nav>
 </header>
 <main>

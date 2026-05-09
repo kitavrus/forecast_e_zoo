@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 import jwt as pyjwt
@@ -15,9 +17,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic_settings import BaseSettings
 
-from app import db, queries
+from app import db, entity_routes, queries
 from app.descriptions import MODULE_DESCRIPTIONS, PIPELINE_OVERVIEW
 from app.entity_descriptions import enrich_kv_rows
+from app.entity_registry import ENTITIES
 from app.field_specs import get_module_spec
 from app.mock_erp_client import MockErpClient
 
@@ -130,6 +133,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="e_zoo dashboards", version="0.1.0", lifespan=lifespan)
+app.include_router(entity_routes.router)
 
 
 # ----- Helpers -----------------------------------------------------------------
@@ -156,6 +160,198 @@ MODULES = [
 
 def _safe_count(table: str) -> int:
     return int(db.fetch_scalar(queries.count_sql(table), default=0) or 0)
+
+
+# ---- Entity-link helpers (для перелинковки kv-rows и sample-rows на /m{N}) ----
+
+_BARE_TABLE_LOOKUP: dict[str, tuple[str, str]] = {}
+for _key in ENTITIES:
+    _BARE_TABLE_LOOKUP.setdefault(_key[1], _key)
+
+_RE_SCHEMA_TABLE = re.compile(r"^([a-z_]+)\.([a-z_][a-z0-9_]*)\b")
+_RE_BARE_TABLE = re.compile(r"^([a-z_][a-z0-9_]*)(?:\s*\(.*\))?\s*$")
+_RE_HTTP_PATH = re.compile(r"^(?:GET\s+)?/v1/(?:marts/)?([a-z_][a-z0-9_]*)\b")
+
+
+def _resolve_entity_url(label: str) -> str | None:
+    """Map an input/output row label to /entity/{schema}/{table}, or None."""
+    if not label or label.startswith((" ", "\t")):
+        return None
+    s = label.strip()
+    m = _RE_SCHEMA_TABLE.match(s)
+    if m:
+        key = (m.group(1), m.group(2))
+        if key in ENTITIES:
+            return f"/entity/{key[0]}/{key[1]}"
+    m2 = _RE_BARE_TABLE.match(s)
+    if m2:
+        bare = m2.group(1)
+        if bare in _BARE_TABLE_LOOKUP:
+            sch, tbl = _BARE_TABLE_LOOKUP[bare]
+            return f"/entity/{sch}/{tbl}"
+    m3 = _RE_HTTP_PATH.match(s)
+    if m3:
+        bare = m3.group(1)
+        if bare in _BARE_TABLE_LOOKUP:
+            sch, tbl = _BARE_TABLE_LOOKUP[bare]
+            return f"/entity/{sch}/{tbl}"
+    return None
+
+
+def _link_kv_rows(rows: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
+    """Append entity URL (or None) к 4-tuple строкам после enrich_kv_rows."""
+    return [(*row, _resolve_entity_url(str(row[0]))) for row in rows]
+
+
+def _entity_url_or_none(schema: str, table: str) -> str | None:
+    return f"/entity/{schema}/{table}" if (schema, table) in ENTITIES else None
+
+
+# col_name → (schema, table, pk_col_or_None). pk_col is None → search via ?q=value.
+_COLUMN_FK_MAP: dict[str, tuple[str, str, str | None]] = {
+    # Public master refs.
+    "supplier_id":    ("public", "supplier", "id"),
+    "location_id":    ("public", "location", "id"),
+    "product_id":     ("public", "products", "id"),
+    "category_id":    ("public", "category", "id"),
+    # Pipeline cross-refs.
+    "load_id":        ("public", "loads", "load_id"),
+    "source_load_id": ("public", "loads", "load_id"),
+    "etl_run_id":     ("marts", "etl_runs", "id"),
+    "run_id":         ("forecast", "forecast_runs", "id"),
+    "plan_id":        ("forecast", "replenishment_plans", "id"),
+    # Composite-PK targets — search instead of detail.
+    "po_id":          ("orders", "purchase_orders", None),
+    "po_number":      ("orders", "purchase_orders", None),
+}
+
+
+def _cell_link(col: str, value: Any) -> str | None:
+    """Return cell-level FK URL for a known column name + non-null value, else None."""
+    if value is None:
+        return None
+    fk = _COLUMN_FK_MAP.get(col)
+    if fk is None:
+        return None
+    schema, table, pk_col = fk
+    if pk_col is None:
+        return f"/entity/{schema}/{table}?q={value}"
+    return f"/entity/{schema}/{table}/detail?{pk_col}={value}"
+
+
+def _flatten_received_sample(rows: list[Any]) -> list[dict[str, Any]]:
+    """Mock-erp /orders/received возвращает row с NULL top-level и body в `raw_body`.
+
+    Для UX-перелинковки достаём po_number/supplier_id/location_id из raw_body
+    и кладём их на top-level (если NULL). Безопасный fallback при ошибке парсинга.
+    """
+    import ast
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if not isinstance(r, dict):
+            out.append(r if isinstance(r, dict) else {"value": r})
+            continue
+        new = dict(r)
+        body_raw = new.get("raw_body")
+        body: dict[str, Any] = {}
+        if isinstance(body_raw, dict):
+            body = body_raw
+        elif isinstance(body_raw, str) and body_raw:
+            try:
+                parsed = ast.literal_eval(body_raw)
+            except (ValueError, SyntaxError):
+                parsed = None
+            if isinstance(parsed, dict):
+                body = parsed
+        for k in ("po_number", "supplier_id", "location_id"):
+            if new.get(k) is None and body.get(k) is not None:
+                new[k] = body[k]
+        out.append(new)
+    return out
+
+
+def _detail_url(entity_key: tuple[str, str], row: dict[str, Any]) -> str | None:
+    """Build /entity/{schema}/{table}/detail?<pk_cols> URL для row на основе registry."""
+    entity = ENTITIES.get(entity_key)
+    if entity is None:
+        return None
+    pairs: list[tuple[str, Any]] = []
+    for col in entity.pk:
+        val = row.get(col)
+        if val is None:
+            return None
+        pairs.append((col, val))
+    return (
+        f"/entity/{entity_key[0]}/{entity_key[1]}/detail?"
+        + urlencode([(k, str(v)) for k, v in pairs])
+    )
+
+
+def _sample_row_urls(
+    entity_key: tuple[str, str] | None,
+    rows: list[dict[str, Any]] | None,
+) -> list[str | None]:
+    """Per-row detail URL list (parallel к rows). None если PK нет в строке."""
+    if not rows:
+        return []
+    if not entity_key:
+        return [None] * len(rows)
+    return [_detail_url(entity_key, r) for r in rows]
+
+
+def _enrich_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Добавляет row_urls (по entity_key) и cell_urls (FK по именам колонок)."""
+    out: list[dict[str, Any]] = []
+    for s in samples:
+        s2 = dict(s)
+        rows = s2.get("rows") or []
+        if "row_urls" not in s2:
+            s2["row_urls"] = _sample_row_urls(s2.get("entity_key"), rows)
+        if "cell_urls" not in s2:
+            cu: list[dict[str, str]] = []
+            for r in rows:
+                d: dict[str, str] = {}
+                if isinstance(r, dict):
+                    for col, val in r.items():
+                        u = _cell_link(col, val)
+                        if u:
+                            d[col] = u
+                cu.append(d)
+            s2["cell_urls"] = cu
+        out.append(s2)
+    return out
+
+
+def _kv_linked(
+    row: dict[str, Any] | None,
+    *,
+    entity_key: tuple[str, str] | None = None,
+    fk_overrides: dict[str, tuple[str, str, str]] | None = None,
+) -> list[tuple[str, str, str | None]]:
+    """KV-строки (k, v, url): авто-линковка PK через entity_key + per-column FK overrides."""
+    if not row:
+        return [("(no rows)", "—", None)]
+    self_url: str | None = None
+    pk_cols: set[str] = set()
+    if entity_key and entity_key in ENTITIES:
+        pk_cols = set(ENTITIES[entity_key].pk)
+        self_url = _detail_url(entity_key, row)
+    overrides = fk_overrides or {}
+    out: list[tuple[str, str, str | None]] = []
+    for k, v in row.items():
+        v_str = str(v) if v is not None else "—"
+        url: str | None = None
+        if v is not None:
+            if k in overrides:
+                fk_schema, fk_table, fk_pk = overrides[k]
+                url = (
+                    f"/entity/{fk_schema}/{fk_table}/detail?"
+                    + urlencode({fk_pk: str(v)})
+                )
+            elif k in pk_cols:
+                url = self_url
+        out.append((k, v_str, url))
+    return out
 
 
 def _by_status(rows: list[dict[str, Any]]) -> list[tuple[str, int]]:
@@ -305,7 +501,9 @@ async def m0(request: Request) -> HTMLResponse:
 
     # 3. POs received from pipeline (via mock-erp).
     received_count = await client.get_received_orders_count()
-    received_sample = await client.get_received_orders_sample(limit=10)
+    received_sample = _flatten_received_sample(
+        await client.get_received_orders_sample(limit=10)
+    )
 
     # 4. Compare with our orders.purchase_orders (sent-status).
     po_sent = int(db.fetch_scalar(queries.M0_QUERIES["po_sent_count"], default=0) or 0)
@@ -376,6 +574,18 @@ async def m0(request: Request) -> HTMLResponse:
         ]},
     ]
 
+    pipeline_row_urls: list[str | None] = [
+        (f"/entity/public/{r['public_table']}"
+         if r.get("public_table") and r["public_table"] != "(MVP skip)"
+         else None)
+        for r in pipeline_rows
+    ]
+    received_row_urls: list[str | None] = [
+        (f"/entity/orders/purchase_orders?q={r['po_number']}"
+         if isinstance(r, dict) and r.get("po_number")
+         else None)
+        for r in received_sample
+    ]
     samples = [
         {"title": "Pipeline movement summary (entity × source × pulled × loss)",
          "caption": (
@@ -383,13 +593,15 @@ async def m0(request: Request) -> HTMLResponse:
              "public.* PostgreSQL после загрузки M1. Loss = source − pulled. "
              "Все 16 сущностей реплицируются (Phase 13). "
              "Для facts может быть ⚠️ partial — это нормально (окно since/window)."),
-         "rows": pipeline_rows},
+         "rows": pipeline_rows,
+         "row_urls": pipeline_row_urls},
         {"title": f"Received POs sample (top {len(received_sample)})",
          "caption": (
              f"Последние {len(received_sample)} заказов, которые mock-erp принял "
              "от Channel Router (M7) через POST /api/v1/orders. Замыкает loop "
              "pipeline."),
-         "rows": received_sample},
+         "rows": received_sample,
+         "row_urls": received_row_urls},
     ]
 
     prev_m, next_m = _module_neighbours(0)
@@ -408,14 +620,14 @@ async def m0(request: Request) -> HTMLResponse:
                 "Mock-erp генерирует данные сам (Faker, 90 дней истории) и не "
                 "имеет внешних входов. Также принимает входящие заказы от M7 "
                 "в POST /api/v1/orders."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "orders.purchase_orders ↔ mock-erp /orders/received",
             "output_summary": (
                 "Mock-erp отдаёт 16 типов сущностей через REST для M1 и "
                 "принимает обратно заказы от M7. Match-проверка ниже сверяет "
                 "число sent POs с числом полученных в mock-erp."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": samples,
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples(samples),
             "extras": extras,
             "field_specs": get_module_spec("m0"),
             "prev": prev_m,
@@ -456,23 +668,24 @@ async def m1(request: Request) -> HTMLResponse:
     recent_loads = db.fetch_all(queries.M1_QUERIES["recent_loads"])
 
     # Source delta: сколько данных из mock-erp прошло через M1 в public.*.
-    delta_kv: list[tuple[str, str]] = []
+    delta_kv: list[tuple[str, str, str | None]] = []
     for entity in queries.M1_PUBLIC_TABLES:
         # entity name == public table name для M1 (см. ENTITY_TO_PUBLIC_TABLE).
         src = next((c for e, c in input_counts if e == entity), None)
         pulled = _safe_count(entity)
+        url = _entity_url_or_none("public", entity)
         if src is None or src in ("?", "n/a"):
-            delta_kv.append((entity, f"public={pulled} / source=n/a"))
+            delta_kv.append((entity, f"public={pulled} / source=n/a", url))
             continue
         try:
             src_int = int(src)
         except (TypeError, ValueError):
-            delta_kv.append((entity, f"public={pulled} / source={src}"))
+            delta_kv.append((entity, f"public={pulled} / source={src}", url))
             continue
         loss = src_int - pulled
         sign = "✅" if loss == 0 else ("⚠️" if pulled > 0 else "⛔")
         delta_kv.append(
-            (entity, f"{sign} public={pulled} / source={src_int} (loss={loss})"),
+            (entity, f"{sign} public={pulled} / source={src_int} (loss={loss})", url),
         )
 
     prev_m, next_m = _module_neighbours(1)
@@ -492,25 +705,28 @@ async def m1(request: Request) -> HTMLResponse:
                 "Cron 02:00 ходит за 16 сущностями в mock-erp по HTTP "
                 "(GET /api/v1/{entity}, X-API-Key). В таблице ниже — что есть "
                 "в источнике в данный момент."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "public.* tables (PostgreSQL)",
             "output_summary": (
                 f"После последнего успешного load M1 положил {pulled_total:,} "
                 "строк во все public.* таблицы (см. разбивку ниже). Snapshot "
                 "pointer flip-нут атомарно — потребители видят консистентный "
                 "снимок."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": [
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples([
                 {"title": "Recent products (top 10 by updated_at)",
                  "caption": "10 последних загруженных продуктов в public.products (по полю updated_at).",
-                 "rows": products},
+                 "rows": products,
+                 "entity_key": ("public", "products")},
                 {"title": "Recent receipt_line (top 10 by event_time DESC)",
                  "caption": "10 последних строк продаж в public.receipt_line (партиционированная таблица фактов).",
-                 "rows": receipts},
+                 "rows": receipts,
+                 "entity_key": ("public", "receipt_line")},
                 {"title": "Recent loads (top 5)",
                  "caption": "5 последних запусков load-джобы M1 со статусом и длительностью.",
-                 "rows": recent_loads},
-            ],
+                 "rows": recent_loads,
+                 "entity_key": ("public", "loads")},
+            ]),
             "extras": [
                 {"title": "Source delta — сколько прошло через M1 (mock-erp → public.*)",
                  "caption": (
@@ -520,10 +736,13 @@ async def m1(request: Request) -> HTMLResponse:
                  "kv": delta_kv},
                 {"title": "Latest load run",
                  "caption": "Последний run load-джобы M1 (status, started_at, finished_at, lines_total/failed).",
-                 "kv": _kv_from_row(latest_load)},
+                 "kv": _kv_linked(latest_load, entity_key=("public", "loads"))},
                 {"title": "Snapshot pointer",
                  "caption": "Текущий snapshot_pointer — current_load_id, на который смотрят downstream-консумеры (M2).",
-                 "kv": _kv_from_row(pointer)},
+                 "kv": _kv_linked(pointer, fk_overrides={
+                     "current_load_id": ("public", "loads", "load_id"),
+                     "previous_load_id": ("public", "loads", "load_id"),
+                 })},
             ],
             "field_specs": get_module_spec("m1"),
             "prev": prev_m,
@@ -567,33 +786,37 @@ async def m2(request: Request) -> HTMLResponse:
                 "Cron 02:30 ходит за 16 сущностями в API M1 (NDJSON streaming, "
                 "JWT с ролью x-flow-etl). Все берутся из одного "
                 "source_load_id для атомарного snapshot."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "marts.* schema",
             "output_summary": (
                 "После успешной валидации построены 5 mart-таблиц + reject_log. "
                 "Atomic flip всех mart выполнен в одной транзакции — "
                 "потребители (M3, M4, M5) видят консистентный набор."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": [
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples([
                 {"title": "Top 10 mart_demand_history by qty_sold DESC",
                  "caption": (
                      "Топ-10 строк mart_demand_history с наибольшим qty_sold. "
                      "Используется Forecast (M5) для построения SMA30."),
-                 "rows": top_demand},
+                 "rows": top_demand,
+                 "entity_key": ("marts", "mart_demand_history")},
                 {"title": "Top 10 mart_calculation_input by on_hand DESC",
                  "caption": (
                      "Топ-10 строк mart_calculation_input с наибольшим "
                      "on_hand (текущий остаток). Pre-resolved supply_spec и "
                      "order_rule готовы для калькулятора M5."),
-                 "rows": top_calc},
+                 "rows": top_calc,
+                 "entity_key": ("marts", "mart_calculation_input")},
                 {"title": "Recent etl_runs (top 5)",
                  "caption": "5 последних запусков ETL-джобы (status, source_load_id, finished_at, длительность).",
-                 "rows": recent_runs},
-            ],
+                 "rows": recent_runs,
+                 "entity_key": ("marts", "etl_runs")},
+            ]),
             "extras": [
                 {"title": "Latest etl_run",
                  "caption": "Последний run M2 — status, source_load_id (который снимок M1 он читал), длительность.",
-                 "kv": _kv_from_row(latest_run)},
+                 "kv": _kv_linked(latest_run, entity_key=("marts", "etl_runs"),
+                                  fk_overrides={"source_load_id": ("public", "loads", "load_id")})},
             ],
             "field_specs": get_module_spec("m2"),
             "prev": prev_m,
@@ -661,6 +884,7 @@ async def m3(request: Request) -> HTMLResponse:
             "10 последних committed etl_runs — каждая запись соответствует "
             "версии mart, доступной через API."),
         "rows": versions,
+        "entity_key": ("marts", "etl_runs"),
     })
     return templates.TemplateResponse(
         "module.html",
@@ -677,13 +901,13 @@ async def m3(request: Request) -> HTMLResponse:
                 "M3 не имеет своего ETL — только читает marts.* через DB role "
                 "mart_reader. Cache 60s для current snapshot уменьшает "
                 "повторные запросы по той же версии."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "HTTP /v1/marts/* (data-marts service)",
             "output_summary": (
                 "Live-проверка endpoint'ов data-marts: status code, размер "
                 "тела ответа. NDJSON streaming с cursor-pagination + ETag."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": samples_with_captions,
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples(samples_with_captions),
             "extras": [],
             "field_specs": get_module_spec("m3"),
             "prev": prev_m,
@@ -749,25 +973,27 @@ async def m4(request: Request) -> HTMLResponse:
             "input_summary": (
                 "Cron 04:00 читает напрямую из marts.* (без HTTP) — "
                 "consistency snapshot гарантирована atomic flip M2."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "kpi.kpi_snapshots + kpi.kpi_calibrations",
             "output_summary": (
                 "Считаются три KPI (OSA, OTIF, Stock Days) для каждой пары "
                 "product×location. Hierarchical калибровки применяются по "
                 "приоритету: pair → location → supplier → category → global."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": [
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples([
                 {"title": "10 critical KPI (lowest values)",
                  "caption": (
                      "Топ-10 product×location пар с самыми низкими значениями "
                      "KPI — кандидаты на немедленное пополнение или внимание."),
-                 "rows": critical},
+                 "rows": critical,
+                 "entity_key": ("kpi", "kpi_snapshots")},
                 {"title": "kpi_calibrations (top 10)",
                  "caption": (
                      "10 активных калибровок: scope (global/category/...), "
                      "kpi_name, target value. Перебивают расчётные значения."),
-                 "rows": calibrations},
-            ],
+                 "rows": calibrations,
+                 "entity_key": ("kpi", "kpi_calibrations")},
+            ]),
             "extras": extras_with_caption,
             "field_specs": get_module_spec("m4"),
             "prev": prev_m,
@@ -812,7 +1038,8 @@ async def m5(request: Request) -> HTMLResponse:
             ("min forecast_qty", str(agg.get("min_qty", 0))),
             ("max forecast_qty", str(agg.get("max_qty", 0))),
         ]},
-        {"title": "Latest forecast_run", "kv": _kv_from_row(latest_run)},
+        {"title": "Latest forecast_run",
+         "kv": _kv_linked(latest_run, entity_key=("forecast", "forecast_runs"))},
     ]
 
     prev_m, next_m = _module_neighbours(5)
@@ -847,24 +1074,26 @@ async def m5(request: Request) -> HTMLResponse:
                 "Cron 05:00 читает напрямую из marts.* и kpi.* через DB role "
                 "(без HTTP — производительность важна на больших фан-аутах). "
                 "Forecaster использует историю продаж за 90 дней."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "forecast.* schema",
             "output_summary": (
                 f"Прогнозы записаны в forecast.forecasts ({forecasts_count} "
                 f"строк), а replenishment_plans ({plans_count} планов, в т.ч. "
                 f"{draft_count} в status=draft) ждут одобрения admin'ом перед "
                 "конвертацией в Order Builder (M6)."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": [
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples([
                 {"title": "Top 10 forecasts by forecast_qty DESC",
                  "caption": (
                      "Топ-10 прогнозов с наибольшим forecast_qty за 60 дней — "
                      "это пары product×location с самым высоким ожидаемым спросом."),
-                 "rows": top_forecasts},
+                 "rows": top_forecasts,
+                 "entity_key": ("forecast", "forecasts")},
                 {"title": "Recent forecast_runs (top 5)",
                  "caption": "5 последних запусков forecast-джобы с длительностью и числом пар.",
-                 "rows": recent_runs},
-            ],
+                 "rows": recent_runs,
+                 "entity_key": ("forecast", "forecast_runs")},
+            ]),
             "extras": extras_with_captions,
             "field_specs": get_module_spec("m5"),
             "prev": prev_m,
@@ -914,28 +1143,30 @@ async def m6(request: Request) -> HTMLResponse:
                 f"Cron 06:00 подбирает approved-планы (всего одобрено: "
                 f"{approved} из {plans_total}). Только approved конвертируются "
                 "в полноценные purchase orders — draft и rejected пропускаются."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "orders.purchase_orders + orders.po_lines",
             "output_summary": (
                 f"После последнего run: {po_total} purchase_orders, "
                 f"{lines_total} po_lines (одна на каждую позицию заказа). "
                 "PO numbers формата PO-YYYYMMDD-NNNNNN, delivery_date = "
                 "today + supplier.lead_time_days."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": [
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples([
                 {"title": "Recent purchase_orders (top 10)",
                  "caption": (
                      "10 последних созданных POs со статусом, supplier_id, "
                      "total_qty, delivery_date. Status workflow: draft → "
                      "ready_to_send → sent → confirmed_by_erp → received."),
-                 "rows": recent_pos},
+                 "rows": recent_pos,
+                 "entity_key": ("orders", "purchase_orders")},
                 {"title": "Recent po_lines (top 10)",
                  "caption": (
                      "10 последних строк заказов: product_id, qty, unit_price "
                      "(резолвится через pricing waterfall — products → "
                      "supplier.default → NULL)."),
-                 "rows": recent_lines},
-            ],
+                 "rows": recent_lines,
+                 "entity_key": ("orders", "po_lines")},
+            ]),
             "extras": [],
             "field_specs": get_module_spec("m6"),
             "prev": prev_m,
@@ -976,7 +1207,8 @@ async def m7(request: Request) -> HTMLResponse:
             received_count = r.headers.get("X-Total-Count", "?")
             if r.status_code == 200:
                 body = r.json()
-                received_sample = body if isinstance(body, list) else body.get("items", [])
+                raw_sample = body if isinstance(body, list) else body.get("items", [])
+                received_sample = _flatten_received_sample(raw_sample)
         except Exception as exc:  # noqa: BLE001
             logger.warning("mock-erp received fetch failed: %s", exc)
             received_count = "n/a"
@@ -985,6 +1217,13 @@ async def m7(request: Request) -> HTMLResponse:
 
     recent_attempts = db.fetch_all(queries.M7_QUERIES["recent_attempts"])
     supplier_configs = db.fetch_all(queries.M7_QUERIES["supplier_configs"])
+
+    # External mock-erp received POs sample → search by po_number (нет entity_key).
+    m7_received_row_urls: list[str | None] = [
+        (f"/entity/orders/purchase_orders?q={r['po_number']}"
+         if isinstance(r, dict) and r.get("po_number") else None)
+        for r in received_sample
+    ]
 
     prev_m, next_m = _module_neighbours(7)
     return templates.TemplateResponse(
@@ -1002,31 +1241,34 @@ async def m7(request: Request) -> HTMLResponse:
                 f"Cron 06:30 подбирает POs со status=ready_to_send "
                 f"({ready} штук готовы к отправке). Per-PO транзакция с "
                 "SELECT FOR UPDATE — конкурентность безопасна."),
-            "input_counts": enrich_kv_rows(input_counts),
+            "input_counts": _link_kv_rows(enrich_kv_rows(input_counts)),
             "output_title": "channels.send_attempts + POST к mock-erp",
             "output_summary": (
                 f"Всего {attempts_total} попыток отправки в журнале "
                 "send_attempts. Успешные (status=success) переводят PO в "
                 "sent; mock-erp принимает заказы через POST /api/v1/orders "
                 "и возвращает их через /orders/received."),
-            "output_counts": enrich_kv_rows(output_counts),
-            "samples": [
+            "output_counts": _link_kv_rows(enrich_kv_rows(output_counts)),
+            "samples": _enrich_samples([
                 {"title": "Recent send_attempts (top 10)",
                  "caption": (
                      "10 последних попыток отправки: po_id, status "
                      "(success/error), HTTP-код ответа ERP, длительность."),
-                 "rows": recent_attempts},
+                 "rows": recent_attempts,
+                 "entity_key": ("channels", "send_attempts")},
                 {"title": "supplier_channel_config (top 10)",
                  "caption": (
                      "Конфиги каналов отправки по supplier'ам: endpoint URL, "
                      "тип авторизации (api_key / jwt / oauth2), формат body."),
-                 "rows": supplier_configs},
+                 "rows": supplier_configs,
+                 "entity_key": ("channels", "supplier_channel_config")},
                 {"title": "mock-erp /api/v1/orders/received (top 5)",
                  "caption": (
                      "Последние 5 принятых заказов в mock-erp — то, что "
                      "реально дошло до ERP клиента. Замыкает loop pipeline."),
-                 "rows": received_sample},
-            ],
+                 "rows": received_sample,
+                 "row_urls": m7_received_row_urls},
+            ]),
             "extras": [],
             "field_specs": get_module_spec("m7"),
             "prev": prev_m,
